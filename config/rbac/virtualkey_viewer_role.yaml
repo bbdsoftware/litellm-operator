@@ -1,0 +1,23 @@
+# permissions for end users to view virtualkeys.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/name: litellm-operator
+    app.kubernetes.io/managed-by: kustomize
+  name: virtualkey-viewer-role
+rules:
+- apiGroups:
+  - auth.litellm.ai
+  resources:
+  - virtualkeys
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - auth.litellm.ai
+  resources:
+  - virtualkeys/status
+  verbs:
+  - get
