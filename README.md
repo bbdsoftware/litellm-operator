@@ -1,10 +1,13 @@
 # litellm-operator
 
-A Kubernetes operator for managing litellm virtual keys.
+A Kubernetes operator for managing litellm resources.
 
 ## Description
 
-The operator is used to manage litellm virtual keys. It is responsible for creating and deleting virtual keys in litellm.
+The operator is used to manage CRUD operations on litellm resources:
+
+- Virtual Keys
+- Users
 
 ## Getting Started
 

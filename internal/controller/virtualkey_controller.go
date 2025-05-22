@@ -130,8 +130,6 @@ func (r *VirtualKeyReconciler) deleteVirtualKey(ctx context.Context, virtualKey 
 		return ctrl.Result{}, err
 	}
 
-	log.Info(string(body))
-
 	if httpResp.StatusCode != 200 {
 		log.Error(errors.New(string(body)), "Failed to delete key")
 		return ctrl.Result{}, errors.New(string(body))
@@ -200,7 +198,7 @@ func (r *VirtualKeyReconciler) generateVirtualKey(ctx context.Context, virtualKe
 		return ctrl.Result{}, err
 	}
 
-	secretKeyName := response.KeyAlias + "-secret-key"
+	secretKeyName := "virtual-key-" + response.KeyAlias
 
 	// Update the status with the key information
 	virtualKey.Status.CreatedAt = response.CreatedAt
