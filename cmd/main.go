@@ -151,6 +151,13 @@ func main() {
 		setupLog.Error(err, "unable to create controller", "controller", "VirtualKey")
 		os.Exit(1)
 	}
+	if err = (&controller.UserReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "User")
+		os.Exit(1)
+	}
 	// +kubebuilder:scaffold:builder
 
 	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {

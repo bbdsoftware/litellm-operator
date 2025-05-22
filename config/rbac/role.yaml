@@ -7,6 +7,7 @@ rules:
 - apiGroups:
   - auth.litellm.ai
   resources:
+  - users
   - virtualkeys
   verbs:
   - create
@@ -19,12 +20,14 @@ rules:
 - apiGroups:
   - auth.litellm.ai
   resources:
+  - users/finalizers
   - virtualkeys/finalizers
   verbs:
   - update
 - apiGroups:
   - auth.litellm.ai
   resources:
+  - users/status
   - virtualkeys/status
   verbs:
   - get
