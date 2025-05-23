@@ -1,0 +1,58 @@
+/*
+Copyright 2025.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package controller
+
+import (
+	"encoding/json"
+	"errors"
+	"os"
+
+	"github.com/go-logr/logr"
+)
+
+// finalizerName is the name of the finalizer used by the litellm operator
+const finalizerName = "litellm-operator.litellm.ai/finalizer"
+
+// litellmBaseURL is the base URL for the litellm service
+var litellmBaseURL = os.Getenv("LITELLM_BASE_URL")
+
+// litellmMasterKey is the master key for authenticating with the litellm service
+var litellmMasterKey = os.Getenv("LITELLM_MASTER_KEY")
+
+type errorJSON struct {
+	Message string `json:"message"`
+	Type    string `json:"type"`
+	Param   string `json:"param"`
+	Code    string `json:"code"`
+}
+
+// logLitellmError logs an errorJSON object
+func logLitellmError(log logr.Logger, errorJSON errorJSON, message string) {
+	log.Error(errors.New(errorJSON.Message), message, "error_code", errorJSON.Code, "error_type", errorJSON.Type, "error_param", errorJSON.Param)
+}
+
+// processLitellmError processes and logs the error message from the litellm service
+func processLitellmError(log logr.Logger, message string, body []byte) (errorJSON, error) {
+	var errorResponse struct {
+		Error errorJSON `json:"error"`
+	}
+	if err := json.Unmarshal(body, &errorResponse); err != nil {
+		return errorJSON{}, err
+	}
+	logLitellmError(log, errorResponse.Error, message)
+	return errorResponse.Error, nil
+}

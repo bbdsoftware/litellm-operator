@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -75,15 +74,15 @@ func (r *UserReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 	}
 
 	if user.GetDeletionTimestamp() != nil {
-		if controllerutil.ContainsFinalizer(user, finalizer) {
-			log.Info("User resource is being deleted. Deleting " + user.Status.UserAlias + " from litellm")
+		if controllerutil.ContainsFinalizer(user, finalizerName) {
+			log.Info("Deleting User: " + user.Status.UserAlias + " from litellm")
 			return r.deleteUser(ctx, user)
 		}
 		return ctrl.Result{}, nil
 	}
 
-	if user.Status.UserID == "" {
-		log.Info("Creating new user: " + user.Spec.UserAlias)
+	if user.Status.Conditions == nil {
+		log.Info("Creating User: " + user.Spec.UserAlias + " in litellm")
 		return r.createUser(ctx, user)
 	}
 
@@ -101,7 +100,7 @@ func (r *UserReconciler) SetupWithManager(mgr ctrl.Manager) error {
 func (r *UserReconciler) deleteUser(ctx context.Context, user *authv1alpha1.User) (ctrl.Result, error) {
 	log := log.FromContext(ctx)
 
-	url := litellmBaseUrl + "/user/delete"
+	url := litellmBaseURL + "/user/delete"
 
 	httpReq, _ := http.NewRequest("POST", url, bytes.NewBuffer([]byte(`{"user_ids": ["`+user.Status.UserID+`"]}`)))
 	httpReq.Header.Set("Content-Type", "application/json")
@@ -122,11 +121,15 @@ func (r *UserReconciler) deleteUser(ctx context.Context, user *authv1alpha1.User
 	}
 
 	if httpResp.StatusCode != 200 {
-		log.Error(errors.New(string(body)), "Failed to delete User")
-		return ctrl.Result{}, errors.New(string(body))
+		_, err := processLitellmError(log, "Failed to delete User", body)
+		if err != nil {
+			log.Error(err, "Failed to parse error response body")
+			return ctrl.Result{}, err
+		}
+		return ctrl.Result{}, nil
 	}
 
-	controllerutil.RemoveFinalizer(user, finalizer)
+	controllerutil.RemoveFinalizer(user, finalizerName)
 	if err := r.Update(ctx, user); err != nil {
 		log.Error(err, "Failed to remove finalizer from User")
 		return ctrl.Result{}, err
@@ -139,7 +142,7 @@ func (r *UserReconciler) deleteUser(ctx context.Context, user *authv1alpha1.User
 func (r *UserReconciler) createUser(ctx context.Context, user *authv1alpha1.User) (ctrl.Result, error) {
 	log := log.FromContext(ctx)
 
-	url := litellmBaseUrl + "/user/new"
+	url := litellmBaseURL + "/user/new"
 
 	jsonData, err := buildUserRequestPayload(user.Spec)
 	if err != nil {
@@ -166,8 +169,24 @@ func (r *UserReconciler) createUser(ctx context.Context, user *authv1alpha1.User
 	}
 
 	if httpResp.StatusCode != 200 {
-		log.Error(errors.New(string(body)), "Failed to create User")
-		return ctrl.Result{}, errors.New(string(body))
+		errorJSON, err := processLitellmError(log, "Failed to create User", body)
+		if err != nil {
+			log.Error(err, "Failed to parse error response body")
+			return ctrl.Result{}, err
+		}
+
+		user.Status.Conditions = append(user.Status.Conditions, metav1.Condition{
+			Type:               "UserCreated",
+			Status:             metav1.ConditionFalse,
+			LastTransitionTime: metav1.Now(),
+			Reason:             "UserCreated",
+			Message:            errorJSON.Message,
+		})
+		if err := r.Status().Update(ctx, user); err != nil {
+			log.Error(err, "unable to update User status")
+			return ctrl.Result{}, err
+		}
+		return ctrl.Result{}, nil
 	}
 
 	// Parse the response to get key information
@@ -221,12 +240,20 @@ func (r *UserReconciler) createUser(ctx context.Context, user *authv1alpha1.User
 		return ctrl.Result{}, err
 	}
 
+	user.Status.Conditions = append(user.Status.Conditions, metav1.Condition{
+		Type:               "UserCreated",
+		Status:             metav1.ConditionTrue,
+		LastTransitionTime: metav1.Now(),
+		Reason:             "UserCreated",
+		Message:            "User created in Litellm",
+	})
+
 	if err := r.Status().Update(ctx, user); err != nil {
 		log.Error(err, "unable to update User status")
 		return ctrl.Result{}, err
 	}
 
-	controllerutil.AddFinalizer(user, finalizer)
+	controllerutil.AddFinalizer(user, finalizerName)
 	if err := r.Update(ctx, user); err != nil {
 		log.Error(err, "Failed to add finalizer to User")
 		return ctrl.Result{}, err
