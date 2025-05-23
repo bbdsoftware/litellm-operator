@@ -36,7 +36,7 @@ type UserSpec struct {
 	UserEmail string `json:"userEmail,omitempty"`
 	// UserRole is the role of the user - one of "proxy_admin", "proxy_admin_viewer", "internal_user", "internal_user_viewer", "team", "customer"
 	UserRole string `json:"userRole,omitempty"`
-	// SendInviteEmail is whether to send an invite email to the user
+	// SendInviteEmail is whether to send an invite email to the user - NOTE: the user endpoint will return an error if email alerting is not configured and this is enabled, but the user will still be created.
 	SendInviteEmail bool `json:"sendInviteEmail,omitempty"`
 	// Teams is the list of teams that the user is a member of
 	Teams []string `json:"teams,omitempty"`

@@ -17,11 +17,17 @@ limitations under the License.
 package controller
 
 import (
+	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"io"
+	"net/http"
 	"os"
 
 	"github.com/go-logr/logr"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
 // finalizerName is the name of the finalizer used by the litellm operator
@@ -38,6 +44,44 @@ type errorJSON struct {
 	Type    string `json:"type"`
 	Param   string `json:"param"`
 	Code    string `json:"code"`
+}
+
+// makeLitellmRequest handles making HTTP requests to the LiteLLM service
+func makeLitellmRequest(ctx context.Context, method, url string, body []byte) ([]byte, error) {
+	log := log.FromContext(ctx)
+
+	httpReq, err := http.NewRequest(method, url, bytes.NewBuffer(body))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	httpReq.Header.Set("Content-Type", "application/json")
+	httpReq.Header.Set("Authorization", "Bearer "+litellmMasterKey)
+
+	defer httpReq.Body.Close()
+
+	httpResp, err := http.DefaultClient.Do(httpReq)
+	if err != nil {
+		log.Error(err, "Failed to send request to Litellm")
+		return nil, err
+	}
+
+	respBody, err := io.ReadAll(httpResp.Body)
+	if err != nil {
+		log.Error(err, "Failed to read response body")
+		return nil, err
+	}
+
+	if httpResp.StatusCode != 200 {
+		errorJSON, err := processLitellmError(log, "Request failed", respBody)
+		if err != nil {
+			log.Error(err, "Failed to parse error response body")
+			return nil, err
+		}
+		return nil, fmt.Errorf("litellm request failed: %s", errorJSON.Message)
+	}
+
+	return respBody, nil
 }
 
 // logLitellmError logs an errorJSON object

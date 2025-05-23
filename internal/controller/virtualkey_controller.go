@@ -17,12 +17,9 @@ limitations under the License.
 package controller
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
 	"strconv"
 
 	corev1 "k8s.io/api/core/v1"
@@ -105,31 +102,10 @@ func (r *VirtualKeyReconciler) deleteVirtualKey(ctx context.Context, virtualKey 
 
 	url := litellmBaseURL + "/key/delete"
 
-	httpReq, _ := http.NewRequest("POST", url, bytes.NewBuffer([]byte(`{"key_aliases": ["`+virtualKey.Status.KeyAlias+`"]}`)))
-	httpReq.Header.Set("Content-Type", "application/json")
-	httpReq.Header.Set("Authorization", "Bearer "+litellmMasterKey)
-
-	defer httpReq.Body.Close()
-
-	httpResp, err := http.DefaultClient.Do(httpReq)
+	_, err := makeLitellmRequest(ctx, "POST", url, []byte(`{"key_aliases": ["`+virtualKey.Status.KeyAlias+`"]}`))
 	if err != nil {
-		log.Error(err, "Failed to send request to Litellm")
+		log.Error(err, "Failed to delete key")
 		return ctrl.Result{}, err
-	}
-
-	body, err := io.ReadAll(httpResp.Body)
-	if err != nil {
-		log.Error(err, "Failed to read response body")
-		return ctrl.Result{}, err
-	}
-
-	if httpResp.StatusCode != 200 {
-		_, err := processLitellmError(log, "Failed to delete key", body)
-		if err != nil {
-			log.Error(err, "Failed to parse error response body")
-			return ctrl.Result{}, err
-		}
-		return ctrl.Result{}, nil
 	}
 
 	controllerutil.RemoveFinalizer(virtualKey, finalizerName)
@@ -153,37 +129,16 @@ func (r *VirtualKeyReconciler) generateVirtualKey(ctx context.Context, virtualKe
 		return ctrl.Result{}, err
 	}
 
-	httpReq, _ := http.NewRequest("POST", url, bytes.NewBuffer(jsonData))
-	httpReq.Header.Set("Content-Type", "application/json")
-	httpReq.Header.Set("Authorization", "Bearer "+litellmMasterKey)
-
-	defer httpReq.Body.Close()
-
-	httpResp, err := http.DefaultClient.Do(httpReq)
+	body, err := makeLitellmRequest(ctx, "POST", url, jsonData)
 	if err != nil {
-		log.Error(err, "Failed to send request to Litellm")
-		return ctrl.Result{}, err
-	}
-
-	body, err := io.ReadAll(httpResp.Body)
-	if err != nil {
-		log.Error(err, "Failed to read response body")
-		return ctrl.Result{}, err
-	}
-
-	if httpResp.StatusCode != 200 {
-		errorJSON, err := processLitellmError(log, "Failed to generate key", body)
-		if err != nil {
-			log.Error(err, "Failed to parse error response body")
-			return ctrl.Result{}, err
-		}
+		log.Error(err, "Failed to generate key")
 
 		virtualKey.Status.Conditions = append(virtualKey.Status.Conditions, metav1.Condition{
 			Type:               "KeyGenerated",
 			Status:             metav1.ConditionFalse,
 			LastTransitionTime: metav1.Now(),
 			Reason:             "KeyGenerated",
-			Message:            errorJSON.Message,
+			Message:            err.Error(),
 		})
 		if err := r.Status().Update(ctx, virtualKey); err != nil {
 			log.Error(err, "unable to update VirtualKey status")
@@ -194,17 +149,18 @@ func (r *VirtualKeyReconciler) generateVirtualKey(ctx context.Context, virtualKe
 
 	// Parse the response to get key information
 	var response struct {
-		CreatedAt      string   `json:"created_at"`
-		UpdatedAt      string   `json:"updated_at"`
-		BudgetDuration string   `json:"budget_duration"`
-		Expires        string   `json:"expires"`
-		KeyAlias       string   `json:"key_alias"`
-		KeyName        string   `json:"key_name"`
-		MaxBudget      float64  `json:"max_budget"`
-		Models         []string `json:"models"`
-		SecretKey      string   `json:"key"`
-		TokenID        string   `json:"token_id"`
-		UserID         string   `json:"user_id"`
+		CreatedAt      string            `json:"created_at"`
+		UpdatedAt      string            `json:"updated_at"`
+		BudgetDuration string            `json:"budget_duration"`
+		Expires        string            `json:"expires"`
+		KeyAlias       string            `json:"key_alias"`
+		KeyName        string            `json:"key_name"`
+		MaxBudget      float64           `json:"max_budget"`
+		Models         []string          `json:"models"`
+		SecretKey      string            `json:"key"`
+		TokenID        string            `json:"token_id"`
+		UserID         string            `json:"user_id"`
+		Metadata       map[string]string `json:"metadata"`
 	}
 	if err := json.Unmarshal(body, &response); err != nil {
 		log.Error(err, "Failed to parse response body")
@@ -225,6 +181,7 @@ func (r *VirtualKeyReconciler) generateVirtualKey(ctx context.Context, virtualKe
 	virtualKey.Status.Models = response.Models
 	virtualKey.Status.UserID = response.UserID
 	virtualKey.Status.SecretRef = secretKeyName
+	virtualKey.Status.Metadata = response.Metadata
 
 	if err := r.createSecret(ctx, virtualKey, secretKeyName, response.SecretKey); err != nil {
 		log.Error(err, "Failed to create secret")
@@ -278,6 +235,15 @@ func buildKeyRequestPayload(spec authv1alpha1.VirtualKeySpec) ([]byte, error) {
 	if len(spec.Models) > 0 {
 		payload["models"] = spec.Models
 	}
+	operatorMetadata := map[string]string{
+		"managed_by": "litellm-operator",
+	}
+	if spec.Metadata != nil {
+		for k, v := range spec.Metadata {
+			operatorMetadata[k] = v
+		}
+	}
+	payload["metadata"] = operatorMetadata
 
 	return json.Marshal(payload)
 }
