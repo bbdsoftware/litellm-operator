@@ -20,11 +20,9 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
-	"os"
 	"strconv"
 
 	corev1 "k8s.io/api/core/v1"
@@ -45,11 +43,6 @@ type VirtualKeyReconciler struct {
 	client.Client
 	Scheme *runtime.Scheme
 }
-
-const finalizer = "litellm-operator.litellm.ai/finalizer"
-
-var litellmBaseUrl = os.Getenv("LITELLM_BASE_URL")
-var litellmMasterKey = os.Getenv("LITELLM_MASTER_KEY")
 
 // +kubebuilder:rbac:groups=auth.litellm.ai,resources=virtualkeys,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=auth.litellm.ai,resources=virtualkeys/status,verbs=get;update;patch
@@ -83,15 +76,15 @@ func (r *VirtualKeyReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	}
 
 	if virtualKey.GetDeletionTimestamp() != nil {
-		if controllerutil.ContainsFinalizer(virtualKey, finalizer) {
-			log.Info("VirtualKey resource is being deleted. Deleting " + virtualKey.Status.KeyAlias + " from litellm")
+		if controllerutil.ContainsFinalizer(virtualKey, finalizerName) {
+			log.Info("Deleting VirtualKey: " + virtualKey.Status.KeyAlias + " from litellm")
 			return r.deleteVirtualKey(ctx, virtualKey)
 		}
 		return ctrl.Result{}, nil
 	}
 
-	if virtualKey.Status.KeyAlias != virtualKey.Spec.KeyAlias {
-		log.Info("Generating new key for: " + virtualKey.Spec.KeyAlias)
+	if virtualKey.Status.Conditions == nil {
+		log.Info("Generating new VirtualKey: " + virtualKey.Spec.KeyAlias + " in litellm")
 		return r.generateVirtualKey(ctx, virtualKey)
 	}
 
@@ -110,7 +103,7 @@ func (r *VirtualKeyReconciler) SetupWithManager(mgr ctrl.Manager) error {
 func (r *VirtualKeyReconciler) deleteVirtualKey(ctx context.Context, virtualKey *authv1alpha1.VirtualKey) (ctrl.Result, error) {
 	log := log.FromContext(ctx)
 
-	url := litellmBaseUrl + "/key/delete"
+	url := litellmBaseURL + "/key/delete"
 
 	httpReq, _ := http.NewRequest("POST", url, bytes.NewBuffer([]byte(`{"key_aliases": ["`+virtualKey.Status.KeyAlias+`"]}`)))
 	httpReq.Header.Set("Content-Type", "application/json")
@@ -131,11 +124,15 @@ func (r *VirtualKeyReconciler) deleteVirtualKey(ctx context.Context, virtualKey 
 	}
 
 	if httpResp.StatusCode != 200 {
-		log.Error(errors.New(string(body)), "Failed to delete key")
-		return ctrl.Result{}, errors.New(string(body))
+		_, err := processLitellmError(log, "Failed to delete key", body)
+		if err != nil {
+			log.Error(err, "Failed to parse error response body")
+			return ctrl.Result{}, err
+		}
+		return ctrl.Result{}, nil
 	}
 
-	controllerutil.RemoveFinalizer(virtualKey, finalizer)
+	controllerutil.RemoveFinalizer(virtualKey, finalizerName)
 	if err := r.Update(ctx, virtualKey); err != nil {
 		log.Error(err, "Failed to remove finalizer from VirtualKey")
 		return ctrl.Result{}, err
@@ -148,7 +145,7 @@ func (r *VirtualKeyReconciler) deleteVirtualKey(ctx context.Context, virtualKey 
 func (r *VirtualKeyReconciler) generateVirtualKey(ctx context.Context, virtualKey *authv1alpha1.VirtualKey) (ctrl.Result, error) {
 	log := log.FromContext(ctx)
 
-	url := litellmBaseUrl + "/key/generate"
+	url := litellmBaseURL + "/key/generate"
 
 	jsonData, err := buildKeyRequestPayload(virtualKey.Spec)
 	if err != nil {
@@ -175,8 +172,24 @@ func (r *VirtualKeyReconciler) generateVirtualKey(ctx context.Context, virtualKe
 	}
 
 	if httpResp.StatusCode != 200 {
-		log.Error(errors.New(string(body)), "Failed to generate key")
-		return ctrl.Result{}, errors.New(string(body))
+		errorJSON, err := processLitellmError(log, "Failed to generate key", body)
+		if err != nil {
+			log.Error(err, "Failed to parse error response body")
+			return ctrl.Result{}, err
+		}
+
+		virtualKey.Status.Conditions = append(virtualKey.Status.Conditions, metav1.Condition{
+			Type:               "KeyGenerated",
+			Status:             metav1.ConditionFalse,
+			LastTransitionTime: metav1.Now(),
+			Reason:             "KeyGenerated",
+			Message:            errorJSON.Message,
+		})
+		if err := r.Status().Update(ctx, virtualKey); err != nil {
+			log.Error(err, "unable to update VirtualKey status")
+			return ctrl.Result{}, err
+		}
+		return ctrl.Result{}, nil
 	}
 
 	// Parse the response to get key information
@@ -218,12 +231,20 @@ func (r *VirtualKeyReconciler) generateVirtualKey(ctx context.Context, virtualKe
 		return ctrl.Result{}, err
 	}
 
+	virtualKey.Status.Conditions = append(virtualKey.Status.Conditions, metav1.Condition{
+		Type:               "KeyGenerated",
+		Status:             metav1.ConditionTrue,
+		LastTransitionTime: metav1.Now(),
+		Reason:             "KeyGenerated",
+		Message:            "Key generated in Litellm",
+	})
+
 	if err := r.Status().Update(ctx, virtualKey); err != nil {
 		log.Error(err, "unable to update VirtualKey status")
 		return ctrl.Result{}, err
 	}
 
-	controllerutil.AddFinalizer(virtualKey, finalizer)
+	controllerutil.AddFinalizer(virtualKey, finalizerName)
 	if err := r.Update(ctx, virtualKey); err != nil {
 		log.Error(err, "Failed to add finalizer to VirtualKey")
 		return ctrl.Result{}, err
