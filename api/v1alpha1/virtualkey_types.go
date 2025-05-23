@@ -40,6 +40,8 @@ type VirtualKeySpec struct {
 	BudgetDuration string `json:"budgetDuration,omitempty"`
 	// UserID is the user ID of the key
 	UserID string `json:"userID,omitempty"`
+	// Metadata is the metadata of the key
+	Metadata map[string]string `json:"metadata,omitempty"`
 }
 
 // VirtualKeyStatus defines the observed state of VirtualKey
@@ -69,6 +71,8 @@ type VirtualKeyStatus struct {
 	Models []string `json:"models,omitempty"`
 	// UserID is the unique user id - used for tracking spend across multiple keys for same user id.
 	UserID string `json:"userID,omitempty"`
+	// Metadata is the metadata of the key
+	Metadata map[string]string `json:"metadata,omitempty"`
 	// +operator-sdk:csv:customresourcedefinitions:type=status
 	Conditions []metav1.Condition `json:"conditions,omitempty" patchStrategy:"merge" patchMergeKey:"type" protobuf:"bytes,1,rep,name=conditions"`
 }

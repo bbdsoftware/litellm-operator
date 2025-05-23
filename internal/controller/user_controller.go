@@ -17,12 +17,9 @@ limitations under the License.
 package controller
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
 	"strconv"
 
 	corev1 "k8s.io/api/core/v1"
@@ -82,6 +79,23 @@ func (r *UserReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 	}
 
 	if user.Status.Conditions == nil {
+		if checkUserExists(ctx, user) {
+			log.Info("User: " + user.Spec.UserAlias + " already exists in litellm - skipping")
+
+			user.Status.Conditions = append(user.Status.Conditions, metav1.Condition{
+				Type:               "UserCreated",
+				Status:             metav1.ConditionFalse,
+				LastTransitionTime: metav1.Now(),
+				Reason:             "UserCreated",
+				Message:            "User already exists in litellm",
+			})
+			if err := r.Status().Update(ctx, user); err != nil {
+				log.Error(err, "unable to update User status")
+				return ctrl.Result{}, err
+			}
+			return ctrl.Result{}, nil
+		}
+
 		log.Info("Creating User: " + user.Spec.UserAlias + " in litellm")
 		return r.createUser(ctx, user)
 	}
@@ -101,32 +115,11 @@ func (r *UserReconciler) deleteUser(ctx context.Context, user *authv1alpha1.User
 	log := log.FromContext(ctx)
 
 	url := litellmBaseURL + "/user/delete"
+	body := []byte(`{"user_ids": ["` + user.Status.UserID + `"]}`)
 
-	httpReq, _ := http.NewRequest("POST", url, bytes.NewBuffer([]byte(`{"user_ids": ["`+user.Status.UserID+`"]}`)))
-	httpReq.Header.Set("Content-Type", "application/json")
-	httpReq.Header.Set("Authorization", "Bearer "+litellmMasterKey)
-
-	defer httpReq.Body.Close()
-
-	httpResp, err := http.DefaultClient.Do(httpReq)
+	_, err := makeLitellmRequest(ctx, "POST", url, body)
 	if err != nil {
-		log.Error(err, "Failed to send request to Litellm")
 		return ctrl.Result{}, err
-	}
-
-	body, err := io.ReadAll(httpResp.Body)
-	if err != nil {
-		log.Error(err, "Failed to read response body")
-		return ctrl.Result{}, err
-	}
-
-	if httpResp.StatusCode != 200 {
-		_, err := processLitellmError(log, "Failed to delete User", body)
-		if err != nil {
-			log.Error(err, "Failed to parse error response body")
-			return ctrl.Result{}, err
-		}
-		return ctrl.Result{}, nil
 	}
 
 	controllerutil.RemoveFinalizer(user, finalizerName)
@@ -136,6 +129,44 @@ func (r *UserReconciler) deleteUser(ctx context.Context, user *authv1alpha1.User
 	}
 
 	return ctrl.Result{}, nil
+}
+
+// checkUserExists checks if a user already exists in the litellm service by email
+func checkUserExists(ctx context.Context, user *authv1alpha1.User) bool {
+	log := log.FromContext(ctx)
+	userExists := false
+
+	url := litellmBaseURL + "/user/list?user_email=" + user.Spec.UserEmail
+
+	body, err := makeLitellmRequest(ctx, "GET", url, nil)
+	if err != nil {
+		log.Error(err, "Failed to check if User exists")
+		return userExists
+	}
+
+	var response struct {
+		Users []struct {
+			UserID    string `json:"user_id"`
+			UserEmail string `json:"user_email"`
+		} `json:"users"`
+	}
+
+	if err := json.Unmarshal(body, &response); err != nil {
+		log.Error(err, "Failed to parse response body")
+		return userExists
+	}
+
+	if len(response.Users) == 0 {
+		return userExists
+	}
+
+	// should only be one user returned as you cannot have multiple users with the same email
+	if response.Users[0].UserEmail == user.Spec.UserEmail {
+		userExists = true
+		return userExists
+	}
+
+	return userExists
 }
 
 // createUser creates a new user for the litellm service
@@ -150,37 +181,14 @@ func (r *UserReconciler) createUser(ctx context.Context, user *authv1alpha1.User
 		return ctrl.Result{}, err
 	}
 
-	httpReq, _ := http.NewRequest("POST", url, bytes.NewBuffer(jsonData))
-	httpReq.Header.Set("Content-Type", "application/json")
-	httpReq.Header.Set("Authorization", "Bearer "+litellmMasterKey)
-
-	defer httpReq.Body.Close()
-
-	httpResp, err := http.DefaultClient.Do(httpReq)
+	body, err := makeLitellmRequest(ctx, "POST", url, jsonData)
 	if err != nil {
-		log.Error(err, "Failed to send request to Litellm")
-		return ctrl.Result{}, err
-	}
-
-	body, err := io.ReadAll(httpResp.Body)
-	if err != nil {
-		log.Error(err, "Failed to read response body")
-		return ctrl.Result{}, err
-	}
-
-	if httpResp.StatusCode != 200 {
-		errorJSON, err := processLitellmError(log, "Failed to create User", body)
-		if err != nil {
-			log.Error(err, "Failed to parse error response body")
-			return ctrl.Result{}, err
-		}
-
 		user.Status.Conditions = append(user.Status.Conditions, metav1.Condition{
 			Type:               "UserCreated",
 			Status:             metav1.ConditionFalse,
 			LastTransitionTime: metav1.Now(),
 			Reason:             "UserCreated",
-			Message:            errorJSON.Message,
+			Message:            err.Error(),
 		})
 		if err := r.Status().Update(ctx, user); err != nil {
 			log.Error(err, "unable to update User status")
@@ -320,9 +328,15 @@ func buildUserRequestPayload(spec authv1alpha1.UserSpec) ([]byte, error) {
 	if spec.MaxParallelRequests != 0 {
 		payload["max_parallel_requests"] = spec.MaxParallelRequests
 	}
-	if spec.Metadata != nil {
-		payload["metadata"] = spec.Metadata
+	operatorMetadata := map[string]string{
+		"managed_by": "litellm-operator",
 	}
+	if spec.Metadata != nil {
+		for k, v := range spec.Metadata {
+			operatorMetadata[k] = v
+		}
+	}
+	payload["metadata"] = operatorMetadata
 
 	return json.Marshal(payload)
 }

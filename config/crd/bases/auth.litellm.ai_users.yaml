@@ -89,8 +89,10 @@ spec:
                   type: string
                 type: array
               sendInviteEmail:
-                description: SendInviteEmail is whether to send an invite email to
-                  the user
+                description: 'SendInviteEmail is whether to send an invite email to
+                  the user - NOTE: the user endpoint will return an error if email
+                  alerting is not configured and this is enabled, but the user will
+                  still be created.'
                 type: boolean
               softBudget:
                 description: SoftBudget - alert when user exceeds this budget, doesn't
