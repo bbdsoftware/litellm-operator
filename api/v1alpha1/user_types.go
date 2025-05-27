@@ -69,9 +69,9 @@ type UserStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 
-	// CreatedAt is the date and time when the key was created
+	// CreatedAt is the date and time when the user was created
 	CreatedAt string `json:"createdAt,omitempty"`
-	// UpdatedAt is the date and time when the key was last updated
+	// UpdatedAt is the date and time when the user was last updated
 	UpdatedAt string `json:"updatedAt,omitempty"`
 	// Expires is the date and time when the user will expire
 	Expires string `json:"expires,omitempty"`

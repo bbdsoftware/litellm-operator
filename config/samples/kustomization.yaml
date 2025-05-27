@@ -2,4 +2,5 @@
 resources:
 - auth_v1alpha1_virtualkey.yaml
 - auth_v1alpha1_user.yaml
+- auth_v1alpha1_team.yaml
 # +kubebuilder:scaffold:manifestskustomizesamples
