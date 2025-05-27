@@ -4,6 +4,7 @@
 resources:
 - bases/auth.litellm.ai_virtualkeys.yaml
 - bases/auth.litellm.ai_users.yaml
+- bases/auth.litellm.ai_teams.yaml
 # +kubebuilder:scaffold:crdkustomizeresource
 
 patches:
@@ -15,6 +16,7 @@ patches:
 # patches here are for enabling the CA injection for each CRD
 #- path: patches/cainjection_in_virtualkeys.yaml
 #- path: patches/cainjection_in_users.yaml
+#- path: patches/cainjection_in_teams.yaml
 # +kubebuilder:scaffold:crdkustomizecainjectionpatch
 
 # [WEBHOOK] To enable webhook, uncomment the following section

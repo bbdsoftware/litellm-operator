@@ -1,0 +1,14 @@
+apiVersion: auth.litellm.ai/v1alpha1
+kind: Team
+metadata:
+  labels:
+    app.kubernetes.io/name: litellm-operator
+    app.kubernetes.io/managed-by: kustomize
+  name: team-sample
+spec:
+  teamAlias: my-team
+  models:
+    - gpt-4o
+  membersWithRole:
+    - userEmail: my-team-admin@example.com # if this user does not exist, it will be created
+      role: admin
