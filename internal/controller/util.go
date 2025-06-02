@@ -100,3 +100,14 @@ func processLitellmError(log logr.Logger, message string, body []byte) (errorJSO
 	logLitellmError(log, errorResponse.Error, message)
 	return errorResponse.Error, nil
 }
+
+// ensureMetadata ensures that the metadata contains the managed_by metadata
+func ensureMetadata(metadata map[string]string) map[string]string {
+	operatorMetadata := map[string]string{
+		"managed_by": "litellm-operator",
+	}
+	for k, v := range metadata {
+		operatorMetadata[k] = v
+	}
+	return operatorMetadata
+}
