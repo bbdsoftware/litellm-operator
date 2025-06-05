@@ -18,6 +18,7 @@ package controller
 
 import (
 	"context"
+	"fmt"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -217,7 +218,7 @@ func (r *TeamReconciler) createTeam(ctx context.Context, l *litellm.LitellmClien
 	team.Status.TeamMemberPermissions = createTeamResponse.TeamMemberPermissions
 	team.Status.TPMLimit = createTeamResponse.TPMLimit
 	team.Status.RPMLimit = createTeamResponse.RPMLimit
-	team.Status.MaxBudget = createTeamResponse.MaxBudget
+	team.Status.MaxBudget = fmt.Sprintf("%.2f", createTeamResponse.MaxBudget)
 	team.Status.BudgetDuration = createTeamResponse.BudgetDuration
 	team.Status.BudgetResetAt = createTeamResponse.BudgetResetAt
 	team.Status.Models = createTeamResponse.Models

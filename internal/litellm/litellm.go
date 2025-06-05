@@ -26,6 +26,10 @@ type Litellm interface {
 	CreateTeam(ctx context.Context, req *CreateTeamRequest) (CreateTeamResponse, error)
 	DeleteTeam(ctx context.Context, teamID string) error
 	CheckTeamExists(ctx context.Context, teamAlias string) (bool, error)
+
+	GenerateVirtualKey(ctx context.Context, req *VirtualKeyRequest) (VirtualKeyResponse, error)
+	DeleteVirtualKey(ctx context.Context, keyAlias string) error
+	CheckVirtualKeyExists(ctx context.Context, keyAlias string) (bool, error)
 }
 
 func NewLitellmClient(baseURL, masterKey string) *LitellmClient {

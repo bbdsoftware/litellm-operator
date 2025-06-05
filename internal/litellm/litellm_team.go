@@ -38,7 +38,7 @@ type CreateTeamResponse struct {
 	TeamMemberPermissions []string             `json:"team_member_permissions"`
 	TPMLimit              string               `json:"tpm_limit"`
 	RPMLimit              string               `json:"rpm_limit"`
-	MaxBudget             string               `json:"max_budget"`
+	MaxBudget             float64              `json:"max_budget"`
 	BudgetDuration        string               `json:"budget_duration"`
 	BudgetResetAt         string               `json:"budget_reset_at"`
 	Models                []string             `json:"models"`
