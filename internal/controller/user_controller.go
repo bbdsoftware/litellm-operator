@@ -18,9 +18,7 @@ package controller
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"strconv"
 
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -32,6 +30,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	authv1alpha1 "github.com/bbdsoftware/litellm-operator/api/v1alpha1"
+	litellm "github.com/bbdsoftware/litellm-operator/internal/litellm"
 )
 
 // UserReconciler reconciles a User object
@@ -70,34 +69,44 @@ func (r *UserReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 		return ctrl.Result{}, err
 	}
 
+	l := litellm.NewLitellmClient(litellmBaseURL, litellmMasterKey)
+
 	if user.GetDeletionTimestamp() != nil {
 		if controllerutil.ContainsFinalizer(user, finalizerName) {
 			log.Info("Deleting User: " + user.Status.UserAlias + " from litellm")
-			return r.deleteUser(ctx, user)
+			return r.deleteUser(ctx, l, user)
 		}
 		return ctrl.Result{}, nil
 	}
 
 	if user.Status.Conditions == nil {
-		if checkUserExists(ctx, user) {
-			log.Info("User: " + user.Spec.UserAlias + " already exists in litellm - skipping")
-
-			user.Status.Conditions = append(user.Status.Conditions, metav1.Condition{
-				Type:               "UserCreated",
+		userExists, err := l.CheckUserExists(ctx, user.Spec.UserEmail)
+		if err != nil {
+			log.Error(err, "Failed to check if User exists")
+			r.appendCondition(ctx, user, metav1.Condition{
+				Type:               "CreateUser",
 				Status:             metav1.ConditionFalse,
 				LastTransitionTime: metav1.Now(),
-				Reason:             "UserCreated",
+				Reason:             "CheckUserExistsFailure",
+				Message:            err.Error(),
+			})
+			return ctrl.Result{}, err
+		}
+
+		if userExists {
+			log.Info("User: " + user.Spec.UserAlias + " already exists in litellm - skipping")
+
+			return r.appendCondition(ctx, user, metav1.Condition{
+				Type:               "CreateUser",
+				Status:             metav1.ConditionFalse,
+				LastTransitionTime: metav1.Now(),
+				Reason:             "CreateUserFailure",
 				Message:            "User already exists in litellm",
 			})
-			if err := r.Status().Update(ctx, user); err != nil {
-				log.Error(err, "unable to update User status")
-				return ctrl.Result{}, err
-			}
-			return ctrl.Result{}, nil
 		}
 
 		log.Info("Creating User: " + user.Spec.UserAlias + " in litellm")
-		return r.createUser(ctx, user)
+		return r.createUser(ctx, l, user)
 	}
 
 	return ctrl.Result{}, nil
@@ -110,16 +119,31 @@ func (r *UserReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Complete(r)
 }
 
-// deleteUser handles the deletion of a user from the litellm service
-func (r *UserReconciler) deleteUser(ctx context.Context, user *authv1alpha1.User) (ctrl.Result, error) {
+// appendCondition appends a condition to the User status and updates the User
+func (r *UserReconciler) appendCondition(ctx context.Context, user *authv1alpha1.User, condition metav1.Condition) (ctrl.Result, error) {
 	log := log.FromContext(ctx)
 
-	url := litellmBaseURL + "/user/delete"
-	body := []byte(`{"user_ids": ["` + user.Status.UserID + `"]}`)
-
-	_, err := makeLitellmRequest(ctx, "POST", url, body)
-	if err != nil {
+	user.Status.Conditions = append(user.Status.Conditions, condition)
+	if err := r.Status().Update(ctx, user); err != nil {
+		log.Error(err, "unable to update User status with condition")
 		return ctrl.Result{}, err
+	}
+
+	return ctrl.Result{}, nil
+}
+
+// deleteUser handles the deletion of a user from the litellm service
+func (r *UserReconciler) deleteUser(ctx context.Context, l *litellm.LitellmClient, user *authv1alpha1.User) (ctrl.Result, error) {
+	log := log.FromContext(ctx)
+
+	if err := l.DeleteUser(ctx, user.Status.UserID); err != nil {
+		return r.appendCondition(ctx, user, metav1.Condition{
+			Type:               "DeleteUser",
+			Status:             metav1.ConditionFalse,
+			LastTransitionTime: metav1.Now(),
+			Reason:             "DeleteUserFailure",
+			Message:            err.Error(),
+		})
 	}
 
 	controllerutil.RemoveFinalizer(user, finalizerName)
@@ -128,136 +152,73 @@ func (r *UserReconciler) deleteUser(ctx context.Context, user *authv1alpha1.User
 		return ctrl.Result{}, err
 	}
 
+	log.Info("Deleted User: " + user.Status.UserAlias + " from litellm")
 	return ctrl.Result{}, nil
 }
 
-// checkUserExists checks if a user already exists in the litellm service by email
-func checkUserExists(ctx context.Context, user *authv1alpha1.User) bool {
-	log := log.FromContext(ctx)
-	userExists := false
-
-	url := litellmBaseURL + "/user/list?user_email=" + user.Spec.UserEmail
-
-	body, err := makeLitellmRequest(ctx, "GET", url, nil)
-	if err != nil {
-		log.Error(err, "Failed to check if User exists")
-		return userExists
-	}
-
-	var response struct {
-		Users []struct {
-			UserID    string `json:"user_id"`
-			UserEmail string `json:"user_email"`
-		} `json:"users"`
-	}
-
-	if err := json.Unmarshal(body, &response); err != nil {
-		log.Error(err, "Failed to parse response body")
-		return userExists
-	}
-
-	if len(response.Users) == 0 {
-		return userExists
-	}
-
-	// should only be one user returned as you cannot have multiple users with the same email
-	if response.Users[0].UserEmail == user.Spec.UserEmail {
-		userExists = true
-		return userExists
-	}
-
-	return userExists
-}
-
 // createUser creates a new user for the litellm service
-func (r *UserReconciler) createUser(ctx context.Context, user *authv1alpha1.User) (ctrl.Result, error) {
+func (r *UserReconciler) createUser(ctx context.Context, l *litellm.LitellmClient, user *authv1alpha1.User) (ctrl.Result, error) {
 	log := log.FromContext(ctx)
 
-	url := litellmBaseURL + "/user/new"
-
-	jsonData, err := buildUserRequestPayload(user.Spec)
-	if err != nil {
-		log.Error(err, "Failed to build request payload")
-		return ctrl.Result{}, err
-	}
-
-	body, err := makeLitellmRequest(ctx, "POST", url, jsonData)
-	if err != nil {
-		user.Status.Conditions = append(user.Status.Conditions, metav1.Condition{
-			Type:               "UserCreated",
-			Status:             metav1.ConditionFalse,
-			LastTransitionTime: metav1.Now(),
-			Reason:             "UserCreated",
-			Message:            err.Error(),
-		})
-		if err := r.Status().Update(ctx, user); err != nil {
-			log.Error(err, "unable to update User status")
-			return ctrl.Result{}, err
-		}
-		return ctrl.Result{}, nil
-	}
-
-	// Parse the response to get key information
-	var response struct {
-		CreatedAt           string            `json:"created_at"`
-		UpdatedAt           string            `json:"updated_at"`
-		UserID              string            `json:"user_id"`
-		UserAlias           string            `json:"user_alias"`
-		UserEmail           string            `json:"user_email"`
-		UserKey             string            `json:"key"`
-		UserRole            string            `json:"user_role"`
-		Teams               []string          `json:"teams"`
-		KeyAlias            string            `json:"key_alias"`
-		MaxBudget           float64           `json:"max_budget"`
-		ModelMaxBudget      map[string]string `json:"model_max_budget"`
-		ModelRPMLimit       map[string]string `json:"model_rpm_limit"`
-		ModelTPMLimit       map[string]string `json:"model_tpm_limit"`
-		BudgetDuration      string            `json:"budget_duration"`
-		Expires             string            `json:"expires"`
-		MaxParallelRequests int               `json:"max_parallel_requests"`
-		Metadata            map[string]string `json:"metadata"`
-	}
-	if err := json.Unmarshal(body, &response); err != nil {
-		log.Error(err, "Failed to parse response body")
-		return ctrl.Result{}, err
-	}
-
-	secretKeyName := "user-" + response.UserAlias + "-key"
-
-	// Update the status with the key information
-	user.Status.CreatedAt = response.CreatedAt
-	user.Status.UpdatedAt = response.UpdatedAt
-	user.Status.UserID = response.UserID
-	user.Status.UserAlias = response.UserAlias
-	user.Status.UserEmail = response.UserEmail
-	user.Status.UserRole = response.UserRole
-	user.Status.Teams = response.Teams
-	user.Status.KeyAlias = response.KeyAlias
-	user.Status.MaxBudget = fmt.Sprintf("%.2f", response.MaxBudget)
-	user.Status.ModelMaxBudget = response.ModelMaxBudget
-	user.Status.ModelRPMLimit = response.ModelRPMLimit
-	user.Status.ModelTPMLimit = response.ModelTPMLimit
-	user.Status.BudgetDuration = response.BudgetDuration
-	user.Status.Expires = response.Expires
-	user.Status.SecretRef = secretKeyName
-	user.Status.MaxParallelRequests = response.MaxParallelRequests
-	user.Status.Metadata = response.Metadata
-
-	if err := r.createSecret(ctx, user, secretKeyName, response.UserKey); err != nil {
-		log.Error(err, "Failed to create secret")
-		return ctrl.Result{}, err
-	}
-
-	user.Status.Conditions = append(user.Status.Conditions, metav1.Condition{
-		Type:               "UserCreated",
-		Status:             metav1.ConditionTrue,
-		LastTransitionTime: metav1.Now(),
-		Reason:             "UserCreated",
-		Message:            "User created in Litellm",
+	userResponse, err := l.CreateUser(ctx, &litellm.CreateUserRequest{
+		UserID:              user.Spec.UserID,
+		UserAlias:           user.Spec.UserAlias,
+		UserEmail:           user.Spec.UserEmail,
+		UserRole:            user.Spec.UserRole,
+		SendInviteEmail:     user.Spec.SendInviteEmail,
+		Teams:               user.Spec.Teams,
+		AutoCreateKey:       user.Spec.AutoCreateKey,
+		KeyAlias:            user.Spec.KeyAlias,
+		SoftBudget:          user.Spec.SoftBudget,
+		MaxBudget:           user.Spec.MaxBudget,
+		ModelMaxBudget:      user.Spec.ModelMaxBudget,
+		ModelRPMLimit:       user.Spec.ModelRPMLimit,
+		ModelTPMLimit:       user.Spec.ModelTPMLimit,
+		BudgetDuration:      user.Spec.BudgetDuration,
+		Models:              user.Spec.Models,
+		MaxParallelRequests: user.Spec.MaxParallelRequests,
+		Metadata:            ensureMetadata(user.Spec.Metadata),
 	})
 
-	if err := r.Status().Update(ctx, user); err != nil {
-		log.Error(err, "unable to update User status")
+	if err != nil {
+		return r.appendCondition(ctx, user, metav1.Condition{
+			Type:               "CreateUser",
+			Status:             metav1.ConditionFalse,
+			LastTransitionTime: metav1.Now(),
+			Reason:             "CreateUserFailure",
+			Message:            err.Error(),
+		})
+	}
+
+	keySecret := "user-" + userResponse.UserAlias + "-key"
+
+	// Update the status with the key information
+	user.Status.CreatedAt = userResponse.CreatedAt
+	user.Status.UpdatedAt = userResponse.UpdatedAt
+	user.Status.Expires = userResponse.Expires
+	user.Status.UserID = userResponse.UserID
+	user.Status.UserAlias = userResponse.UserAlias
+	user.Status.UserEmail = userResponse.UserEmail
+	user.Status.UserRole = userResponse.UserRole
+	user.Status.Teams = userResponse.Teams
+	user.Status.KeyAlias = userResponse.KeyAlias
+	user.Status.MaxBudget = fmt.Sprintf("%.2f", userResponse.MaxBudget)
+	user.Status.Models = userResponse.Models
+	user.Status.ModelMaxBudget = userResponse.ModelMaxBudget
+	user.Status.ModelRPMLimit = userResponse.ModelRPMLimit
+	user.Status.ModelTPMLimit = userResponse.ModelTPMLimit
+	user.Status.BudgetDuration = userResponse.BudgetDuration
+	user.Status.SecretRef = keySecret
+	user.Status.MaxParallelRequests = userResponse.MaxParallelRequests
+	user.Status.Metadata = userResponse.Metadata
+
+	if _, err := r.appendCondition(ctx, user, metav1.Condition{
+		Type:               "CreateUser",
+		Status:             metav1.ConditionTrue,
+		LastTransitionTime: metav1.Now(),
+		Reason:             "CreateUserSuccess",
+		Message:            "User created in Litellm",
+	}); err != nil {
 		return ctrl.Result{}, err
 	}
 
@@ -267,78 +228,13 @@ func (r *UserReconciler) createUser(ctx context.Context, user *authv1alpha1.User
 		return ctrl.Result{}, err
 	}
 
+	if err := r.createSecret(ctx, user, keySecret, userResponse.Key); err != nil {
+		log.Error(err, "Failed to create secret")
+		return ctrl.Result{}, err
+	}
+
+	log.Info("Created User: " + user.Spec.UserAlias + " in litellm")
 	return ctrl.Result{}, nil
-}
-
-// buildKeyRequestPayload creates a JSON payload for key generation based on the User spec
-func buildUserRequestPayload(spec authv1alpha1.UserSpec) ([]byte, error) {
-	payload := make(map[string]interface{})
-
-	// Optional fields - only add if they have values
-	if spec.UserID != "" {
-		payload["user_id"] = spec.UserID
-	}
-	if spec.UserAlias != "" {
-		payload["user_alias"] = spec.UserAlias
-	}
-	if spec.UserEmail != "" {
-		payload["user_email"] = spec.UserEmail
-	}
-	if spec.UserRole != "" {
-		payload["user_role"] = spec.UserRole
-	}
-	if spec.SendInviteEmail {
-		payload["send_invite_email"] = spec.SendInviteEmail
-	}
-	if len(spec.Teams) > 0 {
-		payload["teams"] = spec.Teams
-	}
-	if spec.AutoCreateKey {
-		payload["auto_create_key"] = spec.AutoCreateKey
-	}
-	if spec.KeyAlias != "" {
-		payload["key_alias"] = spec.KeyAlias
-	}
-	if spec.SoftBudget != "" {
-		payload["soft_budget"] = spec.SoftBudget
-	}
-	if spec.MaxBudget != "" {
-		maxBudget, err := strconv.ParseFloat(spec.MaxBudget, 64)
-		if err != nil {
-			return nil, fmt.Errorf("invalid max_budget value: %v", err)
-		}
-		payload["max_budget"] = maxBudget
-	}
-	if spec.ModelMaxBudget != nil {
-		payload["model_max_budget"] = spec.ModelMaxBudget
-	}
-	if spec.ModelRPMLimit != nil {
-		payload["model_rpm_limit"] = spec.ModelRPMLimit
-	}
-	if spec.ModelTPMLimit != nil {
-		payload["model_tpm_limit"] = spec.ModelTPMLimit
-	}
-	payload["budget_duration"] = spec.BudgetDuration
-	if spec.BudgetDuration != "" {
-		payload["budget_duration"] = spec.BudgetDuration
-	}
-	if len(spec.Models) > 0 {
-		payload["models"] = spec.Models
-	}
-	if spec.MaxParallelRequests != 0 {
-		payload["max_parallel_requests"] = spec.MaxParallelRequests
-	}
-	operatorMetadata := map[string]string{
-		"managed_by": "litellm-operator",
-	}
-	if spec.Metadata != nil {
-		for k, v := range spec.Metadata {
-			operatorMetadata[k] = v
-		}
-	}
-	payload["metadata"] = operatorMetadata
-
-	return json.Marshal(payload)
 }
 
 // createSecret stores the secret key in a Kubernetes Secret that is owned by the User

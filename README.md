@@ -8,6 +8,7 @@ The operator is used to manage CRUD operations on litellm resources:
 
 - Virtual Keys
 - Users
+- Teams
 
 ## Getting Started
 
