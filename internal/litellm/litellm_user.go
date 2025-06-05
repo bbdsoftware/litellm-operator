@@ -48,6 +48,7 @@ type CreateUserResponse struct {
 	Metadata            map[string]string `json:"metadata"`
 }
 
+// CreateUser creates a new user in the Litellm service
 func (l *LitellmClient) CreateUser(ctx context.Context, req *CreateUserRequest) (CreateUserResponse, error) {
 	log := log.FromContext(ctx)
 
@@ -105,7 +106,7 @@ func (l *LitellmClient) CheckUserExists(ctx context.Context, userEmail string) (
 	}
 
 	if err := json.Unmarshal(body, &response); err != nil {
-		log.Error(err, "Failed to parse response body")
+		log.Error(err, "Failed to unmarshal response from Litellm")
 		return false, err
 	}
 

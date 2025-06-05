@@ -18,7 +18,6 @@ package controller
 
 import (
 	"context"
-	"encoding/json"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -29,6 +28,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	authv1alpha1 "github.com/bbdsoftware/litellm-operator/api/v1alpha1"
+	"github.com/bbdsoftware/litellm-operator/internal/litellm"
 )
 
 // TeamReconciler reconciles a Team object
@@ -67,34 +67,44 @@ func (r *TeamReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 		return ctrl.Result{}, err
 	}
 
+	l := litellm.NewLitellmClient(litellmBaseURL, litellmMasterKey)
+
 	if team.GetDeletionTimestamp() != nil {
 		if controllerutil.ContainsFinalizer(team, finalizerName) {
 			log.Info("Deleting Team: " + team.Status.TeamAlias + " from litellm")
-			return r.deleteTeam(ctx, team)
+			return r.deleteTeam(ctx, l, team)
 		}
 		return ctrl.Result{}, nil
 	}
 
 	if team.Status.Conditions == nil {
-		if checkTeamExists(ctx, team) {
-			log.Info("Team: " + team.Spec.TeamAlias + " already exists in litellm - skipping")
-
-			team.Status.Conditions = append(team.Status.Conditions, metav1.Condition{
-				Type:               "TeamCreated",
+		teamExists, err := l.CheckTeamExists(ctx, team.Spec.TeamAlias)
+		if err != nil {
+			log.Error(err, "Failed to check if Team exists")
+			r.appendCondition(ctx, team, metav1.Condition{
+				Type:               "CreateTeam",
 				Status:             metav1.ConditionFalse,
 				LastTransitionTime: metav1.Now(),
-				Reason:             "TeamCreated",
+				Reason:             "CheckTeamExistsFailure",
+				Message:            err.Error(),
+			})
+			return ctrl.Result{}, err
+		}
+
+		if teamExists {
+			log.Info("Team: " + team.Spec.TeamAlias + " already exists in litellm - skipping")
+
+			return r.appendCondition(ctx, team, metav1.Condition{
+				Type:               "CreateTeam",
+				Status:             metav1.ConditionFalse,
+				LastTransitionTime: metav1.Now(),
+				Reason:             "CreateTeamFailure",
 				Message:            "Team already exists in litellm",
 			})
-			if err := r.Status().Update(ctx, team); err != nil {
-				log.Error(err, "unable to update Team status")
-				return ctrl.Result{}, err
-			}
-			return ctrl.Result{}, nil
 		}
 
 		log.Info("Creating Team: " + team.Spec.TeamAlias + " in litellm")
-		return r.createTeam(ctx, team)
+		return r.createTeam(ctx, l, team)
 	}
 	return ctrl.Result{}, nil
 }
@@ -106,16 +116,31 @@ func (r *TeamReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Complete(r)
 }
 
-// deleteTeam handles the deletion of a team from the litellm service
-func (r *TeamReconciler) deleteTeam(ctx context.Context, team *authv1alpha1.Team) (ctrl.Result, error) {
+// appendCondition appends a condition to the Team status and updates the Team
+func (r *TeamReconciler) appendCondition(ctx context.Context, team *authv1alpha1.Team, condition metav1.Condition) (ctrl.Result, error) {
 	log := log.FromContext(ctx)
 
-	url := litellmBaseURL + "/team/delete"
-	body := []byte(`{"team_ids": ["` + team.Status.TeamID + `"]}`)
-
-	_, err := makeLitellmRequest(ctx, "POST", url, body)
-	if err != nil {
+	team.Status.Conditions = append(team.Status.Conditions, condition)
+	if err := r.Status().Update(ctx, team); err != nil {
+		log.Error(err, "unable to update Team status with condition")
 		return ctrl.Result{}, err
+	}
+
+	return ctrl.Result{}, nil
+}
+
+// deleteTeam handles the deletion of a team from the litellm service
+func (r *TeamReconciler) deleteTeam(ctx context.Context, l *litellm.LitellmClient, team *authv1alpha1.Team) (ctrl.Result, error) {
+	log := log.FromContext(ctx)
+
+	if err := l.DeleteTeam(ctx, team.Status.TeamID); err != nil {
+		return r.appendCondition(ctx, team, metav1.Condition{
+			Type:               "DeleteTeam",
+			Status:             metav1.ConditionFalse,
+			LastTransitionTime: metav1.Now(),
+			Reason:             "DeleteTeamFailure",
+			Message:            err.Error(),
+		})
 	}
 
 	controllerutil.RemoveFinalizer(team, finalizerName)
@@ -124,122 +149,88 @@ func (r *TeamReconciler) deleteTeam(ctx context.Context, team *authv1alpha1.Team
 		return ctrl.Result{}, err
 	}
 
+	log.Info("Deleted Team: " + team.Status.TeamAlias + " from litellm")
 	return ctrl.Result{}, nil
 }
 
-// checkTeamExists checks if a team already exists in the litellm service by alias
-func checkTeamExists(ctx context.Context, team *authv1alpha1.Team) bool {
-	log := log.FromContext(ctx)
-	teamExists := false
-
-	url := litellmBaseURL + "/v2/team/list?team_alias=" + team.Spec.TeamAlias
-
-	body, err := makeLitellmRequest(ctx, "GET", url, nil)
-	if err != nil {
-		log.Error(err, "Failed to check if Team exists")
-		return teamExists
+// convertToLitellmTeamMemberWithRole converts the TeamMemberWithRole to the Litellm TeamMemberWithRole
+func convertToLitellmTeamMemberWithRole(membersWithRole []authv1alpha1.TeamMemberWithRole) []litellm.TeamMemberWithRole {
+	litellmMembersWithRole := []litellm.TeamMemberWithRole{}
+	for _, member := range membersWithRole {
+		litellmMembersWithRole = append(litellmMembersWithRole, litellm.TeamMemberWithRole{
+			UserID:    member.UserID,
+			UserEmail: member.UserEmail,
+			Role:      member.Role,
+		})
 	}
+	return litellmMembersWithRole
+}
 
-	var response struct {
-		Teams []struct {
-			TeamID    string `json:"team_id"`
-			TeamAlias string `json:"team_alias"`
-		} `json:"teams"`
+// convertToTeamMemberWithRole converts the Litellm TeamMemberWithRole to TeamMemberWithRole
+func convertToTeamMemberWithRole(membersWithRole []litellm.TeamMemberWithRole) []authv1alpha1.TeamMemberWithRole {
+	authv1alpha1MembersWithRole := []authv1alpha1.TeamMemberWithRole{}
+	for _, member := range membersWithRole {
+		authv1alpha1MembersWithRole = append(authv1alpha1MembersWithRole, authv1alpha1.TeamMemberWithRole{
+			UserID:    member.UserID,
+			UserEmail: member.UserEmail,
+			Role:      member.Role,
+		})
 	}
-
-	if err := json.Unmarshal(body, &response); err != nil {
-		log.Error(err, "Failed to parse response body")
-		return teamExists
-	}
-
-	if len(response.Teams) == 0 {
-		return teamExists
-	}
-
-	if response.Teams[0].TeamAlias == team.Spec.TeamAlias {
-		teamExists = true
-	}
-
-	return teamExists
+	return authv1alpha1MembersWithRole
 }
 
 // createTeam creates a new team for the litellm service
-func (r *TeamReconciler) createTeam(ctx context.Context, team *authv1alpha1.Team) (ctrl.Result, error) {
+func (r *TeamReconciler) createTeam(ctx context.Context, l *litellm.LitellmClient, team *authv1alpha1.Team) (ctrl.Result, error) {
 	log := log.FromContext(ctx)
 
-	url := litellmBaseURL + "/team/new"
+	createTeamResponse, err := l.CreateTeam(ctx, &litellm.CreateTeamRequest{
+		TeamAlias:             team.Spec.TeamAlias,
+		TeamID:                team.Spec.TeamID,
+		OrganizationID:        team.Spec.OrganizationID,
+		MembersWithRole:       convertToLitellmTeamMemberWithRole(team.Spec.MembersWithRole),
+		TeamMemberPermissions: team.Spec.TeamMemberPermissions,
+		TPMLimit:              team.Spec.TPMLimit,
+		RPMLimit:              team.Spec.RPMLimit,
+		MaxBudget:             team.Spec.MaxBudget,
+		BudgetDuration:        team.Spec.BudgetDuration,
+		Models:                team.Spec.Models,
+		Tags:                  team.Spec.Tags,
+		Metadata:              ensureMetadata(team.Spec.Metadata),
+	})
 
-	jsonData, err := buildTeamRequestPayload(team.Spec)
 	if err != nil {
-		log.Error(err, "Failed to build request payload")
-		return ctrl.Result{}, err
-	}
-
-	body, err := makeLitellmRequest(ctx, "POST", url, jsonData)
-
-	if err != nil {
-		team.Status.Conditions = append(team.Status.Conditions, metav1.Condition{
-			Type:               "TeamCreated",
+		return r.appendCondition(ctx, team, metav1.Condition{
+			Type:               "CreateTeam",
 			Status:             metav1.ConditionFalse,
 			LastTransitionTime: metav1.Now(),
-			Reason:             "TeamCreated",
+			Reason:             "CreateTeamFailure",
 			Message:            err.Error(),
 		})
-		if err := r.Status().Update(ctx, team); err != nil {
-			log.Error(err, "unable to update Team status")
-			return ctrl.Result{}, err
-		}
-		return ctrl.Result{}, nil
 	}
 
-	// Parse the response to get key information
-	var response struct {
-		CreatedAt             string                            `json:"created_at"`
-		UpdatedAt             string                            `json:"updated_at"`
-		TeamID                string                            `json:"team_id"`
-		TeamAlias             string                            `json:"team_alias"`
-		OrganizationID        string                            `json:"organization_id"`
-		MembersWithRoles      []authv1alpha1.TeamMemberWithRole `json:"members_with_roles"`
-		TeamMemberPermissions []string                          `json:"team_member_permissions"`
-		TPMLimit              string                            `json:"tpm_limit"`
-		RPMLimit              string                            `json:"rpm_limit"`
-		MaxBudget             string                            `json:"max_budget"`
-		BudgetDuration        string                            `json:"budget_duration"`
-		BudgetResetAt         string                            `json:"budget_reset_at"`
-		Models                []string                          `json:"models"`
-		Metadata              map[string]string                 `json:"metadata"`
-	}
+	team.Status.CreatedAt = createTeamResponse.CreatedAt
+	team.Status.UpdatedAt = createTeamResponse.UpdatedAt
+	team.Status.TeamID = createTeamResponse.TeamID
+	team.Status.TeamAlias = createTeamResponse.TeamAlias
+	team.Status.OrganizationID = createTeamResponse.OrganizationID
+	team.Status.MembersWithRole = convertToTeamMemberWithRole(createTeamResponse.MembersWithRole)
+	team.Status.TeamMemberPermissions = createTeamResponse.TeamMemberPermissions
+	team.Status.TPMLimit = createTeamResponse.TPMLimit
+	team.Status.RPMLimit = createTeamResponse.RPMLimit
+	team.Status.MaxBudget = createTeamResponse.MaxBudget
+	team.Status.BudgetDuration = createTeamResponse.BudgetDuration
+	team.Status.BudgetResetAt = createTeamResponse.BudgetResetAt
+	team.Status.Models = createTeamResponse.Models
+	team.Status.Tags = createTeamResponse.Tags
+	team.Status.Metadata = createTeamResponse.Metadata
 
-	if err := json.Unmarshal(body, &response); err != nil {
-		log.Error(err, "Failed to parse response body")
-		return ctrl.Result{}, err
-	}
-
-	team.Status.CreatedAt = response.CreatedAt
-	team.Status.UpdatedAt = response.UpdatedAt
-	team.Status.TeamID = response.TeamID
-	team.Status.TeamAlias = response.TeamAlias
-	team.Status.OrganizationID = response.OrganizationID
-	team.Status.MembersWithRole = response.MembersWithRoles
-	team.Status.TeamMemberPermissions = response.TeamMemberPermissions
-	team.Status.TPMLimit = response.TPMLimit
-	team.Status.RPMLimit = response.RPMLimit
-	team.Status.MaxBudget = response.MaxBudget
-	team.Status.BudgetDuration = response.BudgetDuration
-	team.Status.BudgetResetAt = response.BudgetResetAt
-	team.Status.Models = response.Models
-	team.Status.Metadata = response.Metadata
-
-	team.Status.Conditions = append(team.Status.Conditions, metav1.Condition{
+	if _, err := r.appendCondition(ctx, team, metav1.Condition{
 		Type:               "TeamCreated",
 		Status:             metav1.ConditionTrue,
 		LastTransitionTime: metav1.Now(),
 		Reason:             "TeamCreated",
 		Message:            "Team created in litellm",
-	})
-
-	if err := r.Status().Update(ctx, team); err != nil {
-		log.Error(err, "unable to update Team status")
+	}); err != nil {
 		return ctrl.Result{}, err
 	}
 
@@ -249,67 +240,6 @@ func (r *TeamReconciler) createTeam(ctx context.Context, team *authv1alpha1.Team
 		return ctrl.Result{}, err
 	}
 
+	log.Info("Created Team: " + team.Spec.TeamAlias + " in litellm")
 	return ctrl.Result{}, nil
-}
-
-// buildTeamRequestPayload builds the request payload for the createTeam function
-func buildTeamRequestPayload(spec authv1alpha1.TeamSpec) ([]byte, error) {
-	payload := map[string]interface{}{
-		"team_alias": spec.TeamAlias,
-	}
-	if spec.TeamID != "" {
-		payload["team_id"] = spec.TeamID
-	}
-	if spec.OrganizationID != "" {
-		payload["organization_id"] = spec.OrganizationID
-	}
-	if spec.MembersWithRole != nil {
-		membersWithRoles := []map[string]string{}
-		for _, member := range spec.MembersWithRole {
-			memberMap := make(map[string]string)
-			if member.UserID != "" {
-				memberMap["user_id"] = member.UserID
-			}
-			if member.UserEmail != "" {
-				memberMap["user_email"] = member.UserEmail
-			}
-			if member.Role != "" {
-				memberMap["role"] = member.Role
-			}
-			membersWithRoles = append(membersWithRoles, memberMap)
-		}
-		payload["members_with_roles"] = membersWithRoles
-	}
-	if spec.TeamMemberPermissions != nil {
-		payload["team_member_permissions"] = spec.TeamMemberPermissions
-	}
-	if spec.TPMLimit != "" {
-		payload["tpm_limit"] = spec.TPMLimit
-	}
-	if spec.RPMLimit != "" {
-		payload["rpm_limit"] = spec.RPMLimit
-	}
-	if spec.MaxBudget != "" {
-		payload["max_budget"] = spec.MaxBudget
-	}
-	if spec.BudgetDuration != "" {
-		payload["budget_duration"] = spec.BudgetDuration
-	}
-	if spec.Models != nil {
-		payload["models"] = spec.Models
-	}
-	if spec.Tags != nil {
-		payload["tags"] = spec.Tags
-	}
-	operatorMetadata := map[string]string{
-		"managed_by": "litellm-operator",
-	}
-	if spec.Metadata != nil {
-		for k, v := range spec.Metadata {
-			operatorMetadata[k] = v
-		}
-	}
-	payload["metadata"] = operatorMetadata
-
-	return json.Marshal(payload)
 }
