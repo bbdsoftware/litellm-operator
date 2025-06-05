@@ -19,9 +19,13 @@ type LitellmClient struct {
 }
 
 type Litellm interface {
-	CreateUser(ctx context.Context, req *CreateUserRequest) (*CreateUserResponse, error)
+	CreateUser(ctx context.Context, req *CreateUserRequest) (CreateUserResponse, error)
 	DeleteUser(ctx context.Context, userID string) error
 	CheckUserExists(ctx context.Context, userEmail string) (bool, error)
+
+	CreateTeam(ctx context.Context, req *CreateTeamRequest) (CreateTeamResponse, error)
+	DeleteTeam(ctx context.Context, teamID string) error
+	CheckTeamExists(ctx context.Context, teamAlias string) (bool, error)
 }
 
 func NewLitellmClient(baseURL, masterKey string) *LitellmClient {

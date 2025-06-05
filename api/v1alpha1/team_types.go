@@ -94,6 +94,8 @@ type TeamStatus struct {
 	BudgetResetAt string `json:"budgetResetAt,omitempty"`
 	// Models is the list of models that are associated with the team. All keys for this team_id will have at most, these models.
 	Models []string `json:"models,omitempty"`
+	// Tags is the list of tags that are used for tracking spend and/or doing tag-based routing
+	Tags []string `json:"tags,omitempty"`
 	// Metadata is the metadata of the team
 	Metadata map[string]string `json:"metadata,omitempty"`
 

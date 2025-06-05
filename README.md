@@ -4,7 +4,7 @@ A Kubernetes operator for managing litellm resources.
 
 ## Description
 
-The operator is used to manage CRUD operations on litellm resources:
+The operator is used to manage REST API operations on litellm resources:
 
 - Virtual Keys
 - Users
