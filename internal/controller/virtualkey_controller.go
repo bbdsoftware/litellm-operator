@@ -18,9 +18,7 @@ package controller
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"strconv"
 
 	corev1 "k8s.io/api/core/v1"
 
@@ -31,6 +29,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	authv1alpha1 "github.com/bbdsoftware/litellm-operator/api/v1alpha1"
+	"github.com/bbdsoftware/litellm-operator/internal/litellm"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -72,17 +71,19 @@ func (r *VirtualKeyReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		return ctrl.Result{}, err
 	}
 
+	l := litellm.NewLitellmClient(litellmBaseURL, litellmMasterKey)
+
 	if virtualKey.GetDeletionTimestamp() != nil {
 		if controllerutil.ContainsFinalizer(virtualKey, finalizerName) {
 			log.Info("Deleting VirtualKey: " + virtualKey.Status.KeyAlias + " from litellm")
-			return r.deleteVirtualKey(ctx, virtualKey)
+			return r.deleteVirtualKey(ctx, l, virtualKey)
 		}
 		return ctrl.Result{}, nil
 	}
 
 	if virtualKey.Status.Conditions == nil {
 		log.Info("Generating new VirtualKey: " + virtualKey.Spec.KeyAlias + " in litellm")
-		return r.generateVirtualKey(ctx, virtualKey)
+		return r.generateVirtualKey(ctx, l, virtualKey)
 	}
 
 	return ctrl.Result{}, nil
@@ -96,16 +97,31 @@ func (r *VirtualKeyReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Complete(r)
 }
 
-// deleteVirtualKey handles the deletion of a virtual key from the litellm service
-func (r *VirtualKeyReconciler) deleteVirtualKey(ctx context.Context, virtualKey *authv1alpha1.VirtualKey) (ctrl.Result, error) {
+// appendCondition appends a condition to the VirtualKey status and updates the VirtualKey
+func (r *VirtualKeyReconciler) appendCondition(ctx context.Context, virtualKey *authv1alpha1.VirtualKey, condition metav1.Condition) (ctrl.Result, error) {
 	log := log.FromContext(ctx)
 
-	url := litellmBaseURL + "/key/delete"
-
-	_, err := makeLitellmRequest(ctx, "POST", url, []byte(`{"key_aliases": ["`+virtualKey.Status.KeyAlias+`"]}`))
-	if err != nil {
-		log.Error(err, "Failed to delete key")
+	virtualKey.Status.Conditions = append(virtualKey.Status.Conditions, condition)
+	if err := r.Status().Update(ctx, virtualKey); err != nil {
+		log.Error(err, "unable to update VirtualKey status with condition")
 		return ctrl.Result{}, err
+	}
+
+	return ctrl.Result{}, nil
+}
+
+// deleteVirtualKey handles the deletion of a virtual key from the litellm service
+func (r *VirtualKeyReconciler) deleteVirtualKey(ctx context.Context, l *litellm.LitellmClient, virtualKey *authv1alpha1.VirtualKey) (ctrl.Result, error) {
+	log := log.FromContext(ctx)
+
+	if err := l.DeleteVirtualKey(ctx, virtualKey.Status.KeyAlias); err != nil {
+		return r.appendCondition(ctx, virtualKey, metav1.Condition{
+			Type:               "DeleteVirtualKey",
+			Status:             metav1.ConditionFalse,
+			LastTransitionTime: metav1.Now(),
+			Reason:             "DeleteVirtualKeyFailure",
+			Message:            err.Error(),
+		})
 	}
 
 	controllerutil.RemoveFinalizer(virtualKey, finalizerName)
@@ -114,90 +130,56 @@ func (r *VirtualKeyReconciler) deleteVirtualKey(ctx context.Context, virtualKey 
 		return ctrl.Result{}, err
 	}
 
+	log.Info("Deleted VirtualKey: " + virtualKey.Status.KeyAlias + " from litellm")
 	return ctrl.Result{}, nil
 }
 
 // generateVirtualKey generates a new virtual key for the litellm service
-func (r *VirtualKeyReconciler) generateVirtualKey(ctx context.Context, virtualKey *authv1alpha1.VirtualKey) (ctrl.Result, error) {
+func (r *VirtualKeyReconciler) generateVirtualKey(ctx context.Context, l *litellm.LitellmClient, virtualKey *authv1alpha1.VirtualKey) (ctrl.Result, error) {
 	log := log.FromContext(ctx)
 
-	url := litellmBaseURL + "/key/generate"
-
-	jsonData, err := buildKeyRequestPayload(virtualKey.Spec)
-	if err != nil {
-		log.Error(err, "Failed to build request payload")
-		return ctrl.Result{}, err
-	}
-
-	body, err := makeLitellmRequest(ctx, "POST", url, jsonData)
-	if err != nil {
-		log.Error(err, "Failed to generate key")
-
-		virtualKey.Status.Conditions = append(virtualKey.Status.Conditions, metav1.Condition{
-			Type:               "KeyGenerated",
-			Status:             metav1.ConditionFalse,
-			LastTransitionTime: metav1.Now(),
-			Reason:             "KeyGenerated",
-			Message:            err.Error(),
-		})
-		if err := r.Status().Update(ctx, virtualKey); err != nil {
-			log.Error(err, "unable to update VirtualKey status")
-			return ctrl.Result{}, err
-		}
-		return ctrl.Result{}, nil
-	}
-
-	// Parse the response to get key information
-	var response struct {
-		CreatedAt      string            `json:"created_at"`
-		UpdatedAt      string            `json:"updated_at"`
-		BudgetDuration string            `json:"budget_duration"`
-		Expires        string            `json:"expires"`
-		KeyAlias       string            `json:"key_alias"`
-		KeyName        string            `json:"key_name"`
-		MaxBudget      float64           `json:"max_budget"`
-		Models         []string          `json:"models"`
-		SecretKey      string            `json:"key"`
-		TokenID        string            `json:"token_id"`
-		UserID         string            `json:"user_id"`
-		Metadata       map[string]string `json:"metadata"`
-	}
-	if err := json.Unmarshal(body, &response); err != nil {
-		log.Error(err, "Failed to parse response body")
-		return ctrl.Result{}, err
-	}
-
-	secretKeyName := "virtual-key-" + response.KeyAlias
-
-	// Update the status with the key information
-	virtualKey.Status.CreatedAt = response.CreatedAt
-	virtualKey.Status.UpdatedAt = response.UpdatedAt
-	virtualKey.Status.BudgetDuration = response.BudgetDuration
-	virtualKey.Status.Expires = response.Expires
-	virtualKey.Status.KeyAlias = response.KeyAlias
-	virtualKey.Status.KeyID = response.TokenID
-	virtualKey.Status.KeyName = response.KeyName
-	virtualKey.Status.MaxBudget = fmt.Sprintf("%.2f", response.MaxBudget)
-	virtualKey.Status.Models = response.Models
-	virtualKey.Status.UserID = response.UserID
-	virtualKey.Status.SecretRef = secretKeyName
-	virtualKey.Status.Metadata = response.Metadata
-
-	if err := r.createSecret(ctx, virtualKey, secretKeyName, response.SecretKey); err != nil {
-		log.Error(err, "Failed to create secret")
-		return ctrl.Result{}, err
-	}
-
-	virtualKey.Status.Conditions = append(virtualKey.Status.Conditions, metav1.Condition{
-		Type:               "KeyGenerated",
-		Status:             metav1.ConditionTrue,
-		LastTransitionTime: metav1.Now(),
-		Reason:             "KeyGenerated",
-		Message:            "Key generated in Litellm",
+	generateVirtualKeyResponse, err := l.GenerateVirtualKey(ctx, &litellm.VirtualKeyRequest{
+		KeyAlias:       virtualKey.Spec.KeyAlias,
+		UserID:         virtualKey.Spec.UserID,
+		TeamID:         virtualKey.Spec.TeamID,
+		MaxBudget:      virtualKey.Spec.MaxBudget,
+		BudgetDuration: virtualKey.Spec.BudgetDuration,
+		Models:         virtualKey.Spec.Models,
+		Metadata:       ensureMetadata(virtualKey.Spec.Metadata),
 	})
 
-	if err := r.Status().Update(ctx, virtualKey); err != nil {
-		log.Error(err, "unable to update VirtualKey status")
+	if err != nil {
+		return r.appendCondition(ctx, virtualKey, metav1.Condition{
+			Type:               "GenerateVirtualKey",
+			Status:             metav1.ConditionFalse,
+			LastTransitionTime: metav1.Now(),
+			Reason:             "GenerateVirtualKeyFailure",
+			Message:            err.Error(),
+		})
+	}
+
+	secretKeyName := "virtual-key-" + generateVirtualKeyResponse.KeyAlias
+
+	virtualKey.Status.CreatedAt = generateVirtualKeyResponse.CreatedAt
+	virtualKey.Status.UpdatedAt = generateVirtualKeyResponse.UpdatedAt
+	virtualKey.Status.Expires = generateVirtualKeyResponse.Expires
+	virtualKey.Status.KeyAlias = generateVirtualKeyResponse.KeyAlias
+	virtualKey.Status.KeyID = generateVirtualKeyResponse.TokenID
+	virtualKey.Status.KeyName = generateVirtualKeyResponse.KeyName
+	virtualKey.Status.MaxBudget = fmt.Sprintf("%.2f", generateVirtualKeyResponse.MaxBudget)
+	virtualKey.Status.BudgetDuration = generateVirtualKeyResponse.BudgetDuration
+	virtualKey.Status.Models = generateVirtualKeyResponse.Models
+	virtualKey.Status.UserID = generateVirtualKeyResponse.UserID
+	virtualKey.Status.SecretRef = secretKeyName
+	virtualKey.Status.Metadata = generateVirtualKeyResponse.Metadata
+
+	if _, err := r.appendCondition(ctx, virtualKey, metav1.Condition{
+		Type:               "GenerateVirtualKey",
+		Status:             metav1.ConditionTrue,
+		LastTransitionTime: metav1.Now(),
+		Reason:             "GenerateVirtualKeySuccess",
+		Message:            "VirtualKey generated in Litellm",
+	}); err != nil {
 		return ctrl.Result{}, err
 	}
 
@@ -207,45 +189,13 @@ func (r *VirtualKeyReconciler) generateVirtualKey(ctx context.Context, virtualKe
 		return ctrl.Result{}, err
 	}
 
+	if err := r.createSecret(ctx, virtualKey, secretKeyName, generateVirtualKeyResponse.SecretKey); err != nil {
+		log.Error(err, "Failed to create secret")
+		return ctrl.Result{}, err
+	}
+
+	log.Info("Created VirtualKey: " + virtualKey.Status.KeyAlias + " in litellm")
 	return ctrl.Result{}, nil
-}
-
-// buildKeyRequestPayload creates a JSON payload for key generation based on the VirtualKey spec
-func buildKeyRequestPayload(spec authv1alpha1.VirtualKeySpec) ([]byte, error) {
-	payload := make(map[string]interface{})
-
-	// Required fields
-	payload["key_alias"] = spec.KeyAlias
-	payload["user_id"] = spec.UserID
-
-	// Optional fields - only add if they have values
-	if spec.TeamID != "" {
-		payload["team_id"] = spec.TeamID
-	}
-	if spec.MaxBudget != "" {
-		maxBudget, err := strconv.ParseFloat(spec.MaxBudget, 64)
-		if err != nil {
-			return nil, fmt.Errorf("invalid max_budget value: %v", err)
-		}
-		payload["max_budget"] = maxBudget
-	}
-	if spec.BudgetDuration != "" {
-		payload["budget_duration"] = spec.BudgetDuration
-	}
-	if len(spec.Models) > 0 {
-		payload["models"] = spec.Models
-	}
-	operatorMetadata := map[string]string{
-		"managed_by": "litellm-operator",
-	}
-	if spec.Metadata != nil {
-		for k, v := range spec.Metadata {
-			operatorMetadata[k] = v
-		}
-	}
-	payload["metadata"] = operatorMetadata
-
-	return json.Marshal(payload)
 }
 
 // createSecret stores the secret key in a Kubernetes Secret that is owned by the VirtualKey
