@@ -28,11 +28,50 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	authv1alpha1 "github.com/bbdsoftware/litellm-operator/api/v1alpha1"
+	"github.com/bbdsoftware/litellm-operator/internal/litellm"
 )
+
+type FakeLitellmTeamClient struct {
+	teamExists bool
+}
+
+func (l *FakeLitellmTeamClient) CreateTeam(ctx context.Context, req *litellm.TeamRequest) (litellm.TeamResponse, error) {
+	return litellm.TeamResponse{
+		CreatedAt:      "2024-03-20T10:00:00Z",
+		UpdatedAt:      "2024-03-20T10:00:00Z",
+		TeamID:         "test-team-id",
+		TeamAlias:      req.TeamAlias,
+		OrganizationID: req.OrganizationID,
+		MembersWithRole: []litellm.TeamMemberWithRole{
+			{
+				UserID:    "user1",
+				UserEmail: "user1@example.com",
+				Role:      "admin",
+			},
+		},
+		TeamMemberPermissions: req.TeamMemberPermissions,
+		TPMLimit:              req.TPMLimit,
+		RPMLimit:              req.RPMLimit,
+		MaxBudget:             100.0,
+		BudgetDuration:        req.BudgetDuration,
+		BudgetResetAt:         "2024-04-20T10:00:00Z",
+		Models:                req.Models,
+		Tags:                  req.Tags,
+		Metadata:              req.Metadata,
+	}, nil
+}
+
+func (l *FakeLitellmTeamClient) DeleteTeam(ctx context.Context, teamID string) error {
+	return nil
+}
+
+func (l *FakeLitellmTeamClient) CheckTeamExists(ctx context.Context, teamAlias string) (bool, error) {
+	return l.teamExists, nil
+}
 
 var _ = Describe("Team Controller", func() {
 	Context("When reconciling a resource", func() {
-		const resourceName = "test-resource"
+		const resourceName = "test-team"
 
 		ctx := context.Background()
 
@@ -51,7 +90,10 @@ var _ = Describe("Team Controller", func() {
 						Name:      resourceName,
 						Namespace: "default",
 					},
-					// TODO(user): Specify other spec details if needed.
+					Spec: authv1alpha1.TeamSpec{
+						TeamAlias:      "test-alias",
+						OrganizationID: "test-org",
+					},
 				}
 				Expect(k8sClient.Create(ctx, resource)).To(Succeed())
 			}
@@ -69,8 +111,9 @@ var _ = Describe("Team Controller", func() {
 		It("should successfully reconcile the resource", func() {
 			By("Reconciling the created resource")
 			controllerReconciler := &TeamReconciler{
-				Client: k8sClient,
-				Scheme: k8sClient.Scheme(),
+				Client:      k8sClient,
+				Scheme:      k8sClient.Scheme(),
+				LitellmTeam: &FakeLitellmTeamClient{teamExists: false},
 			}
 
 			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
@@ -79,6 +122,27 @@ var _ = Describe("Team Controller", func() {
 			Expect(err).NotTo(HaveOccurred())
 			// TODO(user): Add more specific assertions depending on your controller's reconciliation logic.
 			// Example: If you expect a certain status condition after reconciliation, verify it here.
+			By("Verifying the team status was updated")
+			team := &authv1alpha1.Team{}
+			err = k8sClient.Get(ctx, typeNamespacedName, team)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(team.Status.TeamID).To(Equal("test-team-id"))
+			Expect(team.Status.TeamAlias).To(Equal("test-alias"))
+			Expect(team.Status.OrganizationID).To(Equal("test-org"))
+			Expect(team.Status.MembersWithRole).To(Equal([]authv1alpha1.TeamMemberWithRole{
+				{
+					UserID:    "user1",
+					UserEmail: "user1@example.com",
+					Role:      "admin",
+				},
+			}))
+
+			By("Verifying the conditions were updated")
+			Expect(team.Status.Conditions).To(HaveLen(1))
+			Expect(team.Status.Conditions[0].Type).To(Equal("TeamCreated"))
+			Expect(team.Status.Conditions[0].Status).To(Equal(metav1.ConditionTrue))
+			Expect(team.Status.Conditions[0].Reason).To(Equal("TeamCreated"))
+			Expect(team.Status.Conditions[0].Message).To(Equal("Team created in litellm"))
 		})
 	})
 })

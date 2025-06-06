@@ -28,7 +28,30 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	authv1alpha1 "github.com/bbdsoftware/litellm-operator/api/v1alpha1"
+	"github.com/bbdsoftware/litellm-operator/internal/litellm"
 )
+
+type FakeLitellmVirtualKeyClient struct{}
+
+func (l *FakeLitellmVirtualKeyClient) GenerateVirtualKey(ctx context.Context, req *litellm.VirtualKeyRequest) (litellm.VirtualKeyResponse, error) {
+	return litellm.VirtualKeyResponse{
+		KeyAlias:  "test-virtual-key-alias",
+		KeyName:   "test-virtual-key-name",
+		UserID:    "test-user-id",
+		Expires:   "2024-03-20T10:00:00Z",
+		Key:       "test-secret-key",
+		TokenID:   "test-token-id",
+		MaxBudget: 100.0,
+	}, nil
+}
+
+func (l *FakeLitellmVirtualKeyClient) DeleteVirtualKey(ctx context.Context, keyAlias string) error {
+	return nil
+}
+
+func (l *FakeLitellmVirtualKeyClient) CheckVirtualKeyExists(ctx context.Context, virtualKeyID string) (bool, error) {
+	return true, nil
+}
 
 var _ = Describe("VirtualKey Controller", func() {
 	Context("When reconciling a resource", func() {
@@ -69,8 +92,9 @@ var _ = Describe("VirtualKey Controller", func() {
 		It("should successfully reconcile the resource", func() {
 			By("Reconciling the created resource")
 			controllerReconciler := &VirtualKeyReconciler{
-				Client: k8sClient,
-				Scheme: k8sClient.Scheme(),
+				Client:            k8sClient,
+				Scheme:            k8sClient.Scheme(),
+				LitellmVirtualKey: &FakeLitellmVirtualKeyClient{},
 			}
 
 			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
