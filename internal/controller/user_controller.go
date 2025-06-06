@@ -146,6 +146,10 @@ func (r *UserReconciler) deleteUser(ctx context.Context, user *authv1alpha1.User
 	}
 
 	controllerutil.RemoveFinalizer(user, finalizerName)
+	if err := r.Update(ctx, user); err != nil {
+		log.Error(err, "Failed to remove finalizer")
+		return ctrl.Result{}, err
+	}
 	log.Info("Deleted User: " + user.Status.UserAlias + " from litellm")
 	return ctrl.Result{}, nil
 }
@@ -206,6 +210,8 @@ func (r *UserReconciler) createUser(ctx context.Context, user *authv1alpha1.User
 	user.Status.MaxParallelRequests = userResponse.MaxParallelRequests
 	user.Status.Metadata = userResponse.Metadata
 
+	controllerutil.AddFinalizer(user, finalizerName)
+
 	if _, err := r.appendCondition(ctx, user, metav1.Condition{
 		Type:               "CreateUser",
 		Status:             metav1.ConditionTrue,
@@ -215,8 +221,6 @@ func (r *UserReconciler) createUser(ctx context.Context, user *authv1alpha1.User
 	}); err != nil {
 		return ctrl.Result{}, err
 	}
-
-	controllerutil.AddFinalizer(user, finalizerName)
 
 	if err := r.createSecret(ctx, user, keySecret, userResponse.Key); err != nil {
 		log.Error(err, "Failed to create secret")
