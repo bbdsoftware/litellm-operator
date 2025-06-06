@@ -7,6 +7,12 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
+type LitellmVirtualKey interface {
+	GenerateVirtualKey(ctx context.Context, req *VirtualKeyRequest) (VirtualKeyResponse, error)
+	DeleteVirtualKey(ctx context.Context, keyAlias string) error
+	CheckVirtualKeyExists(ctx context.Context, keyAlias string) (bool, error)
+}
+
 type VirtualKeyRequest struct {
 	KeyAlias       string            `json:"key_alias,omitempty"`
 	UserID         string            `json:"user_id,omitempty"`

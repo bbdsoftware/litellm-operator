@@ -38,6 +38,7 @@ import (
 type VirtualKeyReconciler struct {
 	client.Client
 	Scheme *runtime.Scheme
+	litellm.LitellmVirtualKey
 }
 
 // +kubebuilder:rbac:groups=auth.litellm.ai,resources=virtualkeys,verbs=get;list;watch;create;update;patch;delete
@@ -71,19 +72,17 @@ func (r *VirtualKeyReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		return ctrl.Result{}, err
 	}
 
-	l := litellm.NewLitellmClient(litellmBaseURL, litellmMasterKey)
-
 	if virtualKey.GetDeletionTimestamp() != nil {
 		if controllerutil.ContainsFinalizer(virtualKey, finalizerName) {
 			log.Info("Deleting VirtualKey: " + virtualKey.Status.KeyAlias + " from litellm")
-			return r.deleteVirtualKey(ctx, l, virtualKey)
+			return r.deleteVirtualKey(ctx, virtualKey)
 		}
 		return ctrl.Result{}, nil
 	}
 
 	if virtualKey.Status.Conditions == nil {
 		log.Info("Generating new VirtualKey: " + virtualKey.Spec.KeyAlias + " in litellm")
-		return r.generateVirtualKey(ctx, l, virtualKey)
+		return r.generateVirtualKey(ctx, virtualKey)
 	}
 
 	return ctrl.Result{}, nil
@@ -111,10 +110,10 @@ func (r *VirtualKeyReconciler) appendCondition(ctx context.Context, virtualKey *
 }
 
 // deleteVirtualKey handles the deletion of a virtual key from the litellm service
-func (r *VirtualKeyReconciler) deleteVirtualKey(ctx context.Context, l *litellm.LitellmClient, virtualKey *authv1alpha1.VirtualKey) (ctrl.Result, error) {
+func (r *VirtualKeyReconciler) deleteVirtualKey(ctx context.Context, virtualKey *authv1alpha1.VirtualKey) (ctrl.Result, error) {
 	log := log.FromContext(ctx)
 
-	if err := l.DeleteVirtualKey(ctx, virtualKey.Status.KeyAlias); err != nil {
+	if err := r.DeleteVirtualKey(ctx, virtualKey.Status.KeyAlias); err != nil {
 		return r.appendCondition(ctx, virtualKey, metav1.Condition{
 			Type:               "DeleteVirtualKey",
 			Status:             metav1.ConditionFalse,
@@ -125,20 +124,15 @@ func (r *VirtualKeyReconciler) deleteVirtualKey(ctx context.Context, l *litellm.
 	}
 
 	controllerutil.RemoveFinalizer(virtualKey, finalizerName)
-	if err := r.Update(ctx, virtualKey); err != nil {
-		log.Error(err, "Failed to remove finalizer from VirtualKey")
-		return ctrl.Result{}, err
-	}
-
 	log.Info("Deleted VirtualKey: " + virtualKey.Status.KeyAlias + " from litellm")
 	return ctrl.Result{}, nil
 }
 
 // generateVirtualKey generates a new virtual key for the litellm service
-func (r *VirtualKeyReconciler) generateVirtualKey(ctx context.Context, l *litellm.LitellmClient, virtualKey *authv1alpha1.VirtualKey) (ctrl.Result, error) {
+func (r *VirtualKeyReconciler) generateVirtualKey(ctx context.Context, virtualKey *authv1alpha1.VirtualKey) (ctrl.Result, error) {
 	log := log.FromContext(ctx)
 
-	generateVirtualKeyResponse, err := l.GenerateVirtualKey(ctx, &litellm.VirtualKeyRequest{
+	generateVirtualKeyResponse, err := r.GenerateVirtualKey(ctx, &litellm.VirtualKeyRequest{
 		KeyAlias:       virtualKey.Spec.KeyAlias,
 		UserID:         virtualKey.Spec.UserID,
 		TeamID:         virtualKey.Spec.TeamID,
@@ -184,10 +178,6 @@ func (r *VirtualKeyReconciler) generateVirtualKey(ctx context.Context, l *litell
 	}
 
 	controllerutil.AddFinalizer(virtualKey, finalizerName)
-	if err := r.Update(ctx, virtualKey); err != nil {
-		log.Error(err, "Failed to add finalizer to VirtualKey")
-		return ctrl.Result{}, err
-	}
 
 	if err := r.createSecret(ctx, virtualKey, secretKeyName, generateVirtualKeyResponse.SecretKey); err != nil {
 		log.Error(err, "Failed to create secret")

@@ -7,6 +7,12 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
+type LitellmUser interface {
+	CreateUser(ctx context.Context, req *CreateUserRequest) (CreateUserResponse, error)
+	DeleteUser(ctx context.Context, userID string) error
+	CheckUserExists(ctx context.Context, userEmail string) (bool, error)
+}
+
 type CreateUserRequest struct {
 	UserID              string            `json:"user_id,omitempty"`
 	UserAlias           string            `json:"user_alias,omitempty"`

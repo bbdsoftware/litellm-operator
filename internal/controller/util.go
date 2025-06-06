@@ -16,18 +16,8 @@ limitations under the License.
 
 package controller
 
-import (
-	"os"
-)
-
 // finalizerName is the name of the finalizer used by the litellm operator
 const finalizerName = "litellm-operator.litellm.ai/finalizer"
-
-// litellmBaseURL is the base URL for the litellm service
-var litellmBaseURL = os.Getenv("LITELLM_BASE_URL")
-
-// litellmMasterKey is the master key for authenticating with the litellm service
-var litellmMasterKey = os.Getenv("LITELLM_MASTER_KEY")
 
 // ensureMetadata ensures that the metadata contains the managed_by metadata
 func ensureMetadata(metadata map[string]string) map[string]string {

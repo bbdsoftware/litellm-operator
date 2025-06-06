@@ -36,6 +36,7 @@ import (
 type TeamReconciler struct {
 	client.Client
 	Scheme *runtime.Scheme
+	litellm.LitellmTeam
 }
 
 // +kubebuilder:rbac:groups=auth.litellm.ai,resources=teams,verbs=get;list;watch;create;update;patch;delete
@@ -68,18 +69,16 @@ func (r *TeamReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 		return ctrl.Result{}, err
 	}
 
-	l := litellm.NewLitellmClient(litellmBaseURL, litellmMasterKey)
-
 	if team.GetDeletionTimestamp() != nil {
 		if controllerutil.ContainsFinalizer(team, finalizerName) {
 			log.Info("Deleting Team: " + team.Status.TeamAlias + " from litellm")
-			return r.deleteTeam(ctx, l, team)
+			return r.deleteTeam(ctx, team)
 		}
 		return ctrl.Result{}, nil
 	}
 
 	if team.Status.Conditions == nil {
-		teamExists, err := l.CheckTeamExists(ctx, team.Spec.TeamAlias)
+		teamExists, err := r.CheckTeamExists(ctx, team.Spec.TeamAlias)
 		if err != nil {
 			log.Error(err, "Failed to check if Team exists")
 			r.appendCondition(ctx, team, metav1.Condition{
@@ -105,7 +104,7 @@ func (r *TeamReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 		}
 
 		log.Info("Creating Team: " + team.Spec.TeamAlias + " in litellm")
-		return r.createTeam(ctx, l, team)
+		return r.createTeam(ctx, team)
 	}
 	return ctrl.Result{}, nil
 }
@@ -131,10 +130,10 @@ func (r *TeamReconciler) appendCondition(ctx context.Context, team *authv1alpha1
 }
 
 // deleteTeam handles the deletion of a team from the litellm service
-func (r *TeamReconciler) deleteTeam(ctx context.Context, l *litellm.LitellmClient, team *authv1alpha1.Team) (ctrl.Result, error) {
+func (r *TeamReconciler) deleteTeam(ctx context.Context, team *authv1alpha1.Team) (ctrl.Result, error) {
 	log := log.FromContext(ctx)
 
-	if err := l.DeleteTeam(ctx, team.Status.TeamID); err != nil {
+	if err := r.DeleteTeam(ctx, team.Status.TeamID); err != nil {
 		return r.appendCondition(ctx, team, metav1.Condition{
 			Type:               "DeleteTeam",
 			Status:             metav1.ConditionFalse,
@@ -145,11 +144,6 @@ func (r *TeamReconciler) deleteTeam(ctx context.Context, l *litellm.LitellmClien
 	}
 
 	controllerutil.RemoveFinalizer(team, finalizerName)
-	if err := r.Update(ctx, team); err != nil {
-		log.Error(err, "Failed to remove finalizer from Team")
-		return ctrl.Result{}, err
-	}
-
 	log.Info("Deleted Team: " + team.Status.TeamAlias + " from litellm")
 	return ctrl.Result{}, nil
 }
@@ -167,24 +161,24 @@ func convertToLitellmTeamMemberWithRole(membersWithRole []authv1alpha1.TeamMembe
 	return litellmMembersWithRole
 }
 
-// convertToTeamMemberWithRole converts the Litellm TeamMemberWithRole to TeamMemberWithRole
-func convertToTeamMemberWithRole(membersWithRole []litellm.TeamMemberWithRole) []authv1alpha1.TeamMemberWithRole {
-	authv1alpha1MembersWithRole := []authv1alpha1.TeamMemberWithRole{}
+// convertToK8sTeamMemberWithRole converts the Litellm TeamMemberWithRole to TeamMemberWithRole
+func convertToK8sTeamMemberWithRole(membersWithRole []litellm.TeamMemberWithRole) []authv1alpha1.TeamMemberWithRole {
+	k8sMembersWithRole := []authv1alpha1.TeamMemberWithRole{}
 	for _, member := range membersWithRole {
-		authv1alpha1MembersWithRole = append(authv1alpha1MembersWithRole, authv1alpha1.TeamMemberWithRole{
+		k8sMembersWithRole = append(k8sMembersWithRole, authv1alpha1.TeamMemberWithRole{
 			UserID:    member.UserID,
 			UserEmail: member.UserEmail,
 			Role:      member.Role,
 		})
 	}
-	return authv1alpha1MembersWithRole
+	return k8sMembersWithRole
 }
 
 // createTeam creates a new team for the litellm service
-func (r *TeamReconciler) createTeam(ctx context.Context, l *litellm.LitellmClient, team *authv1alpha1.Team) (ctrl.Result, error) {
+func (r *TeamReconciler) createTeam(ctx context.Context, team *authv1alpha1.Team) (ctrl.Result, error) {
 	log := log.FromContext(ctx)
 
-	createTeamResponse, err := l.CreateTeam(ctx, &litellm.CreateTeamRequest{
+	createTeamResponse, err := r.CreateTeam(ctx, &litellm.CreateTeamRequest{
 		TeamAlias:             team.Spec.TeamAlias,
 		TeamID:                team.Spec.TeamID,
 		OrganizationID:        team.Spec.OrganizationID,
@@ -214,7 +208,7 @@ func (r *TeamReconciler) createTeam(ctx context.Context, l *litellm.LitellmClien
 	team.Status.TeamID = createTeamResponse.TeamID
 	team.Status.TeamAlias = createTeamResponse.TeamAlias
 	team.Status.OrganizationID = createTeamResponse.OrganizationID
-	team.Status.MembersWithRole = convertToTeamMemberWithRole(createTeamResponse.MembersWithRole)
+	team.Status.MembersWithRole = convertToK8sTeamMemberWithRole(createTeamResponse.MembersWithRole)
 	team.Status.TeamMemberPermissions = createTeamResponse.TeamMemberPermissions
 	team.Status.TPMLimit = createTeamResponse.TPMLimit
 	team.Status.RPMLimit = createTeamResponse.RPMLimit
@@ -236,11 +230,6 @@ func (r *TeamReconciler) createTeam(ctx context.Context, l *litellm.LitellmClien
 	}
 
 	controllerutil.AddFinalizer(team, finalizerName)
-	if err := r.Update(ctx, team); err != nil {
-		log.Error(err, "Failed to add finalizer to Team")
-		return ctrl.Result{}, err
-	}
-
 	log.Info("Created Team: " + team.Spec.TeamAlias + " in litellm")
 	return ctrl.Result{}, nil
 }
