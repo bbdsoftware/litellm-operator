@@ -124,6 +124,10 @@ func (r *VirtualKeyReconciler) deleteVirtualKey(ctx context.Context, virtualKey 
 	}
 
 	controllerutil.RemoveFinalizer(virtualKey, finalizerName)
+	if err := r.Update(ctx, virtualKey); err != nil {
+		log.Error(err, "Failed to remove finalizer")
+		return ctrl.Result{}, err
+	}
 	log.Info("Deleted VirtualKey: " + virtualKey.Status.KeyAlias + " from litellm")
 	return ctrl.Result{}, nil
 }
@@ -167,6 +171,8 @@ func (r *VirtualKeyReconciler) generateVirtualKey(ctx context.Context, virtualKe
 	virtualKey.Status.SecretRef = secretKeyName
 	virtualKey.Status.Metadata = generateVirtualKeyResponse.Metadata
 
+	controllerutil.AddFinalizer(virtualKey, finalizerName)
+
 	if _, err := r.appendCondition(ctx, virtualKey, metav1.Condition{
 		Type:               "GenerateVirtualKey",
 		Status:             metav1.ConditionTrue,
@@ -176,8 +182,6 @@ func (r *VirtualKeyReconciler) generateVirtualKey(ctx context.Context, virtualKe
 	}); err != nil {
 		return ctrl.Result{}, err
 	}
-
-	controllerutil.AddFinalizer(virtualKey, finalizerName)
 
 	if err := r.createSecret(ctx, virtualKey, secretKeyName, generateVirtualKeyResponse.SecretKey); err != nil {
 		log.Error(err, "Failed to create secret")

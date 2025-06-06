@@ -144,6 +144,10 @@ func (r *TeamReconciler) deleteTeam(ctx context.Context, team *authv1alpha1.Team
 	}
 
 	controllerutil.RemoveFinalizer(team, finalizerName)
+	if err := r.Update(ctx, team); err != nil {
+		log.Error(err, "Failed to remove finalizer")
+		return ctrl.Result{}, err
+	}
 	log.Info("Deleted Team: " + team.Status.TeamAlias + " from litellm")
 	return ctrl.Result{}, nil
 }
@@ -230,6 +234,10 @@ func (r *TeamReconciler) createTeam(ctx context.Context, team *authv1alpha1.Team
 	}
 
 	controllerutil.AddFinalizer(team, finalizerName)
+	if err := r.Update(ctx, team); err != nil {
+		log.Error(err, "Failed to add finalizer")
+		return ctrl.Result{}, err
+	}
 	log.Info("Created Team: " + team.Spec.TeamAlias + " in litellm")
 	return ctrl.Result{}, nil
 }
