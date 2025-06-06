@@ -37,6 +37,7 @@ import (
 type UserReconciler struct {
 	client.Client
 	Scheme *runtime.Scheme
+	litellm.LitellmUser
 }
 
 // +kubebuilder:rbac:groups=auth.litellm.ai,resources=users,verbs=get;list;watch;create;update;patch;delete
@@ -69,18 +70,16 @@ func (r *UserReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 		return ctrl.Result{}, err
 	}
 
-	l := litellm.NewLitellmClient(litellmBaseURL, litellmMasterKey)
-
 	if user.GetDeletionTimestamp() != nil {
 		if controllerutil.ContainsFinalizer(user, finalizerName) {
 			log.Info("Deleting User: " + user.Status.UserAlias + " from litellm")
-			return r.deleteUser(ctx, l, user)
+			return r.deleteUser(ctx, user)
 		}
 		return ctrl.Result{}, nil
 	}
 
 	if user.Status.Conditions == nil {
-		userExists, err := l.CheckUserExists(ctx, user.Spec.UserEmail)
+		userExists, err := r.CheckUserExists(ctx, user.Spec.UserEmail)
 		if err != nil {
 			log.Error(err, "Failed to check if User exists")
 			r.appendCondition(ctx, user, metav1.Condition{
@@ -106,7 +105,7 @@ func (r *UserReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 		}
 
 		log.Info("Creating User: " + user.Spec.UserAlias + " in litellm")
-		return r.createUser(ctx, l, user)
+		return r.createUser(ctx, user)
 	}
 
 	return ctrl.Result{}, nil
@@ -133,10 +132,10 @@ func (r *UserReconciler) appendCondition(ctx context.Context, user *authv1alpha1
 }
 
 // deleteUser handles the deletion of a user from the litellm service
-func (r *UserReconciler) deleteUser(ctx context.Context, l *litellm.LitellmClient, user *authv1alpha1.User) (ctrl.Result, error) {
+func (r *UserReconciler) deleteUser(ctx context.Context, user *authv1alpha1.User) (ctrl.Result, error) {
 	log := log.FromContext(ctx)
 
-	if err := l.DeleteUser(ctx, user.Status.UserID); err != nil {
+	if err := r.DeleteUser(ctx, user.Status.UserID); err != nil {
 		return r.appendCondition(ctx, user, metav1.Condition{
 			Type:               "DeleteUser",
 			Status:             metav1.ConditionFalse,
@@ -147,20 +146,15 @@ func (r *UserReconciler) deleteUser(ctx context.Context, l *litellm.LitellmClien
 	}
 
 	controllerutil.RemoveFinalizer(user, finalizerName)
-	if err := r.Update(ctx, user); err != nil {
-		log.Error(err, "Failed to remove finalizer from User")
-		return ctrl.Result{}, err
-	}
-
 	log.Info("Deleted User: " + user.Status.UserAlias + " from litellm")
 	return ctrl.Result{}, nil
 }
 
 // createUser creates a new user for the litellm service
-func (r *UserReconciler) createUser(ctx context.Context, l *litellm.LitellmClient, user *authv1alpha1.User) (ctrl.Result, error) {
+func (r *UserReconciler) createUser(ctx context.Context, user *authv1alpha1.User) (ctrl.Result, error) {
 	log := log.FromContext(ctx)
 
-	userResponse, err := l.CreateUser(ctx, &litellm.CreateUserRequest{
+	userResponse, err := r.CreateUser(ctx, &litellm.CreateUserRequest{
 		UserID:              user.Spec.UserID,
 		UserAlias:           user.Spec.UserAlias,
 		UserEmail:           user.Spec.UserEmail,
@@ -223,10 +217,6 @@ func (r *UserReconciler) createUser(ctx context.Context, l *litellm.LitellmClien
 	}
 
 	controllerutil.AddFinalizer(user, finalizerName)
-	if err := r.Update(ctx, user); err != nil {
-		log.Error(err, "Failed to add finalizer to User")
-		return ctrl.Result{}, err
-	}
 
 	if err := r.createSecret(ctx, user, keySecret, userResponse.Key); err != nil {
 		log.Error(err, "Failed to create secret")

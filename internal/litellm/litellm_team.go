@@ -7,6 +7,12 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
+type LitellmTeam interface {
+	CreateTeam(ctx context.Context, req *CreateTeamRequest) (CreateTeamResponse, error)
+	DeleteTeam(ctx context.Context, teamID string) error
+	CheckTeamExists(ctx context.Context, teamAlias string) (bool, error)
+}
+
 type TeamMemberWithRole struct {
 	UserID    string `json:"user_id,omitempty"`
 	UserEmail string `json:"user_email,omitempty"`
