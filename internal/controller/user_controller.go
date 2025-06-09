@@ -188,7 +188,7 @@ func (r *UserReconciler) createUser(ctx context.Context, user *authv1alpha1.User
 		})
 	}
 
-	keySecret := "user-" + userResponse.UserAlias + "-key"
+	keySecret := "litellm-key-" + userResponse.UserAlias
 
 	// Update the status with the key information
 	user.Status.CreatedAt = userResponse.CreatedAt
@@ -210,8 +210,6 @@ func (r *UserReconciler) createUser(ctx context.Context, user *authv1alpha1.User
 	user.Status.MaxParallelRequests = userResponse.MaxParallelRequests
 	user.Status.Metadata = userResponse.Metadata
 
-	controllerutil.AddFinalizer(user, finalizerName)
-
 	if _, err := r.appendCondition(ctx, user, metav1.Condition{
 		Type:               "CreateUser",
 		Status:             metav1.ConditionTrue,
@@ -219,6 +217,12 @@ func (r *UserReconciler) createUser(ctx context.Context, user *authv1alpha1.User
 		Reason:             "CreateUserSuccess",
 		Message:            "User created in Litellm",
 	}); err != nil {
+		return ctrl.Result{}, err
+	}
+
+	controllerutil.AddFinalizer(user, finalizerName)
+	if err := r.Update(ctx, user); err != nil {
+		log.Error(err, "Failed to add finalizer")
 		return ctrl.Result{}, err
 	}
 
