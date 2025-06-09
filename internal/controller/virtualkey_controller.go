@@ -18,6 +18,7 @@ package controller
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strconv"
 
@@ -151,8 +152,7 @@ func (r *VirtualKeyReconciler) generateVirtualKey(ctx context.Context, virtualKe
 		return ctrl.Result{}, err
 	}
 
-	generateVirtualKeyResponse, err := r.GenerateVirtualKey(ctx, &virtualKeyRequest)
-
+	virtualKeyResponse, err := r.GenerateVirtualKey(ctx, &virtualKeyRequest)
 	if err != nil {
 		return r.appendCondition(ctx, virtualKey, metav1.Condition{
 			Type:               "GenerateVirtualKey",
@@ -163,9 +163,9 @@ func (r *VirtualKeyReconciler) generateVirtualKey(ctx context.Context, virtualKe
 		})
 	}
 
-	secretKeyName := "litellm-key-" + generateVirtualKeyResponse.KeyAlias
+	secretName := "litellm-key-" + virtualKeyResponse.KeyAlias
 
-	err = r.updateStatus(ctx, virtualKey, generateVirtualKeyResponse, secretKeyName)
+	err = r.updateStatus(ctx, virtualKey, virtualKeyResponse, secretName)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
@@ -176,7 +176,7 @@ func (r *VirtualKeyReconciler) generateVirtualKey(ctx context.Context, virtualKe
 		return ctrl.Result{}, err
 	}
 
-	if err := r.createSecret(ctx, virtualKey, secretKeyName, generateVirtualKeyResponse.Key); err != nil {
+	if err := r.createSecret(ctx, virtualKey, secretName, virtualKeyResponse.Key); err != nil {
 		log.Error(err, "Failed to create secret")
 		return ctrl.Result{}, err
 	}
@@ -186,7 +186,7 @@ func (r *VirtualKeyReconciler) generateVirtualKey(ctx context.Context, virtualKe
 }
 
 // createSecret stores the secret key in a Kubernetes Secret that is owned by the VirtualKey
-func (r *VirtualKeyReconciler) createSecret(ctx context.Context, virtualKey *authv1alpha1.VirtualKey, secretName string, secretKey string) error {
+func (r *VirtualKeyReconciler) createSecret(ctx context.Context, virtualKey *authv1alpha1.VirtualKey, secretName string, key string) error {
 	secret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      secretName,
@@ -201,7 +201,7 @@ func (r *VirtualKeyReconciler) createSecret(ctx context.Context, virtualKey *aut
 			},
 		},
 		Data: map[string][]byte{
-			"SecretKey": []byte(secretKey),
+			"key": []byte(key),
 		},
 	}
 
@@ -210,17 +210,7 @@ func (r *VirtualKeyReconciler) createSecret(ctx context.Context, virtualKey *aut
 
 // createVirtualKeyRequest creates a VirtualKeyRequest from a VirtualKey
 func createVirtualKeyRequest(virtualKey *authv1alpha1.VirtualKey) (litellm.VirtualKeyRequest, error) {
-	maxBudget, err := strconv.ParseFloat(virtualKey.Spec.MaxBudget, 64)
-	if err != nil {
-		return litellm.VirtualKeyRequest{}, err
-	}
-
-	softBudget, err := strconv.ParseFloat(virtualKey.Spec.SoftBudget, 64)
-	if err != nil && virtualKey.Spec.SoftBudget != "" {
-		return litellm.VirtualKeyRequest{}, err
-	}
-
-	return litellm.VirtualKeyRequest{
+	virtualKeyRequest := litellm.VirtualKeyRequest{
 		Aliases:              virtualKey.Spec.Aliases,
 		AllowedCacheControls: virtualKey.Spec.AllowedCacheControls,
 		AllowedRoutes:        virtualKey.Spec.AllowedRoutes,
@@ -233,7 +223,6 @@ func createVirtualKeyRequest(virtualKey *authv1alpha1.VirtualKey) (litellm.Virtu
 		Guardrails:           virtualKey.Spec.Guardrails,
 		Key:                  virtualKey.Spec.Key,
 		KeyAlias:             virtualKey.Spec.KeyAlias,
-		MaxBudget:            maxBudget,
 		MaxParallelRequests:  virtualKey.Spec.MaxParallelRequests,
 		Metadata:             ensureMetadata(virtualKey.Spec.Metadata),
 		ModelMaxBudget:       virtualKey.Spec.ModelMaxBudget,
@@ -243,12 +232,28 @@ func createVirtualKeyRequest(virtualKey *authv1alpha1.VirtualKey) (litellm.Virtu
 		Permissions:          virtualKey.Spec.Permissions,
 		RPMLimit:             virtualKey.Spec.RPMLimit,
 		SendInviteEmail:      virtualKey.Spec.SendInviteEmail,
-		SoftBudget:           softBudget,
 		Tags:                 virtualKey.Spec.Tags,
 		TeamID:               virtualKey.Spec.TeamID,
 		TPMLimit:             virtualKey.Spec.TPMLimit,
 		UserID:               virtualKey.Spec.UserID,
-	}, nil
+	}
+
+	if virtualKey.Spec.MaxBudget != "" {
+		maxBudget, err := strconv.ParseFloat(virtualKey.Spec.MaxBudget, 64)
+		if err != nil {
+			return litellm.VirtualKeyRequest{}, errors.New("maxBudget: " + err.Error())
+		}
+		virtualKeyRequest.MaxBudget = maxBudget
+	}
+	if virtualKey.Spec.SoftBudget != "" {
+		softBudget, err := strconv.ParseFloat(virtualKey.Spec.SoftBudget, 64)
+		if err != nil {
+			return litellm.VirtualKeyRequest{}, errors.New("softBudget: " + err.Error())
+		}
+		virtualKeyRequest.SoftBudget = softBudget
+	}
+
+	return virtualKeyRequest, nil
 }
 
 // updateStatus updates the status of the k8s VirtualKey from the litellm response
@@ -266,7 +271,6 @@ func (r *VirtualKeyReconciler) updateStatus(ctx context.Context, virtualKey *aut
 	virtualKey.Status.EnforcedParams = virtualKeyResponse.EnforcedParams
 	virtualKey.Status.Expires = virtualKeyResponse.Expires
 	virtualKey.Status.Guardrails = virtualKeyResponse.Guardrails
-	virtualKey.Status.Key = virtualKeyResponse.Key
 	virtualKey.Status.KeyAlias = virtualKeyResponse.KeyAlias
 	virtualKey.Status.KeyID = virtualKeyResponse.TokenID
 	virtualKey.Status.KeyName = virtualKeyResponse.KeyName

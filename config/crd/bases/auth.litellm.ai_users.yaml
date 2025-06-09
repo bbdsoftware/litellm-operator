@@ -39,9 +39,23 @@ spec:
           spec:
             description: UserSpec defines the desired state of User
             properties:
+              aliases:
+                additionalProperties:
+                  type: string
+                description: Aliases is the model aliases for the user
+                type: object
+              allowedCacheControls:
+                description: AllowedCacheControls is the list of allowed cache control
+                  values
+                items:
+                  type: string
+                type: array
               autoCreateKey:
                 description: AutoCreateKey is whether to automatically create a key
                   for the user
+                type: boolean
+              blocked:
+                description: Blocked is whether the user is blocked
                 type: boolean
               budgetDuration:
                 description: BudgetDuration - Budget is reset at the end of specified
@@ -49,6 +63,15 @@ spec:
                   as seconds ("30s"), minutes ("30m"), hours ("30h"), days ("30d"),
                   months ("1mo").
                 type: string
+              duration:
+                description: Duration is the duration for the key auto-created on
+                  /user/new
+                type: string
+              guardrails:
+                description: Guardrails is the list of active guardrails for the user
+                items:
+                  type: string
+                type: array
               keyAlias:
                 description: KeyAlias is the optional alias of the key if autoCreateKey
                   is true
@@ -88,6 +111,14 @@ spec:
                 items:
                   type: string
                 type: array
+              permissions:
+                additionalProperties:
+                  type: string
+                description: Permissions is the user-specific permissions
+                type: object
+              rpmLimit:
+                description: RPMLimit is the maximum requests per minute for the user
+                type: integer
               sendInviteEmail:
                 description: 'SendInviteEmail is whether to send an invite email to
                   the user - NOTE: the user endpoint will return an error if email
@@ -98,12 +129,21 @@ spec:
                 description: SoftBudget - alert when user exceeds this budget, doesn't
                   block requests
                 type: string
+              spend:
+                description: Spend is the amount spent by user
+                type: string
+              ssoUserID:
+                description: SSOUserID is the id of the user in the SSO provider
+                type: string
               teams:
                 description: Teams is the list of teams that the user is a member
                   of
                 items:
                   type: string
                 type: array
+              tpmLimit:
+                description: TPMLimit is the maximum tokens per minute for the user
+                type: integer
               userAlias:
                 description: UserAlias is the alias of the user
                 type: string
@@ -123,11 +163,31 @@ spec:
           status:
             description: UserStatus defines the observed state of User
             properties:
+              aliases:
+                additionalProperties:
+                  type: string
+                description: Aliases is the model aliases for the user
+                type: object
+              allowedCacheControls:
+                description: AllowedCacheControls is the list of allowed cache control
+                  values
+                items:
+                  type: string
+                type: array
+              allowedRoutes:
+                description: AllowedRoutes is the list of allowed routes
+                items:
+                  type: string
+                type: array
+              blocked:
+                description: Blocked is whether the user is blocked
+                type: boolean
               budgetDuration:
                 description: BudgetDuration - Budget is reset at the end of specified
-                  duration. If not set, budget is never reset. You can set duration
-                  as seconds ("30s"), minutes ("30m"), hours ("30h"), days ("30d"),
-                  months ("1mo").
+                  duration
+                type: string
+              budgetID:
+                description: BudgetID is the ID of the budget
                 type: string
               conditions:
                 items:
@@ -185,22 +245,52 @@ spec:
                   - type
                   type: object
                 type: array
+              config:
+                additionalProperties:
+                  type: string
+                description: Config is the user-specific config
+                type: object
               createdAt:
                 description: CreatedAt is the date and time when the user was created
                 type: string
+              createdBy:
+                description: CreatedBy is the user who created this user
+                type: string
+              duration:
+                description: Duration is the duration for the key
+                type: string
+              enforcedParams:
+                description: EnforcedParams is the list of enforced parameters
+                items:
+                  type: string
+                type: array
               expires:
                 description: Expires is the date and time when the user will expire
                 type: string
+              guardrails:
+                description: Guardrails is the list of active guardrails
+                items:
+                  type: string
+                type: array
               keyAlias:
-                description: KeyAlias is the optional alias of the key if autoCreateKey
-                  is true
+                description: KeyAlias is the alias of the key
+                type: string
+              keyName:
+                description: KeyName is the name of the key
+                type: string
+              keySecretRef:
+                description: KeySecretRef is the reference to the secret containing
+                  the user key
+                type: string
+              litellmBudgetTable:
+                description: LiteLLMBudgetTable is the budget table name
                 type: string
               maxBudget:
                 description: MaxBudget is the maximum budget for the user
                 type: string
               maxParallelRequests:
                 description: MaxParallelRequests is the maximum number of parallel
-                  requests for the user
+                  requests
                 type: integer
               metadata:
                 additionalProperties:
@@ -230,19 +320,40 @@ spec:
                 items:
                   type: string
                 type: array
-              secretRef:
-                description: SecretRef is the reference to the secret containing the
-                  user key
+              permissions:
+                additionalProperties:
+                  type: string
+                description: Permissions is the user-specific permissions
+                type: object
+              rpmLimit:
+                description: RPMLimit is the maximum requests per minute
+                type: integer
+              spend:
+                description: Spend is the amount spent by user
                 type: string
+              tags:
+                description: Tags is the list of tags associated with the user
+                items:
+                  type: string
+                type: array
               teams:
                 description: Teams is the list of teams that the user is a member
                   of
                 items:
                   type: string
                 type: array
+              token:
+                description: Token is the user's token
+                type: string
+              tpmLimit:
+                description: TPMLimit is the maximum tokens per minute
+                type: integer
               updatedAt:
                 description: UpdatedAt is the date and time when the user was last
                   updated
+                type: string
+              updatedBy:
+                description: UpdatedBy is the user who last updated this user
                 type: string
               userAlias:
                 description: UserAlias is the alias of the user
@@ -251,13 +362,10 @@ spec:
                 description: UserEmail is the email of the user
                 type: string
               userID:
-                description: UserID is the unique user id - used for tracking spend
-                  across multiple keys for same user id.
+                description: UserID is the unique user id
                 type: string
               userRole:
-                description: UserRole is the role of the user - one of "proxy_admin",
-                  "proxy_admin_viewer", "internal_user", "internal_user_viewer", "team",
-                  "customer"
+                description: UserRole is the role of the user
                 type: string
             type: object
         type: object

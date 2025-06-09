@@ -18,7 +18,9 @@ package controller
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"strconv"
 
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -158,26 +160,21 @@ func (r *UserReconciler) deleteUser(ctx context.Context, user *authv1alpha1.User
 func (r *UserReconciler) createUser(ctx context.Context, user *authv1alpha1.User) (ctrl.Result, error) {
 	log := log.FromContext(ctx)
 
-	userResponse, err := r.CreateUser(ctx, &litellm.CreateUserRequest{
-		UserID:              user.Spec.UserID,
-		UserAlias:           user.Spec.UserAlias,
-		UserEmail:           user.Spec.UserEmail,
-		UserRole:            user.Spec.UserRole,
-		SendInviteEmail:     user.Spec.SendInviteEmail,
-		Teams:               user.Spec.Teams,
-		AutoCreateKey:       user.Spec.AutoCreateKey,
-		KeyAlias:            user.Spec.KeyAlias,
-		SoftBudget:          user.Spec.SoftBudget,
-		MaxBudget:           user.Spec.MaxBudget,
-		ModelMaxBudget:      user.Spec.ModelMaxBudget,
-		ModelRPMLimit:       user.Spec.ModelRPMLimit,
-		ModelTPMLimit:       user.Spec.ModelTPMLimit,
-		BudgetDuration:      user.Spec.BudgetDuration,
-		Models:              user.Spec.Models,
-		MaxParallelRequests: user.Spec.MaxParallelRequests,
-		Metadata:            ensureMetadata(user.Spec.Metadata),
-	})
+	userRequest, err := createUserRequest(user)
+	if err != nil {
+		if _, err := r.appendCondition(ctx, user, metav1.Condition{
+			Type:               "CreateUser",
+			Status:             metav1.ConditionFalse,
+			LastTransitionTime: metav1.Now(),
+			Reason:             "CreateUserFailure",
+			Message:            err.Error(),
+		}); err != nil {
+			return ctrl.Result{}, err
+		}
+		return ctrl.Result{}, err
+	}
 
+	userResponse, err := r.CreateUser(ctx, &userRequest)
 	if err != nil {
 		return r.appendCondition(ctx, user, metav1.Condition{
 			Type:               "CreateUser",
@@ -188,35 +185,10 @@ func (r *UserReconciler) createUser(ctx context.Context, user *authv1alpha1.User
 		})
 	}
 
-	keySecret := "litellm-key-" + userResponse.UserAlias
+	secretName := "litellm-key-" + userResponse.UserAlias
 
-	// Update the status with the key information
-	user.Status.CreatedAt = userResponse.CreatedAt
-	user.Status.UpdatedAt = userResponse.UpdatedAt
-	user.Status.Expires = userResponse.Expires
-	user.Status.UserID = userResponse.UserID
-	user.Status.UserAlias = userResponse.UserAlias
-	user.Status.UserEmail = userResponse.UserEmail
-	user.Status.UserRole = userResponse.UserRole
-	user.Status.Teams = userResponse.Teams
-	user.Status.KeyAlias = userResponse.KeyAlias
-	user.Status.MaxBudget = fmt.Sprintf("%.2f", userResponse.MaxBudget)
-	user.Status.Models = userResponse.Models
-	user.Status.ModelMaxBudget = userResponse.ModelMaxBudget
-	user.Status.ModelRPMLimit = userResponse.ModelRPMLimit
-	user.Status.ModelTPMLimit = userResponse.ModelTPMLimit
-	user.Status.BudgetDuration = userResponse.BudgetDuration
-	user.Status.SecretRef = keySecret
-	user.Status.MaxParallelRequests = userResponse.MaxParallelRequests
-	user.Status.Metadata = userResponse.Metadata
-
-	if _, err := r.appendCondition(ctx, user, metav1.Condition{
-		Type:               "CreateUser",
-		Status:             metav1.ConditionTrue,
-		LastTransitionTime: metav1.Now(),
-		Reason:             "CreateUserSuccess",
-		Message:            "User created in Litellm",
-	}); err != nil {
+	err = r.updateStatus(ctx, user, userResponse, secretName)
+	if err != nil {
 		return ctrl.Result{}, err
 	}
 
@@ -226,7 +198,7 @@ func (r *UserReconciler) createUser(ctx context.Context, user *authv1alpha1.User
 		return ctrl.Result{}, err
 	}
 
-	if err := r.createSecret(ctx, user, keySecret, userResponse.Key); err != nil {
+	if err := r.createSecret(ctx, user, secretName, userResponse.Key); err != nil {
 		log.Error(err, "Failed to create secret")
 		return ctrl.Result{}, err
 	}
@@ -251,9 +223,105 @@ func (r *UserReconciler) createSecret(ctx context.Context, user *authv1alpha1.Us
 			},
 		},
 		Data: map[string][]byte{
-			"Key": []byte(key),
+			"key": []byte(key),
 		},
 	}
 
 	return r.Create(ctx, secret)
+}
+
+// createUserRequest creates a UserRequest from a User
+func createUserRequest(user *authv1alpha1.User) (litellm.UserRequest, error) {
+	userRequest := litellm.UserRequest{
+		Aliases:              user.Spec.Aliases,
+		AllowedCacheControls: user.Spec.AllowedCacheControls,
+		AutoCreateKey:        user.Spec.AutoCreateKey,
+		Blocked:              user.Spec.Blocked,
+		BudgetDuration:       user.Spec.BudgetDuration,
+		Duration:             user.Spec.Duration,
+		Guardrails:           user.Spec.Guardrails,
+		KeyAlias:             user.Spec.KeyAlias,
+		MaxParallelRequests:  user.Spec.MaxParallelRequests,
+		Metadata:             ensureMetadata(user.Spec.Metadata),
+		ModelMaxBudget:       user.Spec.ModelMaxBudget,
+		ModelRPMLimit:        user.Spec.ModelRPMLimit,
+		ModelTPMLimit:        user.Spec.ModelTPMLimit,
+		Models:               user.Spec.Models,
+		Permissions:          user.Spec.Permissions,
+		RPMLimit:             user.Spec.RPMLimit,
+		SendInviteEmail:      user.Spec.SendInviteEmail,
+		SSOUserID:            user.Spec.SSOUserID,
+		Teams:                user.Spec.Teams,
+		TPMLimit:             user.Spec.TPMLimit,
+		UserAlias:            user.Spec.UserAlias,
+		UserEmail:            user.Spec.UserEmail,
+		UserID:               user.Spec.UserID,
+		UserRole:             user.Spec.UserRole,
+	}
+
+	if user.Spec.MaxBudget != "" {
+		maxBudget, err := strconv.ParseFloat(user.Spec.MaxBudget, 64)
+		if err != nil {
+			return litellm.UserRequest{}, errors.New("maxBudget: " + err.Error())
+		}
+		userRequest.MaxBudget = maxBudget
+	}
+	if user.Spec.SoftBudget != "" {
+		softBudget, err := strconv.ParseFloat(user.Spec.SoftBudget, 64)
+		if err != nil {
+			return litellm.UserRequest{}, errors.New("softBudget: " + err.Error())
+		}
+		userRequest.SoftBudget = softBudget
+	}
+
+	return userRequest, nil
+}
+
+// updateStatus updates the status of the k8s User from the litellm response
+func (r *UserReconciler) updateStatus(ctx context.Context, user *authv1alpha1.User, userResponse litellm.UserResponse, keySecret string) error {
+	user.Status.Aliases = userResponse.Aliases
+	user.Status.AllowedCacheControls = userResponse.AllowedCacheControls
+	user.Status.AllowedRoutes = userResponse.AllowedRoutes
+	user.Status.Blocked = userResponse.Blocked
+	user.Status.BudgetDuration = userResponse.BudgetDuration
+	user.Status.BudgetID = userResponse.BudgetID
+	user.Status.CreatedAt = userResponse.CreatedAt
+	user.Status.CreatedBy = userResponse.CreatedBy
+	user.Status.Duration = userResponse.Duration
+	user.Status.EnforcedParams = userResponse.EnforcedParams
+	user.Status.Expires = userResponse.Expires
+	user.Status.Guardrails = userResponse.Guardrails
+	user.Status.KeyAlias = userResponse.KeyAlias
+	user.Status.KeyName = userResponse.KeyName
+	user.Status.KeySecretRef = keySecret
+	user.Status.LiteLLMBudgetTable = userResponse.LiteLLMBudgetTable
+	user.Status.MaxBudget = fmt.Sprintf("%.2f", userResponse.MaxBudget)
+	user.Status.MaxParallelRequests = userResponse.MaxParallelRequests
+	user.Status.Metadata = userResponse.Metadata
+	user.Status.ModelMaxBudget = userResponse.ModelMaxBudget
+	user.Status.ModelRPMLimit = userResponse.ModelRPMLimit
+	user.Status.ModelTPMLimit = userResponse.ModelTPMLimit
+	user.Status.Models = userResponse.Models
+	user.Status.Permissions = userResponse.Permissions
+	user.Status.RPMLimit = userResponse.RPMLimit
+	user.Status.Spend = fmt.Sprintf("%.2f", userResponse.Spend)
+	user.Status.Tags = userResponse.Tags
+	user.Status.Teams = userResponse.Teams
+	user.Status.TPMLimit = userResponse.TPMLimit
+	user.Status.UpdatedAt = userResponse.UpdatedAt
+	user.Status.UpdatedBy = userResponse.UpdatedBy
+	user.Status.UserAlias = userResponse.UserAlias
+	user.Status.UserEmail = userResponse.UserEmail
+	user.Status.UserID = userResponse.UserID
+	user.Status.UserRole = userResponse.UserRole
+
+	_, err := r.appendCondition(ctx, user, metav1.Condition{
+		Type:               "CreateUser",
+		Status:             metav1.ConditionTrue,
+		LastTransitionTime: metav1.Now(),
+		Reason:             "CreateUserSuccess",
+		Message:            "User created in Litellm",
+	})
+
+	return err
 }

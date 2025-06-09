@@ -111,8 +111,6 @@ type VirtualKeyStatus struct {
 	Expires string `json:"expires,omitempty"`
 	// Guardrails defines guardrail settings
 	Guardrails []string `json:"guardrails,omitempty"`
-	// Key is the actual key value
-	Key string `json:"key,omitempty"`
 	// KeyAlias is the user defined key alias
 	KeyAlias string `json:"keyAlias,omitempty"`
 	// KeyID is the generated ID of the key
