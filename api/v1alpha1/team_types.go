@@ -37,30 +37,36 @@ type TeamSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 
+	// Blocked is a flag indicating if the team is blocked or not - will stop all calls from keys with this team_id
+	Blocked bool `json:"blocked,omitempty"`
+	// BudgetDuration - Budget is reset at the end of specified duration. If not set, budget is never reset. You can set duration as seconds ("30s"), minutes ("30m"), hours ("30h"), days ("30d"), months ("1mo").
+	BudgetDuration string `json:"budgetDuration,omitempty"`
+	// Guardrails are guardrails for the team
+	Guardrails []string `json:"guardrails,omitempty"`
+	// MaxBudget is the maximum budget for the team
+	MaxBudget string `json:"maxBudget,omitempty"`
+	// MembersWithRole is the list of members with role. If not set, the team will be created with no members.
+	MembersWithRole []TeamMemberWithRole `json:"membersWithRole,omitempty"`
+	// Metadata is the metadata of the team
+	Metadata map[string]string `json:"metadata,omitempty"`
+	// ModelAliases are model aliases for the team
+	ModelAliases map[string]string `json:"modelAliases,omitempty"`
+	// Models is the list of models that are associated with the team. All keys for this team_id will have at most, these models. If empty, assumes all models are allowed.
+	Models []string `json:"models,omitempty"`
+	// OrganizationID is the ID of the organization that the team belongs to. If not set, the team will be created with no organization.
+	OrganizationID string `json:"organizationID,omitempty"`
+	// RPMLimit is the maximum requests per minute limit for the team - all keys associated with this team_id will have at max this RPM limit
+	RPMLimit int `json:"rpmLimit,omitempty"`
+	// Tags is the list of tags that are used for tracking spend and/or doing tag-based routing
+	Tags []string `json:"tags,omitempty"`
 	// TeamAlias is the alias of the team
 	TeamAlias string `json:"teamAlias,omitempty"`
 	// TeamID is the ID of the team. If not set, a unique ID will be generated.
 	TeamID string `json:"teamID,omitempty"`
-	// OrganizationID is the ID of the organization that the team belongs to. If not set, the team will be created with no organization.
-	OrganizationID string `json:"organizationID,omitempty"`
-	// MembersWithRole is the list of members with role. If not set, the team will be created with no members.
-	MembersWithRole []TeamMemberWithRole `json:"membersWithRole,omitempty"`
 	// TeamMemberPermissions is the list of routes that non-admin team members can access. Example: ["/key/generate", "/key/update", "/key/delete"]
 	TeamMemberPermissions []string `json:"teamMemberPermissions,omitempty"`
 	// TPMLimit is the maximum tokens per minute limit for the team - all keys with this team_id will have at max this TPM limit
-	TPMLimit string `json:"tpMLimit,omitempty"`
-	// RPMLimit is the maximum requests per minute limit for the team - all keys associated with this team_id will have at max this RPM limit
-	RPMLimit string `json:"rpMLimit,omitempty"`
-	// MaxBudget is the maximum budget for the team
-	MaxBudget string `json:"maxBudget,omitempty"`
-	// BudgetDuration - Budget is reset at the end of specified duration. If not set, budget is never reset. You can set duration as seconds ("30s"), minutes ("30m"), hours ("30h"), days ("30d"), months ("1mo").
-	BudgetDuration string `json:"budgetDuration,omitempty"`
-	// Models is the list of models that are associated with the team. All keys for this team_id will have at most, these models. If empty, assumes all models are allowed.
-	Models []string `json:"models,omitempty"`
-	// Tags is the list of tags that are used for tracking spend and/or doing tag-based routing
-	Tags []string `json:"tags,omitempty"`
-	// Metadata is the metadata of the team
-	Metadata map[string]string `json:"metadata,omitempty"`
+	TPMLimit int `json:"tpmLimit,omitempty"`
 }
 
 // TeamStatus defines the observed state of Team
@@ -68,36 +74,46 @@ type TeamStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 
-	// CreatedAt is the date and time when the team was created
-	CreatedAt string `json:"createdAt,omitempty"`
-	// UpdatedAt is the date and time when the team was last updated
-	UpdatedAt string `json:"updatedAt,omitempty"`
-	// TeamID is the ID of the team
-	TeamID string `json:"teamID,omitempty"`
-	// TeamAlias is the alias of the team
-	TeamAlias string `json:"teamAlias,omitempty"`
-	// OrganizationID is the ID of the organization that the team belongs to
-	OrganizationID string `json:"organizationID,omitempty"`
-	// MembersWithRole is the list of members with role
-	MembersWithRole []TeamMemberWithRole `json:"membersWithRole,omitempty"`
-	// TeamMemberPermissions is the list of routes that non-admin team members can access
-	TeamMemberPermissions []string `json:"teamMemberPermissions,omitempty"`
-	// TPMLimit is the maximum tokens per minute limit for the team - all keys with this team_id will have at max this TPM limit
-	TPMLimit string `json:"tpMLimit,omitempty"`
-	// RPMLimit is the maximum requests per minute limit for the team - all keys associated with this team_id will have at max this RPM limit
-	RPMLimit string `json:"rpMLimit,omitempty"`
-	// MaxBudget is the maximum budget for the team
-	MaxBudget string `json:"maxBudget,omitempty"`
+	// Blocked is a flag indicating if the team is blocked or not
+	Blocked bool `json:"blocked,omitempty"`
 	// BudgetDuration - Budget is reset at the end of specified duration. If not set, budget is never reset.
 	BudgetDuration string `json:"budgetDuration,omitempty"`
 	// BudgetResetAt is the date and time when the budget will be reset
 	BudgetResetAt string `json:"budgetResetAt,omitempty"`
-	// Models is the list of models that are associated with the team. All keys for this team_id will have at most, these models.
-	Models []string `json:"models,omitempty"`
-	// Tags is the list of tags that are used for tracking spend and/or doing tag-based routing
-	Tags []string `json:"tags,omitempty"`
+	// CreatedAt is the date and time when the team was created
+	CreatedAt string `json:"createdAt,omitempty"`
+	// LiteLLMModelTable is the model table for the team
+	LiteLLMModelTable string `json:"liteLLMModelTable,omitempty"`
+	// MaxBudget is the maximum budget for the team
+	MaxBudget string `json:"maxBudget,omitempty"`
+	// MaxParallelRequests is the maximum number of parallel requests allowed
+	MaxParallelRequests int `json:"maxParallelRequests,omitempty"`
+	// MembersWithRole is the list of members with role
+	MembersWithRole []TeamMemberWithRole `json:"membersWithRole,omitempty"`
 	// Metadata is the metadata of the team
 	Metadata map[string]string `json:"metadata,omitempty"`
+	// ModelID is the ID of the model
+	ModelID string `json:"modelID,omitempty"`
+	// Models is the list of models that are associated with the team. All keys for this team_id will have at most, these models.
+	Models []string `json:"models,omitempty"`
+	// OrganizationID is the ID of the organization that the team belongs to
+	OrganizationID string `json:"organizationID,omitempty"`
+	// RPMLimit is the maximum requests per minute limit for the team - all keys associated with this team_id will have at max this RPM limit
+	RPMLimit int `json:"rpmLimit,omitempty"`
+	// Spend is the current spend of the team
+	Spend string `json:"spend,omitempty"`
+	// Tags is the list of tags that are used for tracking spend and/or doing tag-based routing
+	Tags []string `json:"tags,omitempty"`
+	// TeamAlias is the alias of the team
+	TeamAlias string `json:"teamAlias,omitempty"`
+	// TeamID is the ID of the team
+	TeamID string `json:"teamID,omitempty"`
+	// TeamMemberPermissions is the list of routes that non-admin team members can access
+	TeamMemberPermissions []string `json:"teamMemberPermissions,omitempty"`
+	// TPMLimit is the maximum tokens per minute limit for the team - all keys with this team_id will have at max this TPM limit
+	TPMLimit int `json:"tpmLimit,omitempty"`
+	// UpdatedAt is the date and time when the team was last updated
+	UpdatedAt string `json:"updatedAt,omitempty"`
 
 	// +operator-sdk:csv:customresourcedefinitions:type=status
 	Conditions []metav1.Condition `json:"conditions,omitempty" patchStrategy:"merge" patchMergeKey:"type" protobuf:"bytes,1,rep,name=conditions"`

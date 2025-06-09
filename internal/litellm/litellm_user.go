@@ -102,14 +102,14 @@ func (l *LitellmClient) CreateUser(ctx context.Context, req *UserRequest) (UserR
 		return UserResponse{}, err
 	}
 
-	// convert response to CreateUserResponse
-	var createUserResponse UserResponse
-	if err := json.Unmarshal(response, &createUserResponse); err != nil {
+	// convert response to UserResponse
+	var userResponse UserResponse
+	if err := json.Unmarshal(response, &userResponse); err != nil {
 		log.Error(err, "Failed to unmarshal create user response from Litellm")
 		return UserResponse{}, err
 	}
 
-	return createUserResponse, nil
+	return userResponse, nil
 }
 
 // DeleteUser deletes a user from the Litellm service

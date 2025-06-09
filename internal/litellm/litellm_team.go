@@ -8,7 +8,7 @@ import (
 )
 
 type LitellmTeam interface {
-	CreateTeam(ctx context.Context, req *CreateTeamRequest) (CreateTeamResponse, error)
+	CreateTeam(ctx context.Context, req *TeamRequest) (TeamResponse, error)
 	DeleteTeam(ctx context.Context, teamID string) error
 	CheckTeamExists(ctx context.Context, teamAlias string) (bool, error)
 }
@@ -19,59 +19,71 @@ type TeamMemberWithRole struct {
 	Role      string `json:"role,omitempty"`
 }
 
-type CreateTeamRequest struct {
+type TeamRequest struct {
+	Admins                []string             `json:"admins,omitempty"`
+	Blocked               bool                 `json:"blocked,omitempty"`
+	BudgetDuration        string               `json:"budget_duration,omitempty"`
+	Guardrails            []string             `json:"guardrails,omitempty"`
+	MaxBudget             float64              `json:"max_budget,omitempty"`
+	Members               []string             `json:"members,omitempty"`
+	MembersWithRole       []TeamMemberWithRole `json:"members_with_roles,omitempty"`
+	Metadata              map[string]string    `json:"metadata,omitempty"`
+	ModelAliases          map[string]string    `json:"model_aliases,omitempty"`
+	Models                []string             `json:"models,omitempty"`
+	OrganizationID        string               `json:"organization_id,omitempty"`
+	RPMLimit              int                  `json:"rpm_limit,omitempty"`
+	Tags                  []string             `json:"tags,omitempty"`
 	TeamAlias             string               `json:"team_alias,omitempty"`
 	TeamID                string               `json:"team_id,omitempty"`
-	OrganizationID        string               `json:"organization_id,omitempty"`
-	MembersWithRole       []TeamMemberWithRole `json:"members_with_role,omitempty"`
 	TeamMemberPermissions []string             `json:"team_member_permissions,omitempty"`
-	TPMLimit              string               `json:"tpm_limit,omitempty"`
-	RPMLimit              string               `json:"rpm_limit,omitempty"`
-	MaxBudget             string               `json:"max_budget,omitempty"`
-	BudgetDuration        string               `json:"budget_duration,omitempty"`
-	Models                []string             `json:"models,omitempty"`
-	Tags                  []string             `json:"tags,omitempty"`
-	Metadata              map[string]string    `json:"metadata,omitempty"`
+	TPMLimit              int                  `json:"tpm_limit,omitempty"`
 }
 
-type CreateTeamResponse struct {
-	CreatedAt             string               `json:"created_at"`
-	UpdatedAt             string               `json:"updated_at"`
-	TeamID                string               `json:"team_id"`
-	TeamAlias             string               `json:"team_alias"`
-	OrganizationID        string               `json:"organization_id"`
-	MembersWithRole       []TeamMemberWithRole `json:"members_with_role"`
-	TeamMemberPermissions []string             `json:"team_member_permissions"`
-	TPMLimit              string               `json:"tpm_limit"`
-	RPMLimit              string               `json:"rpm_limit"`
-	MaxBudget             float64              `json:"max_budget"`
-	BudgetDuration        string               `json:"budget_duration"`
-	BudgetResetAt         string               `json:"budget_reset_at"`
-	Models                []string             `json:"models"`
-	Tags                  []string             `json:"tags"`
-	Metadata              map[string]string    `json:"metadata"`
+type TeamResponse struct {
+	Admins                []string             `json:"admins,omitempty"`
+	Blocked               bool                 `json:"blocked,omitempty"`
+	BudgetDuration        string               `json:"budget_duration,omitempty"`
+	BudgetResetAt         string               `json:"budget_reset_at,omitempty"`
+	CreatedAt             string               `json:"created_at,omitempty"`
+	LiteLLMModelTable     string               `json:"litellm_model_table,omitempty"`
+	MaxBudget             float64              `json:"max_budget,omitempty"`
+	MaxParallelRequests   int                  `json:"max_parallel_requests,omitempty"`
+	Members               []string             `json:"members,omitempty"`
+	MembersWithRole       []TeamMemberWithRole `json:"members_with_roles,omitempty"`
+	Metadata              map[string]string    `json:"metadata,omitempty"`
+	ModelID               string               `json:"model_id,omitempty"`
+	Models                []string             `json:"models,omitempty"`
+	OrganizationID        string               `json:"organization_id,omitempty"`
+	RPMLimit              int                  `json:"rpm_limit,omitempty"`
+	Spend                 float64              `json:"spend,omitempty"`
+	Tags                  []string             `json:"tags,omitempty"`
+	TeamAlias             string               `json:"team_alias,omitempty"`
+	TeamID                string               `json:"team_id,omitempty"`
+	TeamMemberPermissions []string             `json:"team_member_permissions,omitempty"`
+	TPMLimit              int                  `json:"tpm_limit,omitempty"`
+	UpdatedAt             string               `json:"updated_at,omitempty"`
 }
 
 // CreateTeam creates a new team in the Litellm service
-func (l *LitellmClient) CreateTeam(ctx context.Context, req *CreateTeamRequest) (CreateTeamResponse, error) {
+func (l *LitellmClient) CreateTeam(ctx context.Context, req *TeamRequest) (TeamResponse, error) {
 	log := log.FromContext(ctx)
 
 	body, err := json.Marshal(req)
 	if err != nil {
 		log.Error(err, "Failed to marshal team request payload")
-		return CreateTeamResponse{}, err
+		return TeamResponse{}, err
 	}
 
 	response, err := l.makeRequest(ctx, "POST", "/team/new", body)
 	if err != nil {
 		log.Error(err, "Failed to create team in Litellm")
-		return CreateTeamResponse{}, err
+		return TeamResponse{}, err
 	}
 
-	var createTeamResponse CreateTeamResponse
+	var createTeamResponse TeamResponse
 	if err := json.Unmarshal(response, &createTeamResponse); err != nil {
 		log.Error(err, "Failed to unmarshal create team response from Litellm")
-		return CreateTeamResponse{}, err
+		return TeamResponse{}, err
 	}
 
 	return createTeamResponse, nil

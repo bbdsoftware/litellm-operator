@@ -10,5 +10,5 @@ spec:
   models:
     - gpt-4o
   membersWithRole:
-    - userEmail: my-team-admin@example.com # if this user does not exist, it will be created
+    - userEmail: my-team-admin@example.com
       role: admin

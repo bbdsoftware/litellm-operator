@@ -18,7 +18,9 @@ package controller
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"strconv"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -182,21 +184,7 @@ func convertToK8sTeamMemberWithRole(membersWithRole []litellm.TeamMemberWithRole
 func (r *TeamReconciler) createTeam(ctx context.Context, team *authv1alpha1.Team) (ctrl.Result, error) {
 	log := log.FromContext(ctx)
 
-	createTeamResponse, err := r.CreateTeam(ctx, &litellm.CreateTeamRequest{
-		TeamAlias:             team.Spec.TeamAlias,
-		TeamID:                team.Spec.TeamID,
-		OrganizationID:        team.Spec.OrganizationID,
-		MembersWithRole:       convertToLitellmTeamMemberWithRole(team.Spec.MembersWithRole),
-		TeamMemberPermissions: team.Spec.TeamMemberPermissions,
-		TPMLimit:              team.Spec.TPMLimit,
-		RPMLimit:              team.Spec.RPMLimit,
-		MaxBudget:             team.Spec.MaxBudget,
-		BudgetDuration:        team.Spec.BudgetDuration,
-		Models:                team.Spec.Models,
-		Tags:                  team.Spec.Tags,
-		Metadata:              ensureMetadata(team.Spec.Metadata),
-	})
-
+	teamRequest, err := createTeamRequest(team)
 	if err != nil {
 		return r.appendCondition(ctx, team, metav1.Condition{
 			Type:               "CreateTeam",
@@ -207,29 +195,19 @@ func (r *TeamReconciler) createTeam(ctx context.Context, team *authv1alpha1.Team
 		})
 	}
 
-	team.Status.CreatedAt = createTeamResponse.CreatedAt
-	team.Status.UpdatedAt = createTeamResponse.UpdatedAt
-	team.Status.TeamID = createTeamResponse.TeamID
-	team.Status.TeamAlias = createTeamResponse.TeamAlias
-	team.Status.OrganizationID = createTeamResponse.OrganizationID
-	team.Status.MembersWithRole = convertToK8sTeamMemberWithRole(createTeamResponse.MembersWithRole)
-	team.Status.TeamMemberPermissions = createTeamResponse.TeamMemberPermissions
-	team.Status.TPMLimit = createTeamResponse.TPMLimit
-	team.Status.RPMLimit = createTeamResponse.RPMLimit
-	team.Status.MaxBudget = fmt.Sprintf("%.2f", createTeamResponse.MaxBudget)
-	team.Status.BudgetDuration = createTeamResponse.BudgetDuration
-	team.Status.BudgetResetAt = createTeamResponse.BudgetResetAt
-	team.Status.Models = createTeamResponse.Models
-	team.Status.Tags = createTeamResponse.Tags
-	team.Status.Metadata = createTeamResponse.Metadata
+	createTeamResponse, err := r.CreateTeam(ctx, &teamRequest)
+	if err != nil {
+		return r.appendCondition(ctx, team, metav1.Condition{
+			Type:               "CreateTeam",
+			Status:             metav1.ConditionFalse,
+			LastTransitionTime: metav1.Now(),
+			Reason:             "CreateTeamFailure",
+			Message:            err.Error(),
+		})
+	}
 
-	if _, err := r.appendCondition(ctx, team, metav1.Condition{
-		Type:               "TeamCreated",
-		Status:             metav1.ConditionTrue,
-		LastTransitionTime: metav1.Now(),
-		Reason:             "TeamCreated",
-		Message:            "Team created in litellm",
-	}); err != nil {
+	err = r.updateStatus(ctx, team, createTeamResponse)
+	if err != nil {
 		return ctrl.Result{}, err
 	}
 
@@ -240,4 +218,68 @@ func (r *TeamReconciler) createTeam(ctx context.Context, team *authv1alpha1.Team
 	}
 	log.Info("Created Team: " + team.Spec.TeamAlias + " in litellm")
 	return ctrl.Result{}, nil
+}
+
+// createTeamRequest creates a TeamRequest from a Team
+func createTeamRequest(team *authv1alpha1.Team) (litellm.TeamRequest, error) {
+	teamRequest := litellm.TeamRequest{
+		Blocked:               team.Spec.Blocked,
+		BudgetDuration:        team.Spec.BudgetDuration,
+		Guardrails:            team.Spec.Guardrails,
+		MembersWithRole:       convertToLitellmTeamMemberWithRole(team.Spec.MembersWithRole),
+		Metadata:              ensureMetadata(team.Spec.Metadata),
+		ModelAliases:          team.Spec.ModelAliases,
+		Models:                team.Spec.Models,
+		OrganizationID:        team.Spec.OrganizationID,
+		RPMLimit:              team.Spec.RPMLimit,
+		Tags:                  team.Spec.Tags,
+		TeamAlias:             team.Spec.TeamAlias,
+		TeamID:                team.Spec.TeamID,
+		TeamMemberPermissions: team.Spec.TeamMemberPermissions,
+		TPMLimit:              team.Spec.TPMLimit,
+	}
+
+	if team.Spec.MaxBudget != "" {
+		maxBudget, err := strconv.ParseFloat(team.Spec.MaxBudget, 64)
+		if err != nil {
+			return litellm.TeamRequest{}, errors.New("maxBudget: " + err.Error())
+		}
+		teamRequest.MaxBudget = maxBudget
+	}
+
+	return teamRequest, nil
+}
+
+// updateStatus updates the status of the k8s Team from the litellm response
+func (r *TeamReconciler) updateStatus(ctx context.Context, team *authv1alpha1.Team, teamResponse litellm.TeamResponse) error {
+	team.Status.Blocked = teamResponse.Blocked
+	team.Status.BudgetDuration = teamResponse.BudgetDuration
+	team.Status.BudgetResetAt = teamResponse.BudgetResetAt
+	team.Status.CreatedAt = teamResponse.CreatedAt
+	team.Status.LiteLLMModelTable = teamResponse.LiteLLMModelTable
+	team.Status.MaxBudget = fmt.Sprintf("%.2f", teamResponse.MaxBudget)
+	team.Status.MaxParallelRequests = teamResponse.MaxParallelRequests
+	team.Status.MembersWithRole = convertToK8sTeamMemberWithRole(teamResponse.MembersWithRole)
+	team.Status.Metadata = teamResponse.Metadata
+	team.Status.ModelID = teamResponse.ModelID
+	team.Status.Models = teamResponse.Models
+	team.Status.OrganizationID = teamResponse.OrganizationID
+	team.Status.RPMLimit = teamResponse.RPMLimit
+	team.Status.Spend = fmt.Sprintf("%.2f", teamResponse.Spend)
+	team.Status.Tags = teamResponse.Tags
+	team.Status.TeamAlias = teamResponse.TeamAlias
+	team.Status.TeamID = teamResponse.TeamID
+	team.Status.TeamMemberPermissions = teamResponse.TeamMemberPermissions
+	team.Status.TPMLimit = teamResponse.TPMLimit
+	team.Status.UpdatedAt = teamResponse.UpdatedAt
+
+	_, err := r.appendCondition(ctx, team, metav1.Condition{
+		Type:               "TeamCreated",
+		Status:             metav1.ConditionTrue,
+		LastTransitionTime: metav1.Now(),
+		Reason:             "TeamCreated",
+		Message:            "Team created in litellm",
+	})
+
+	return err
 }
