@@ -39,12 +39,21 @@ spec:
           spec:
             description: TeamSpec defines the desired state of Team
             properties:
+              blocked:
+                description: Blocked is a flag indicating if the team is blocked or
+                  not - will stop all calls from keys with this team_id
+                type: boolean
               budgetDuration:
                 description: BudgetDuration - Budget is reset at the end of specified
                   duration. If not set, budget is never reset. You can set duration
                   as seconds ("30s"), minutes ("30m"), hours ("30h"), days ("30d"),
                   months ("1mo").
                 type: string
+              guardrails:
+                description: Guardrails are guardrails for the team
+                items:
+                  type: string
+                type: array
               maxBudget:
                 description: MaxBudget is the maximum budget for the team
                 type: string
@@ -70,6 +79,11 @@ spec:
                   type: string
                 description: Metadata is the metadata of the team
                 type: object
+              modelAliases:
+                additionalProperties:
+                  type: string
+                description: ModelAliases are model aliases for the team
+                type: object
               models:
                 description: Models is the list of models that are associated with
                   the team. All keys for this team_id will have at most, these models.
@@ -81,11 +95,11 @@ spec:
                 description: OrganizationID is the ID of the organization that the
                   team belongs to. If not set, the team will be created with no organization.
                 type: string
-              rpMLimit:
+              rpmLimit:
                 description: RPMLimit is the maximum requests per minute limit for
                   the team - all keys associated with this team_id will have at max
                   this RPM limit
-                type: string
+                type: integer
               tags:
                 description: Tags is the list of tags that are used for tracking spend
                   and/or doing tag-based routing
@@ -106,14 +120,18 @@ spec:
                 items:
                   type: string
                 type: array
-              tpMLimit:
+              tpmLimit:
                 description: TPMLimit is the maximum tokens per minute limit for the
                   team - all keys with this team_id will have at max this TPM limit
-                type: string
+                type: integer
             type: object
           status:
             description: TeamStatus defines the observed state of Team
             properties:
+              blocked:
+                description: Blocked is a flag indicating if the team is blocked or
+                  not
+                type: boolean
               budgetDuration:
                 description: BudgetDuration - Budget is reset at the end of specified
                   duration. If not set, budget is never reset.
@@ -181,9 +199,16 @@ spec:
               createdAt:
                 description: CreatedAt is the date and time when the team was created
                 type: string
+              liteLLMModelTable:
+                description: LiteLLMModelTable is the model table for the team
+                type: string
               maxBudget:
                 description: MaxBudget is the maximum budget for the team
                 type: string
+              maxParallelRequests:
+                description: MaxParallelRequests is the maximum number of parallel
+                  requests allowed
+                type: integer
               membersWithRole:
                 description: MembersWithRole is the list of members with role
                 items:
@@ -205,6 +230,9 @@ spec:
                   type: string
                 description: Metadata is the metadata of the team
                 type: object
+              modelID:
+                description: ModelID is the ID of the model
+                type: string
               models:
                 description: Models is the list of models that are associated with
                   the team. All keys for this team_id will have at most, these models.
@@ -215,10 +243,13 @@ spec:
                 description: OrganizationID is the ID of the organization that the
                   team belongs to
                 type: string
-              rpMLimit:
+              rpmLimit:
                 description: RPMLimit is the maximum requests per minute limit for
                   the team - all keys associated with this team_id will have at max
                   this RPM limit
+                type: integer
+              spend:
+                description: Spend is the current spend of the team
                 type: string
               tags:
                 description: Tags is the list of tags that are used for tracking spend
@@ -238,10 +269,10 @@ spec:
                 items:
                   type: string
                 type: array
-              tpMLimit:
+              tpmLimit:
                 description: TPMLimit is the maximum tokens per minute limit for the
                   team - all keys with this team_id will have at max this TPM limit
-                type: string
+                type: integer
               updatedAt:
                 description: UpdatedAt is the date and time when the team was last
                   updated
