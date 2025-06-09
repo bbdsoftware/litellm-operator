@@ -262,9 +262,6 @@ spec:
                 items:
                   type: string
                 type: array
-              key:
-                description: Key is the actual key value
-                type: string
               keyAlias:
                 description: KeyAlias is the user defined key alias
                 type: string

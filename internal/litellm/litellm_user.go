@@ -8,73 +8,105 @@ import (
 )
 
 type LitellmUser interface {
-	CreateUser(ctx context.Context, req *CreateUserRequest) (CreateUserResponse, error)
+	CreateUser(ctx context.Context, req *UserRequest) (UserResponse, error)
 	DeleteUser(ctx context.Context, userID string) error
 	CheckUserExists(ctx context.Context, userEmail string) (bool, error)
 }
 
-type CreateUserRequest struct {
-	UserID              string            `json:"user_id,omitempty"`
-	UserAlias           string            `json:"user_alias,omitempty"`
-	UserEmail           string            `json:"user_email,omitempty"`
-	UserRole            string            `json:"user_role,omitempty"`
-	SendInviteEmail     bool              `json:"send_invite_email,omitempty"`
-	Teams               []string          `json:"teams,omitempty"`
-	AutoCreateKey       bool              `json:"auto_create_key,omitempty"`
-	KeyAlias            string            `json:"key_alias,omitempty"`
-	SoftBudget          string            `json:"soft_budget,omitempty"`
-	MaxBudget           string            `json:"max_budget,omitempty"`
-	ModelMaxBudget      map[string]string `json:"model_max_budget,omitempty"`
-	ModelRPMLimit       map[string]string `json:"model_rpm_limit,omitempty"`
-	ModelTPMLimit       map[string]string `json:"model_tpm_limit,omitempty"`
-	BudgetDuration      string            `json:"budget_duration,omitempty"`
-	Models              []string          `json:"models,omitempty"`
-	MaxParallelRequests int               `json:"max_parallel_requests,omitempty"`
-	Metadata            map[string]string `json:"metadata,omitempty"`
+type UserRequest struct {
+	Aliases              map[string]string `json:"aliases,omitempty"`
+	AllowedCacheControls []string          `json:"allowed_cache_controls,omitempty"`
+	AutoCreateKey        bool              `json:"auto_create_key,omitempty"`
+	Blocked              bool              `json:"blocked,omitempty"`
+	BudgetDuration       string            `json:"budget_duration,omitempty"`
+	Config               map[string]string `json:"config,omitempty"`
+	Duration             string            `json:"duration,omitempty"`
+	Guardrails           []string          `json:"guardrails,omitempty"`
+	KeyAlias             string            `json:"key_alias,omitempty"`
+	MaxBudget            float64           `json:"max_budget,omitempty"`
+	MaxParallelRequests  int               `json:"max_parallel_requests,omitempty"`
+	Metadata             map[string]string `json:"metadata,omitempty"`
+	ModelMaxBudget       map[string]string `json:"model_max_budget,omitempty"`
+	ModelRPMLimit        map[string]string `json:"model_rpm_limit,omitempty"`
+	ModelTPMLimit        map[string]string `json:"model_tpm_limit,omitempty"`
+	Models               []string          `json:"models,omitempty"`
+	Permissions          map[string]string `json:"permissions,omitempty"`
+	RPMLimit             int               `json:"rpm_limit,omitempty"`
+	SendInviteEmail      bool              `json:"send_invite_email,omitempty"`
+	SoftBudget           float64           `json:"soft_budget,omitempty"`
+	SSOUserID            string            `json:"sso_user_id,omitempty"`
+	Teams                []string          `json:"teams,omitempty"`
+	TPMLimit             int               `json:"tpm_limit,omitempty"`
+	UserAlias            string            `json:"user_alias,omitempty"`
+	UserEmail            string            `json:"user_email,omitempty"`
+	UserID               string            `json:"user_id,omitempty"`
+	UserRole             string            `json:"user_role,omitempty"`
 }
 
-type CreateUserResponse struct {
-	CreatedAt           string            `json:"created_at"`
-	UpdatedAt           string            `json:"updated_at"`
-	Expires             string            `json:"expires"`
-	UserID              string            `json:"user_id"`
-	UserAlias           string            `json:"user_alias"`
-	UserEmail           string            `json:"user_email"`
-	UserRole            string            `json:"user_role"`
-	Key                 string            `json:"key"`
-	Teams               []string          `json:"teams"`
-	KeyAlias            string            `json:"key_alias"`
-	MaxBudget           float64           `json:"max_budget"`
-	ModelMaxBudget      map[string]string `json:"model_max_budget"`
-	ModelRPMLimit       map[string]string `json:"model_rpm_limit"`
-	ModelTPMLimit       map[string]string `json:"model_tpm_limit"`
-	BudgetDuration      string            `json:"budget_duration"`
-	Models              []string          `json:"models"`
-	MaxParallelRequests int               `json:"max_parallel_requests"`
-	Metadata            map[string]string `json:"metadata"`
+type UserResponse struct {
+	Aliases              map[string]string `json:"aliases,omitempty"`
+	AllowedCacheControls []string          `json:"allowed_cache_controls,omitempty"`
+	AllowedRoutes        []string          `json:"allowed_routes,omitempty"`
+	AutoCreateKey        bool              `json:"auto_create_key,omitempty"`
+	Blocked              bool              `json:"blocked,omitempty"`
+	BudgetDuration       string            `json:"budget_duration,omitempty"`
+	BudgetID             string            `json:"budget_id,omitempty"`
+	Config               map[string]string `json:"config,omitempty"`
+	CreatedAt            string            `json:"created_at,omitempty"`
+	CreatedBy            string            `json:"created_by,omitempty"`
+	Duration             string            `json:"duration,omitempty"`
+	EnforcedParams       []string          `json:"enforced_params,omitempty"`
+	Expires              string            `json:"expires,omitempty"`
+	Guardrails           []string          `json:"guardrails,omitempty"`
+	Key                  string            `json:"key,omitempty"`
+	KeyAlias             string            `json:"key_alias,omitempty"`
+	KeyName              string            `json:"key_name,omitempty"`
+	LiteLLMBudgetTable   string            `json:"litellm_budget_table,omitempty"`
+	MaxBudget            float64           `json:"max_budget,omitempty"`
+	MaxParallelRequests  int               `json:"max_parallel_requests,omitempty"`
+	Metadata             map[string]string `json:"metadata,omitempty"`
+	ModelMaxBudget       map[string]string `json:"model_max_budget,omitempty"`
+	ModelRPMLimit        map[string]string `json:"model_rpm_limit,omitempty"`
+	ModelTPMLimit        map[string]string `json:"model_tpm_limit,omitempty"`
+	Models               []string          `json:"models,omitempty"`
+	Permissions          map[string]string `json:"permissions,omitempty"`
+	RPMLimit             int               `json:"rpm_limit,omitempty"`
+	SendInviteEmail      bool              `json:"send_invite_email,omitempty"`
+	Spend                float64           `json:"spend,omitempty"`
+	SSOUserID            string            `json:"sso_user_id,omitempty"`
+	Tags                 []string          `json:"tags,omitempty"`
+	Teams                []string          `json:"teams,omitempty"`
+	Token                string            `json:"token,omitempty"`
+	TPMLimit             int               `json:"tpm_limit,omitempty"`
+	UpdatedAt            string            `json:"updated_at,omitempty"`
+	UpdatedBy            string            `json:"updated_by,omitempty"`
+	UserAlias            string            `json:"user_alias,omitempty"`
+	UserEmail            string            `json:"user_email,omitempty"`
+	UserID               string            `json:"user_id,omitempty"`
+	UserRole             string            `json:"user_role,omitempty"`
 }
 
 // CreateUser creates a new user in the Litellm service
-func (l *LitellmClient) CreateUser(ctx context.Context, req *CreateUserRequest) (CreateUserResponse, error) {
+func (l *LitellmClient) CreateUser(ctx context.Context, req *UserRequest) (UserResponse, error) {
 	log := log.FromContext(ctx)
 
 	body, err := json.Marshal(req)
 	if err != nil {
 		log.Error(err, "Failed to marshal user request payload")
-		return CreateUserResponse{}, err
+		return UserResponse{}, err
 	}
 
 	response, err := l.makeRequest(ctx, "POST", "/user/new", body)
 	if err != nil {
 		log.Error(err, "Failed to create user in Litellm")
-		return CreateUserResponse{}, err
+		return UserResponse{}, err
 	}
 
 	// convert response to CreateUserResponse
-	var createUserResponse CreateUserResponse
+	var createUserResponse UserResponse
 	if err := json.Unmarshal(response, &createUserResponse); err != nil {
 		log.Error(err, "Failed to unmarshal create user response from Litellm")
-		return CreateUserResponse{}, err
+		return UserResponse{}, err
 	}
 
 	return createUserResponse, nil

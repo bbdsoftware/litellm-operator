@@ -28,40 +28,60 @@ type UserSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 
-	// UserID is the ID of the user. If not set, a unique ID will be generated.
-	UserID string `json:"userID,omitempty"`
-	// UserAlias is the alias of the user
-	UserAlias string `json:"userAlias,omitempty"`
-	// UserEmail is the email of the user
-	UserEmail string `json:"userEmail,omitempty"`
-	// UserRole is the role of the user - one of "proxy_admin", "proxy_admin_viewer", "internal_user", "internal_user_viewer", "team", "customer"
-	UserRole string `json:"userRole,omitempty"`
-	// SendInviteEmail is whether to send an invite email to the user - NOTE: the user endpoint will return an error if email alerting is not configured and this is enabled, but the user will still be created.
-	SendInviteEmail bool `json:"sendInviteEmail,omitempty"`
-	// Teams is the list of teams that the user is a member of
-	Teams []string `json:"teams,omitempty"`
+	// Aliases is the model aliases for the user
+	Aliases map[string]string `json:"aliases,omitempty"`
+	// AllowedCacheControls is the list of allowed cache control values
+	AllowedCacheControls []string `json:"allowedCacheControls,omitempty"`
 	// AutoCreateKey is whether to automatically create a key for the user
 	AutoCreateKey bool `json:"autoCreateKey,omitempty"`
+	// Blocked is whether the user is blocked
+	Blocked bool `json:"blocked,omitempty"`
+	// BudgetDuration - Budget is reset at the end of specified duration. If not set, budget is never reset. You can set duration as seconds ("30s"), minutes ("30m"), hours ("30h"), days ("30d"), months ("1mo").
+	BudgetDuration string `json:"budgetDuration,omitempty"`
+	// Duration is the duration for the key auto-created on /user/new
+	Duration string `json:"duration,omitempty"`
+	// Guardrails is the list of active guardrails for the user
+	Guardrails []string `json:"guardrails,omitempty"`
 	// KeyAlias is the optional alias of the key if autoCreateKey is true
 	KeyAlias string `json:"keyAlias,omitempty"`
-	// SoftBudget - alert when user exceeds this budget, doesn't block requests
-	SoftBudget string `json:"softBudget,omitempty"`
 	// MaxBudget is the maximum budget for the user
 	MaxBudget string `json:"maxBudget,omitempty"`
+	// MaxParallelRequests is the maximum number of parallel requests for the user
+	MaxParallelRequests int `json:"maxParallelRequests,omitempty"`
+	// Metadata is the metadata of the user
+	Metadata map[string]string `json:"metadata,omitempty"`
 	// ModelMaxBudget is the model specific maximum budget
 	ModelMaxBudget map[string]string `json:"modelMaxBudget,omitempty"`
 	// ModelRPMLimit is the model specific maximum requests per minute
 	ModelRPMLimit map[string]string `json:"modelRPMLimit,omitempty"`
 	// ModelTPMLimit is the model specific maximum tokens per minute
 	ModelTPMLimit map[string]string `json:"modelTPMLimit,omitempty"`
-	// BudgetDuration - Budget is reset at the end of specified duration. If not set, budget is never reset. You can set duration as seconds ("30s"), minutes ("30m"), hours ("30h"), days ("30d"), months ("1mo").
-	BudgetDuration string `json:"budgetDuration,omitempty"`
 	// Models is the list of models that the user is allowed to use
 	Models []string `json:"models,omitempty"`
-	// MaxParallelRequests is the maximum number of parallel requests for the user
-	MaxParallelRequests int `json:"maxParallelRequests,omitempty"`
-	// Metadata is the metadata of the user
-	Metadata map[string]string `json:"metadata,omitempty"`
+	// Permissions is the user-specific permissions
+	Permissions map[string]string `json:"permissions,omitempty"`
+	// RPMLimit is the maximum requests per minute for the user
+	RPMLimit int `json:"rpmLimit,omitempty"`
+	// SendInviteEmail is whether to send an invite email to the user - NOTE: the user endpoint will return an error if email alerting is not configured and this is enabled, but the user will still be created.
+	SendInviteEmail bool `json:"sendInviteEmail,omitempty"`
+	// SoftBudget - alert when user exceeds this budget, doesn't block requests
+	SoftBudget string `json:"softBudget,omitempty"`
+	// Spend is the amount spent by user
+	Spend string `json:"spend,omitempty"`
+	// SSOUserID is the id of the user in the SSO provider
+	SSOUserID string `json:"ssoUserID,omitempty"`
+	// Teams is the list of teams that the user is a member of
+	Teams []string `json:"teams,omitempty"`
+	// TPMLimit is the maximum tokens per minute for the user
+	TPMLimit int `json:"tpmLimit,omitempty"`
+	// UserAlias is the alias of the user
+	UserAlias string `json:"userAlias,omitempty"`
+	// UserEmail is the email of the user
+	UserEmail string `json:"userEmail,omitempty"`
+	// UserID is the ID of the user. If not set, a unique ID will be generated.
+	UserID string `json:"userID,omitempty"`
+	// UserRole is the role of the user - one of "proxy_admin", "proxy_admin_viewer", "internal_user", "internal_user_viewer", "team", "customer"
+	UserRole string `json:"userRole,omitempty"`
 }
 
 // UserStatus defines the observed state of User
@@ -69,42 +89,80 @@ type UserStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 
+	// AllowedCacheControls is the list of allowed cache control values
+	AllowedCacheControls []string `json:"allowedCacheControls,omitempty"`
+	// AllowedRoutes is the list of allowed routes
+	AllowedRoutes []string `json:"allowedRoutes,omitempty"`
+	// Aliases is the model aliases for the user
+	Aliases map[string]string `json:"aliases,omitempty"`
+	// Blocked is whether the user is blocked
+	Blocked bool `json:"blocked,omitempty"`
+	// BudgetDuration - Budget is reset at the end of specified duration
+	BudgetDuration string `json:"budgetDuration,omitempty"`
+	// BudgetID is the ID of the budget
+	BudgetID string `json:"budgetID,omitempty"`
+	// Config is the user-specific config
+	Config map[string]string `json:"config,omitempty"`
 	// CreatedAt is the date and time when the user was created
 	CreatedAt string `json:"createdAt,omitempty"`
-	// UpdatedAt is the date and time when the user was last updated
-	UpdatedAt string `json:"updatedAt,omitempty"`
+	// CreatedBy is the user who created this user
+	CreatedBy string `json:"createdBy,omitempty"`
+	// Duration is the duration for the key
+	Duration string `json:"duration,omitempty"`
+	// EnforcedParams is the list of enforced parameters
+	EnforcedParams []string `json:"enforcedParams,omitempty"`
 	// Expires is the date and time when the user will expire
 	Expires string `json:"expires,omitempty"`
-	// UserID is the unique user id - used for tracking spend across multiple keys for same user id.
-	UserID string `json:"userID,omitempty"`
-	// UserAlias is the alias of the user
-	UserAlias string `json:"userAlias,omitempty"`
-	// UserEmail is the email of the user
-	UserEmail string `json:"userEmail,omitempty"`
-	// UserRole is the role of the user - one of "proxy_admin", "proxy_admin_viewer", "internal_user", "internal_user_viewer", "team", "customer"
-	UserRole string `json:"userRole,omitempty"`
-	// Teams is the list of teams that the user is a member of
-	Teams []string `json:"teams,omitempty"`
-	// KeyAlias is the optional alias of the key if autoCreateKey is true
+	// Guardrails is the list of active guardrails
+	Guardrails []string `json:"guardrails,omitempty"`
+	// KeyAlias is the alias of the key
 	KeyAlias string `json:"keyAlias,omitempty"`
+	// KeyName is the name of the key
+	KeyName string `json:"keyName,omitempty"`
+	// KeySecretRef is the reference to the secret containing the user key
+	KeySecretRef string `json:"keySecretRef,omitempty"`
+	// LiteLLMBudgetTable is the budget table name
+	LiteLLMBudgetTable string `json:"litellmBudgetTable,omitempty"`
 	// MaxBudget is the maximum budget for the user
 	MaxBudget string `json:"maxBudget,omitempty"`
+	// MaxParallelRequests is the maximum number of parallel requests
+	MaxParallelRequests int `json:"maxParallelRequests,omitempty"`
+	// Metadata is the metadata of the user
+	Metadata map[string]string `json:"metadata,omitempty"`
 	// ModelMaxBudget is the model specific maximum budget
 	ModelMaxBudget map[string]string `json:"modelMaxBudget,omitempty"`
 	// ModelRPMLimit is the model specific maximum requests per minute
 	ModelRPMLimit map[string]string `json:"modelRPMLimit,omitempty"`
 	// ModelTPMLimit is the model specific maximum tokens per minute
 	ModelTPMLimit map[string]string `json:"modelTPMLimit,omitempty"`
-	// BudgetDuration - Budget is reset at the end of specified duration. If not set, budget is never reset. You can set duration as seconds ("30s"), minutes ("30m"), hours ("30h"), days ("30d"), months ("1mo").
-	BudgetDuration string `json:"budgetDuration,omitempty"`
 	// Models is the list of models that the user is allowed to use
 	Models []string `json:"models,omitempty"`
-	// MaxParallelRequests is the maximum number of parallel requests for the user
-	MaxParallelRequests int `json:"maxParallelRequests,omitempty"`
-	// Metadata is the metadata of the user
-	Metadata map[string]string `json:"metadata,omitempty"`
-	// SecretRef is the reference to the secret containing the user key
-	SecretRef string `json:"secretRef,omitempty"`
+	// Permissions is the user-specific permissions
+	Permissions map[string]string `json:"permissions,omitempty"`
+	// RPMLimit is the maximum requests per minute
+	RPMLimit int `json:"rpmLimit,omitempty"`
+	// Spend is the amount spent by user
+	Spend string `json:"spend,omitempty"`
+	// Tags is the list of tags associated with the user
+	Tags []string `json:"tags,omitempty"`
+	// Teams is the list of teams that the user is a member of
+	Teams []string `json:"teams,omitempty"`
+	// Token is the user's token
+	Token string `json:"token,omitempty"`
+	// TPMLimit is the maximum tokens per minute
+	TPMLimit int `json:"tpmLimit,omitempty"`
+	// UpdatedAt is the date and time when the user was last updated
+	UpdatedAt string `json:"updatedAt,omitempty"`
+	// UpdatedBy is the user who last updated this user
+	UpdatedBy string `json:"updatedBy,omitempty"`
+	// UserAlias is the alias of the user
+	UserAlias string `json:"userAlias,omitempty"`
+	// UserEmail is the email of the user
+	UserEmail string `json:"userEmail,omitempty"`
+	// UserID is the unique user id
+	UserID string `json:"userID,omitempty"`
+	// UserRole is the role of the user
+	UserRole string `json:"userRole,omitempty"`
 
 	// +operator-sdk:csv:customresourcedefinitions:type=status
 	Conditions []metav1.Condition `json:"conditions,omitempty" patchStrategy:"merge" patchMergeKey:"type" protobuf:"bytes,1,rep,name=conditions"`
