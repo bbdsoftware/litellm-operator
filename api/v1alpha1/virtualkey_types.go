@@ -25,54 +25,141 @@ import (
 
 // VirtualKeySpec defines the desired state of VirtualKey
 type VirtualKeySpec struct {
-	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
-
+	// Aliases maps additional aliases for the key
+	Aliases map[string]string `json:"aliases,omitempty"`
+	// AllowedCacheControls defines allowed cache control settings
+	AllowedCacheControls []string `json:"allowedCacheControls,omitempty"`
+	// AllowedRoutes defines allowed API routes
+	AllowedRoutes []string `json:"allowedRoutes,omitempty"`
+	// Blocked indicates if the key is blocked
+	Blocked bool `json:"blocked,omitempty"`
+	// BudgetDuration specifies the duration for budget tracking
+	BudgetDuration string `json:"budgetDuration,omitempty"`
+	// BudgetID is the identifier for the budget
+	BudgetID string `json:"budgetID,omitempty"`
+	// Config contains additional configuration settings
+	Config map[string]string `json:"config,omitempty"`
+	// Duration specifies how long the key is valid
+	Duration string `json:"duration,omitempty"`
+	// EnforcedParams lists parameters that must be included in requests
+	EnforcedParams []string `json:"enforcedParams,omitempty"`
+	// Guardrails defines guardrail settings
+	Guardrails []string `json:"guardrails,omitempty"`
+	// Key is the actual key value
+	Key string `json:"key,omitempty"`
 	// KeyAlias is the user defined key alias
 	KeyAlias string `json:"keyAlias,omitempty"`
-	// Model names that a user is allowed to call. If empty, all models are allowed.
-	Models []string `json:"models,omitempty"`
-	// TeamID is the team ID for the key
-	TeamID string `json:"teamID,omitempty"`
-	// MaxBudget is the maximum budget for the key
+	// MaxBudget sets the maximum budget limit
 	MaxBudget string `json:"maxBudget,omitempty"`
-	// BudgetDuration is the duration of the budget
-	BudgetDuration string `json:"budgetDuration,omitempty"`
-	// UserID is the user ID of the key
-	UserID string `json:"userID,omitempty"`
-	// Metadata is the metadata of the key
+	// MaxParallelRequests limits concurrent requests
+	MaxParallelRequests int `json:"maxParallelRequests,omitempty"`
+	// Metadata contains additional metadata
 	Metadata map[string]string `json:"metadata,omitempty"`
+	// ModelMaxBudget sets budget limits per model
+	ModelMaxBudget map[string]string `json:"modelMaxBudget,omitempty"`
+	// ModelRPMLimit sets RPM limits per model
+	ModelRPMLimit map[string]int `json:"modelRPMLimit,omitempty"`
+	// ModelTPMLimit sets TPM limits per model
+	ModelTPMLimit map[string]int `json:"modelTPMLimit,omitempty"`
+	// Models specifies which models can be used
+	Models []string `json:"models,omitempty"`
+	// Permissions defines key permissions
+	Permissions map[string]string `json:"permissions,omitempty"`
+	// RPMLimit sets global RPM limit
+	RPMLimit int `json:"rpmLimit,omitempty"`
+	// SendInviteEmail indicates whether to send an invite email
+	SendInviteEmail bool `json:"sendInviteEmail,omitempty"`
+	// SoftBudget sets a soft budget limit
+	SoftBudget string `json:"softBudget,omitempty"`
+	// Spend tracks the current spend amount
+	Spend string `json:"spend,omitempty"`
+	// Tags are labels for the key
+	Tags []string `json:"tags,omitempty"`
+	// TeamID identifies the team associated with the key
+	TeamID string `json:"teamID,omitempty"`
+	// TPMLimit sets global TPM limit
+	TPMLimit int `json:"tpmLimit,omitempty"`
+	// UserID identifies the user associated with the key
+	UserID string `json:"userID,omitempty"`
 }
 
 // VirtualKeyStatus defines the observed state of VirtualKey
 type VirtualKeyStatus struct {
-	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
-
+	// Aliases maps additional aliases for the key
+	Aliases map[string]string `json:"aliases,omitempty"`
+	// AllowedCacheControls defines allowed cache control settings
+	AllowedCacheControls []string `json:"allowedCacheControls,omitempty"`
+	// AllowedRoutes defines allowed API routes
+	AllowedRoutes []string `json:"allowedRoutes,omitempty"`
+	// Blocked indicates if the key is blocked
+	Blocked bool `json:"blocked,omitempty"`
+	// BudgetDuration is the duration of the budget
+	BudgetDuration string `json:"budgetDuration,omitempty"`
+	// BudgetID is the identifier for the budget
+	BudgetID string `json:"budgetID,omitempty"`
+	// Config contains additional configuration settings
+	Config map[string]string `json:"config,omitempty"`
 	// CreatedAt is the date and time when the key was created
 	CreatedAt string `json:"createdAt,omitempty"`
-	// UpdatedAt is the date and time when the key was last updated
-	UpdatedAt string `json:"updatedAt,omitempty"`
+	// CreatedBy tracks who created the key
+	CreatedBy string `json:"createdBy,omitempty"`
+	// Duration specifies how long the key is valid
+	Duration string `json:"duration,omitempty"`
+	// EnforcedParams lists parameters that must be included in requests
+	EnforcedParams []string `json:"enforcedParams,omitempty"`
+	// Expires is the date and time when the key will expire
+	Expires string `json:"expires,omitempty"`
+	// Guardrails defines guardrail settings
+	Guardrails []string `json:"guardrails,omitempty"`
+	// Key is the actual key value
+	Key string `json:"key,omitempty"`
 	// KeyAlias is the user defined key alias
 	KeyAlias string `json:"keyAlias,omitempty"`
 	// KeyID is the generated ID of the key
 	KeyID string `json:"keyID,omitempty"`
 	// KeyName is the redacted secret key
 	KeyName string `json:"keyName,omitempty"`
-	// Expires is the date and time when the key will expire
-	Expires string `json:"expires,omitempty"`
-	// SecretRef is the reference to the secret containing the key
-	SecretRef string `json:"secretRef,omitempty"`
+	// KeySecretRef is the reference to the secret containing the key
+	KeySecretRef string `json:"keySecretRef,omitempty"`
+	// LiteLLMBudgetTable is the budget table reference
+	LiteLLMBudgetTable string `json:"liteLLMBudgetTable,omitempty"`
 	// MaxBudget is the maximum budget for the key
 	MaxBudget string `json:"maxBudget,omitempty"`
-	// BudgetDuration is the duration of the budget
-	BudgetDuration string `json:"budgetDuration,omitempty"`
-	// Model names that a user is allowed to call. If empty, all models are allowed.
-	Models []string `json:"models,omitempty"`
-	// UserID is the unique user id - used for tracking spend across multiple keys for same user id.
-	UserID string `json:"userID,omitempty"`
-	// Metadata is the metadata of the key
+	// MaxParallelRequests limits concurrent requests
+	MaxParallelRequests int `json:"maxParallelRequests,omitempty"`
+	// Metadata contains additional metadata
 	Metadata map[string]string `json:"metadata,omitempty"`
+	// ModelMaxBudget sets budget limits per model
+	ModelMaxBudget map[string]string `json:"modelMaxBudget,omitempty"`
+	// ModelRPMLimit sets RPM limits per model
+	ModelRPMLimit map[string]string `json:"modelRPMLimit,omitempty"`
+	// ModelTPMLimit sets TPM limits per model
+	ModelTPMLimit map[string]string `json:"modelTPMLimit,omitempty"`
+	// Models specifies which models can be used
+	Models []string `json:"models,omitempty"`
+	// Permissions defines key permissions
+	Permissions map[string]string `json:"permissions,omitempty"`
+	// RPMLimit sets global RPM limit
+	RPMLimit int `json:"rpmLimit,omitempty"`
+	// Spend tracks the current spend amount
+	Spend string `json:"spend,omitempty"`
+	// Tags are labels for the key
+	Tags []string `json:"tags,omitempty"`
+	// TeamID identifies the team associated with the key
+	TeamID string `json:"teamID,omitempty"`
+	// Token contains the actual API key
+	Token string `json:"token,omitempty"`
+	// TokenID is the unique identifier for the token
+	TokenID string `json:"tokenID,omitempty"`
+	// TPMLimit sets global TPM limit
+	TPMLimit int `json:"tpmLimit,omitempty"`
+	// UpdatedAt is the date and time when the key was last updated
+	UpdatedAt string `json:"updatedAt,omitempty"`
+	// UpdatedBy tracks who last updated the key
+	UpdatedBy string `json:"updatedBy,omitempty"`
+	// UserID identifies the user associated with the key
+	UserID string `json:"userID,omitempty"`
+
 	// +operator-sdk:csv:customresourcedefinitions:type=status
 	Conditions []metav1.Condition `json:"conditions,omitempty" patchStrategy:"merge" patchMergeKey:"type" protobuf:"bytes,1,rep,name=conditions"`
 }

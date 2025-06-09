@@ -19,6 +19,7 @@ package controller
 import (
 	"context"
 	"fmt"
+	"strconv"
 
 	corev1 "k8s.io/api/core/v1"
 
@@ -136,15 +137,21 @@ func (r *VirtualKeyReconciler) deleteVirtualKey(ctx context.Context, virtualKey 
 func (r *VirtualKeyReconciler) generateVirtualKey(ctx context.Context, virtualKey *authv1alpha1.VirtualKey) (ctrl.Result, error) {
 	log := log.FromContext(ctx)
 
-	generateVirtualKeyResponse, err := r.GenerateVirtualKey(ctx, &litellm.VirtualKeyRequest{
-		KeyAlias:       virtualKey.Spec.KeyAlias,
-		UserID:         virtualKey.Spec.UserID,
-		TeamID:         virtualKey.Spec.TeamID,
-		MaxBudget:      virtualKey.Spec.MaxBudget,
-		BudgetDuration: virtualKey.Spec.BudgetDuration,
-		Models:         virtualKey.Spec.Models,
-		Metadata:       ensureMetadata(virtualKey.Spec.Metadata),
-	})
+	virtualKeyRequest, err := createVirtualKeyRequest(virtualKey)
+	if err != nil {
+		if _, err := r.appendCondition(ctx, virtualKey, metav1.Condition{
+			Type:               "GenerateVirtualKey",
+			Status:             metav1.ConditionFalse,
+			LastTransitionTime: metav1.Now(),
+			Reason:             "GenerateVirtualKeyFailure",
+			Message:            err.Error(),
+		}); err != nil {
+			return ctrl.Result{}, err
+		}
+		return ctrl.Result{}, err
+	}
+
+	generateVirtualKeyResponse, err := r.GenerateVirtualKey(ctx, &virtualKeyRequest)
 
 	if err != nil {
 		return r.appendCondition(ctx, virtualKey, metav1.Condition{
@@ -156,39 +163,25 @@ func (r *VirtualKeyReconciler) generateVirtualKey(ctx context.Context, virtualKe
 		})
 	}
 
-	secretKeyName := "virtual-key-" + generateVirtualKeyResponse.KeyAlias
+	secretKeyName := "litellm-key-" + generateVirtualKeyResponse.KeyAlias
 
-	virtualKey.Status.CreatedAt = generateVirtualKeyResponse.CreatedAt
-	virtualKey.Status.UpdatedAt = generateVirtualKeyResponse.UpdatedAt
-	virtualKey.Status.Expires = generateVirtualKeyResponse.Expires
-	virtualKey.Status.KeyAlias = generateVirtualKeyResponse.KeyAlias
-	virtualKey.Status.KeyID = generateVirtualKeyResponse.TokenID
-	virtualKey.Status.KeyName = generateVirtualKeyResponse.KeyName
-	virtualKey.Status.MaxBudget = fmt.Sprintf("%.2f", generateVirtualKeyResponse.MaxBudget)
-	virtualKey.Status.BudgetDuration = generateVirtualKeyResponse.BudgetDuration
-	virtualKey.Status.Models = generateVirtualKeyResponse.Models
-	virtualKey.Status.UserID = generateVirtualKeyResponse.UserID
-	virtualKey.Status.SecretRef = secretKeyName
-	virtualKey.Status.Metadata = generateVirtualKeyResponse.Metadata
-
-	controllerutil.AddFinalizer(virtualKey, finalizerName)
-
-	if _, err := r.appendCondition(ctx, virtualKey, metav1.Condition{
-		Type:               "GenerateVirtualKey",
-		Status:             metav1.ConditionTrue,
-		LastTransitionTime: metav1.Now(),
-		Reason:             "GenerateVirtualKeySuccess",
-		Message:            "VirtualKey generated in Litellm",
-	}); err != nil {
+	err = r.updateStatus(ctx, virtualKey, generateVirtualKeyResponse, secretKeyName)
+	if err != nil {
 		return ctrl.Result{}, err
 	}
 
-	if err := r.createSecret(ctx, virtualKey, secretKeyName, generateVirtualKeyResponse.SecretKey); err != nil {
+	controllerutil.AddFinalizer(virtualKey, finalizerName)
+	if err := r.Update(ctx, virtualKey); err != nil {
+		log.Error(err, "Failed to add finalizer")
+		return ctrl.Result{}, err
+	}
+
+	if err := r.createSecret(ctx, virtualKey, secretKeyName, generateVirtualKeyResponse.Key); err != nil {
 		log.Error(err, "Failed to create secret")
 		return ctrl.Result{}, err
 	}
 
-	log.Info("Created VirtualKey: " + virtualKey.Status.KeyAlias + " in litellm")
+	log.Info("Generated VirtualKey: " + virtualKey.Status.KeyAlias + " in litellm")
 	return ctrl.Result{}, nil
 }
 
@@ -213,4 +206,97 @@ func (r *VirtualKeyReconciler) createSecret(ctx context.Context, virtualKey *aut
 	}
 
 	return r.Create(ctx, secret)
+}
+
+// createVirtualKeyRequest creates a VirtualKeyRequest from a VirtualKey
+func createVirtualKeyRequest(virtualKey *authv1alpha1.VirtualKey) (litellm.VirtualKeyRequest, error) {
+	maxBudget, err := strconv.ParseFloat(virtualKey.Spec.MaxBudget, 64)
+	if err != nil {
+		return litellm.VirtualKeyRequest{}, err
+	}
+
+	softBudget, err := strconv.ParseFloat(virtualKey.Spec.SoftBudget, 64)
+	if err != nil && virtualKey.Spec.SoftBudget != "" {
+		return litellm.VirtualKeyRequest{}, err
+	}
+
+	return litellm.VirtualKeyRequest{
+		Aliases:              virtualKey.Spec.Aliases,
+		AllowedCacheControls: virtualKey.Spec.AllowedCacheControls,
+		AllowedRoutes:        virtualKey.Spec.AllowedRoutes,
+		Blocked:              virtualKey.Spec.Blocked,
+		BudgetDuration:       virtualKey.Spec.BudgetDuration,
+		BudgetID:             virtualKey.Spec.BudgetID,
+		Config:               virtualKey.Spec.Config,
+		Duration:             virtualKey.Spec.Duration,
+		EnforcedParams:       virtualKey.Spec.EnforcedParams,
+		Guardrails:           virtualKey.Spec.Guardrails,
+		Key:                  virtualKey.Spec.Key,
+		KeyAlias:             virtualKey.Spec.KeyAlias,
+		MaxBudget:            maxBudget,
+		MaxParallelRequests:  virtualKey.Spec.MaxParallelRequests,
+		Metadata:             ensureMetadata(virtualKey.Spec.Metadata),
+		ModelMaxBudget:       virtualKey.Spec.ModelMaxBudget,
+		ModelRPMLimit:        virtualKey.Spec.ModelRPMLimit,
+		ModelTPMLimit:        virtualKey.Spec.ModelTPMLimit,
+		Models:               virtualKey.Spec.Models,
+		Permissions:          virtualKey.Spec.Permissions,
+		RPMLimit:             virtualKey.Spec.RPMLimit,
+		SendInviteEmail:      virtualKey.Spec.SendInviteEmail,
+		SoftBudget:           softBudget,
+		Tags:                 virtualKey.Spec.Tags,
+		TeamID:               virtualKey.Spec.TeamID,
+		TPMLimit:             virtualKey.Spec.TPMLimit,
+		UserID:               virtualKey.Spec.UserID,
+	}, nil
+}
+
+// updateStatus updates the status of the k8s VirtualKey from the litellm response
+func (r *VirtualKeyReconciler) updateStatus(ctx context.Context, virtualKey *authv1alpha1.VirtualKey, virtualKeyResponse litellm.VirtualKeyResponse, secretKeyName string) error {
+	virtualKey.Status.Aliases = virtualKeyResponse.Aliases
+	virtualKey.Status.AllowedCacheControls = virtualKeyResponse.AllowedCacheControls
+	virtualKey.Status.AllowedRoutes = virtualKeyResponse.AllowedRoutes
+	virtualKey.Status.Blocked = virtualKeyResponse.Blocked
+	virtualKey.Status.BudgetDuration = virtualKeyResponse.BudgetDuration
+	virtualKey.Status.BudgetID = virtualKeyResponse.BudgetID
+	virtualKey.Status.Config = virtualKeyResponse.Config
+	virtualKey.Status.CreatedAt = virtualKeyResponse.CreatedAt
+	virtualKey.Status.CreatedBy = virtualKeyResponse.CreatedBy
+	virtualKey.Status.Duration = virtualKeyResponse.Duration
+	virtualKey.Status.EnforcedParams = virtualKeyResponse.EnforcedParams
+	virtualKey.Status.Expires = virtualKeyResponse.Expires
+	virtualKey.Status.Guardrails = virtualKeyResponse.Guardrails
+	virtualKey.Status.Key = virtualKeyResponse.Key
+	virtualKey.Status.KeyAlias = virtualKeyResponse.KeyAlias
+	virtualKey.Status.KeyID = virtualKeyResponse.TokenID
+	virtualKey.Status.KeyName = virtualKeyResponse.KeyName
+	virtualKey.Status.KeySecretRef = secretKeyName
+	virtualKey.Status.LiteLLMBudgetTable = virtualKeyResponse.LiteLLMBudgetTable
+	virtualKey.Status.MaxBudget = fmt.Sprintf("%.2f", virtualKeyResponse.MaxBudget)
+	virtualKey.Status.MaxParallelRequests = virtualKeyResponse.MaxParallelRequests
+	virtualKey.Status.Metadata = virtualKeyResponse.Metadata
+	virtualKey.Status.ModelMaxBudget = virtualKeyResponse.ModelMaxBudget
+	virtualKey.Status.ModelRPMLimit = virtualKeyResponse.ModelRPMLimit
+	virtualKey.Status.ModelTPMLimit = virtualKeyResponse.ModelTPMLimit
+	virtualKey.Status.Models = virtualKeyResponse.Models
+	virtualKey.Status.Permissions = virtualKeyResponse.Permissions
+	virtualKey.Status.RPMLimit = virtualKeyResponse.RPMLimit
+	virtualKey.Status.Spend = fmt.Sprintf("%.2f", virtualKeyResponse.Spend)
+	virtualKey.Status.Tags = virtualKeyResponse.Tags
+	virtualKey.Status.TeamID = virtualKeyResponse.TeamID
+	virtualKey.Status.Token = virtualKeyResponse.Token
+	virtualKey.Status.TPMLimit = virtualKeyResponse.TPMLimit
+	virtualKey.Status.UpdatedAt = virtualKeyResponse.UpdatedAt
+	virtualKey.Status.UpdatedBy = virtualKeyResponse.UpdatedBy
+	virtualKey.Status.UserID = virtualKeyResponse.UserID
+
+	_, err := r.appendCondition(ctx, virtualKey, metav1.Condition{
+		Type:               "GenerateVirtualKey",
+		Status:             metav1.ConditionTrue,
+		LastTransitionTime: metav1.Now(),
+		Reason:             "GenerateVirtualKeySuccess",
+		Message:            "VirtualKey generated in Litellm",
+	})
+
+	return err
 }

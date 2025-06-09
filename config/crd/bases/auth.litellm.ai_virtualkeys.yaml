@@ -39,38 +39,144 @@ spec:
           spec:
             description: VirtualKeySpec defines the desired state of VirtualKey
             properties:
+              aliases:
+                additionalProperties:
+                  type: string
+                description: Aliases maps additional aliases for the key
+                type: object
+              allowedCacheControls:
+                description: AllowedCacheControls defines allowed cache control settings
+                items:
+                  type: string
+                type: array
+              allowedRoutes:
+                description: AllowedRoutes defines allowed API routes
+                items:
+                  type: string
+                type: array
+              blocked:
+                description: Blocked indicates if the key is blocked
+                type: boolean
               budgetDuration:
-                description: BudgetDuration is the duration of the budget
+                description: BudgetDuration specifies the duration for budget tracking
+                type: string
+              budgetID:
+                description: BudgetID is the identifier for the budget
+                type: string
+              config:
+                additionalProperties:
+                  type: string
+                description: Config contains additional configuration settings
+                type: object
+              duration:
+                description: Duration specifies how long the key is valid
+                type: string
+              enforcedParams:
+                description: EnforcedParams lists parameters that must be included
+                  in requests
+                items:
+                  type: string
+                type: array
+              guardrails:
+                description: Guardrails defines guardrail settings
+                items:
+                  type: string
+                type: array
+              key:
+                description: Key is the actual key value
                 type: string
               keyAlias:
                 description: KeyAlias is the user defined key alias
                 type: string
               maxBudget:
-                description: MaxBudget is the maximum budget for the key
+                description: MaxBudget sets the maximum budget limit
                 type: string
+              maxParallelRequests:
+                description: MaxParallelRequests limits concurrent requests
+                type: integer
               metadata:
                 additionalProperties:
                   type: string
-                description: Metadata is the metadata of the key
+                description: Metadata contains additional metadata
+                type: object
+              modelMaxBudget:
+                additionalProperties:
+                  type: string
+                description: ModelMaxBudget sets budget limits per model
+                type: object
+              modelRPMLimit:
+                additionalProperties:
+                  type: integer
+                description: ModelRPMLimit sets RPM limits per model
+                type: object
+              modelTPMLimit:
+                additionalProperties:
+                  type: integer
+                description: ModelTPMLimit sets TPM limits per model
                 type: object
               models:
-                description: Model names that a user is allowed to call. If empty,
-                  all models are allowed.
+                description: Models specifies which models can be used
+                items:
+                  type: string
+                type: array
+              permissions:
+                additionalProperties:
+                  type: string
+                description: Permissions defines key permissions
+                type: object
+              rpmLimit:
+                description: RPMLimit sets global RPM limit
+                type: integer
+              sendInviteEmail:
+                description: SendInviteEmail indicates whether to send an invite email
+                type: boolean
+              softBudget:
+                description: SoftBudget sets a soft budget limit
+                type: string
+              spend:
+                description: Spend tracks the current spend amount
+                type: string
+              tags:
+                description: Tags are labels for the key
                 items:
                   type: string
                 type: array
               teamID:
-                description: TeamID is the team ID for the key
+                description: TeamID identifies the team associated with the key
                 type: string
+              tpmLimit:
+                description: TPMLimit sets global TPM limit
+                type: integer
               userID:
-                description: UserID is the user ID of the key
+                description: UserID identifies the user associated with the key
                 type: string
             type: object
           status:
             description: VirtualKeyStatus defines the observed state of VirtualKey
             properties:
+              aliases:
+                additionalProperties:
+                  type: string
+                description: Aliases maps additional aliases for the key
+                type: object
+              allowedCacheControls:
+                description: AllowedCacheControls defines allowed cache control settings
+                items:
+                  type: string
+                type: array
+              allowedRoutes:
+                description: AllowedRoutes defines allowed API routes
+                items:
+                  type: string
+                type: array
+              blocked:
+                description: Blocked indicates if the key is blocked
+                type: boolean
               budgetDuration:
                 description: BudgetDuration is the duration of the budget
+                type: string
+              budgetID:
+                description: BudgetID is the identifier for the budget
                 type: string
               conditions:
                 items:
@@ -128,11 +234,36 @@ spec:
                   - type
                   type: object
                 type: array
+              config:
+                additionalProperties:
+                  type: string
+                description: Config contains additional configuration settings
+                type: object
               createdAt:
                 description: CreatedAt is the date and time when the key was created
                 type: string
+              createdBy:
+                description: CreatedBy tracks who created the key
+                type: string
+              duration:
+                description: Duration specifies how long the key is valid
+                type: string
+              enforcedParams:
+                description: EnforcedParams lists parameters that must be included
+                  in requests
+                items:
+                  type: string
+                type: array
               expires:
                 description: Expires is the date and time when the key will expire
+                type: string
+              guardrails:
+                description: Guardrails defines guardrail settings
+                items:
+                  type: string
+                type: array
+              key:
+                description: Key is the actual key value
                 type: string
               keyAlias:
                 description: KeyAlias is the user defined key alias
@@ -143,31 +274,81 @@ spec:
               keyName:
                 description: KeyName is the redacted secret key
                 type: string
+              keySecretRef:
+                description: KeySecretRef is the reference to the secret containing
+                  the key
+                type: string
+              liteLLMBudgetTable:
+                description: LiteLLMBudgetTable is the budget table reference
+                type: string
               maxBudget:
                 description: MaxBudget is the maximum budget for the key
                 type: string
+              maxParallelRequests:
+                description: MaxParallelRequests limits concurrent requests
+                type: integer
               metadata:
                 additionalProperties:
                   type: string
-                description: Metadata is the metadata of the key
+                description: Metadata contains additional metadata
+                type: object
+              modelMaxBudget:
+                additionalProperties:
+                  type: string
+                description: ModelMaxBudget sets budget limits per model
+                type: object
+              modelRPMLimit:
+                additionalProperties:
+                  type: string
+                description: ModelRPMLimit sets RPM limits per model
+                type: object
+              modelTPMLimit:
+                additionalProperties:
+                  type: string
+                description: ModelTPMLimit sets TPM limits per model
                 type: object
               models:
-                description: Model names that a user is allowed to call. If empty,
-                  all models are allowed.
+                description: Models specifies which models can be used
                 items:
                   type: string
                 type: array
-              secretRef:
-                description: SecretRef is the reference to the secret containing the
-                  key
+              permissions:
+                additionalProperties:
+                  type: string
+                description: Permissions defines key permissions
+                type: object
+              rpmLimit:
+                description: RPMLimit sets global RPM limit
+                type: integer
+              spend:
+                description: Spend tracks the current spend amount
                 type: string
+              tags:
+                description: Tags are labels for the key
+                items:
+                  type: string
+                type: array
+              teamID:
+                description: TeamID identifies the team associated with the key
+                type: string
+              token:
+                description: Token contains the actual API key
+                type: string
+              tokenID:
+                description: TokenID is the unique identifier for the token
+                type: string
+              tpmLimit:
+                description: TPMLimit sets global TPM limit
+                type: integer
               updatedAt:
                 description: UpdatedAt is the date and time when the key was last
                   updated
                 type: string
+              updatedBy:
+                description: UpdatedBy tracks who last updated the key
+                type: string
               userID:
-                description: UserID is the unique user id - used for tracking spend
-                  across multiple keys for same user id.
+                description: UserID identifies the user associated with the key
                 type: string
             type: object
         type: object
