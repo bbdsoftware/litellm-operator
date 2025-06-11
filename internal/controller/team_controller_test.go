@@ -106,43 +106,83 @@ var _ = Describe("Team Controller", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Cleanup the specific resource instance Team")
+			By("Deleting the resource from k8s")
 			Expect(k8sClient.Delete(ctx, resource)).To(Succeed())
-		})
-		It("should successfully reconcile the resource", func() {
-			By("Reconciling the created resource")
+			By("Deleting the resource from litellm")
 			controllerReconciler := &TeamReconciler{
 				Client:      k8sClient,
 				Scheme:      k8sClient.Scheme(),
-				LitellmTeam: &FakeLitellmTeamClient{teamExists: false},
+				LitellmTeam: &FakeLitellmTeamClient{teamExists: true},
 			}
-
-			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
+			_, err = controllerReconciler.Reconcile(ctx, reconcile.Request{
 				NamespacedName: typeNamespacedName,
 			})
 			Expect(err).NotTo(HaveOccurred())
-			// TODO(user): Add more specific assertions depending on your controller's reconciliation logic.
-			// Example: If you expect a certain status condition after reconciliation, verify it here.
-			By("Verifying the team status was updated")
-			team := &authv1alpha1.Team{}
-			err = k8sClient.Get(ctx, typeNamespacedName, team)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(team.Status.TeamID).To(Equal("test-team-id"))
-			Expect(team.Status.TeamAlias).To(Equal("test-alias"))
-			Expect(team.Status.OrganizationID).To(Equal("test-org"))
-			Expect(team.Status.MembersWithRole).To(Equal([]authv1alpha1.TeamMemberWithRole{
-				{
-					UserID:    "user1",
-					UserEmail: "user1@example.com",
-					Role:      "admin",
-				},
-			}))
+		})
 
-			By("Verifying the conditions were updated")
-			Expect(team.Status.Conditions).To(HaveLen(1))
-			Expect(team.Status.Conditions[0].Type).To(Equal("TeamCreated"))
-			Expect(team.Status.Conditions[0].Status).To(Equal(metav1.ConditionTrue))
-			Expect(team.Status.Conditions[0].Reason).To(Equal("TeamCreated"))
-			Expect(team.Status.Conditions[0].Message).To(Equal("Team created in litellm"))
+		Context("that does not already exist in litellm", func() {
+			It("should successfully reconcile the resource", func() {
+				By("Reconciling the created resource")
+				controllerReconciler := &TeamReconciler{
+					Client:      k8sClient,
+					Scheme:      k8sClient.Scheme(),
+					LitellmTeam: &FakeLitellmTeamClient{teamExists: false},
+				}
+
+				_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
+					NamespacedName: typeNamespacedName,
+				})
+				Expect(err).NotTo(HaveOccurred())
+				// TODO(user): Add more specific assertions depending on your controller's reconciliation logic.
+				// Example: If you expect a certain status condition after reconciliation, verify it here.
+				By("Verifying the team status was updated")
+				team := &authv1alpha1.Team{}
+				err = k8sClient.Get(ctx, typeNamespacedName, team)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(team.Status.TeamID).To(Equal("test-team-id"))
+				Expect(team.Status.TeamAlias).To(Equal("test-alias"))
+				Expect(team.Status.OrganizationID).To(Equal("test-org"))
+				Expect(team.Status.MembersWithRole).To(Equal([]authv1alpha1.TeamMemberWithRole{
+					{
+						UserID:    "user1",
+						UserEmail: "user1@example.com",
+						Role:      "admin",
+					},
+				}))
+
+				By("Verifying the conditions were updated")
+				Expect(team.Status.Conditions).To(HaveLen(1))
+				Expect(team.Status.Conditions[0].Type).To(Equal("TeamCreated"))
+				Expect(team.Status.Conditions[0].Status).To(Equal(metav1.ConditionTrue))
+				Expect(team.Status.Conditions[0].Reason).To(Equal("TeamCreated"))
+				Expect(team.Status.Conditions[0].Message).To(Equal("Team created in litellm"))
+			})
+		})
+
+		Context("that already exists in litellm", func() {
+			It("should add an error condition to the status", func() {
+				By("Reconciling the created resource")
+				controllerReconciler := &TeamReconciler{
+					Client:      k8sClient,
+					Scheme:      k8sClient.Scheme(),
+					LitellmTeam: &FakeLitellmTeamClient{teamExists: true},
+				}
+
+				_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
+					NamespacedName: typeNamespacedName,
+				})
+				Expect(err).NotTo(HaveOccurred())
+
+				By("Verifying the conditions were updated")
+				team := &authv1alpha1.Team{}
+				err = k8sClient.Get(ctx, typeNamespacedName, team)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(team.Status.Conditions).To(HaveLen(1))
+				Expect(team.Status.Conditions[0].Type).To(Equal("CreateTeam"))
+				Expect(team.Status.Conditions[0].Status).To(Equal(metav1.ConditionFalse))
+				Expect(team.Status.Conditions[0].Reason).To(Equal("CreateTeamFailure"))
+				Expect(team.Status.Conditions[0].Message).To(Equal("Team already exists in litellm"))
+			})
 		})
 	})
 })
