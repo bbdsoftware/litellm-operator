@@ -178,6 +178,10 @@ spec:
               budgetID:
                 description: BudgetID is the identifier for the budget
                 type: string
+              budgetResetAt:
+                description: BudgetResetAt is the date and time when the budget will
+                  reset
+                type: string
               conditions:
                 items:
                   description: Condition contains details for one aspect of the current

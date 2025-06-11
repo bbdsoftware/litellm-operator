@@ -25,6 +25,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -74,6 +75,7 @@ func (r *VirtualKeyReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		return ctrl.Result{}, err
 	}
 
+	// If the VirtualKey is being deleted, delete the key from litellm
 	if virtualKey.GetDeletionTimestamp() != nil {
 		if controllerutil.ContainsFinalizer(virtualKey, finalizerName) {
 			log.Info("Deleting VirtualKey: " + virtualKey.Status.KeyAlias + " from litellm")
@@ -82,9 +84,23 @@ func (r *VirtualKeyReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		return ctrl.Result{}, nil
 	}
 
-	if virtualKey.Status.Conditions == nil {
+	exists, err := r.CheckVirtualKeyExists(ctx, virtualKey.Spec.KeyAlias)
+	if err != nil {
+		log.Error(err, "Failed to check if VirtualKey exists")
+		return ctrl.Result{}, err
+	}
+
+	if !exists {
+		// Key does not exist, generate it
 		log.Info("Generating new VirtualKey: " + virtualKey.Spec.KeyAlias + " in litellm")
 		return r.generateVirtualKey(ctx, virtualKey)
+	}
+
+	// sync key if required
+	err = r.syncVirtualKey(ctx, virtualKey)
+	if err != nil {
+		log.Error(err, "Failed to sync virtual key")
+		return ctrl.Result{}, err
 	}
 
 	return ctrl.Result{}, nil
@@ -165,7 +181,14 @@ func (r *VirtualKeyReconciler) generateVirtualKey(ctx context.Context, virtualKe
 
 	secretName := "litellm-key-" + virtualKeyResponse.KeyAlias
 
-	err = r.updateStatus(ctx, virtualKey, virtualKeyResponse, secretName)
+	updateStatus(virtualKey, virtualKeyResponse, secretName)
+	_, err = r.appendCondition(ctx, virtualKey, metav1.Condition{
+		Type:               "GenerateVirtualKey",
+		Status:             metav1.ConditionTrue,
+		LastTransitionTime: metav1.Now(),
+		Reason:             "GenerateVirtualKeySuccess",
+		Message:            "VirtualKey generated in Litellm",
+	})
 	if err != nil {
 		return ctrl.Result{}, err
 	}
@@ -206,6 +229,65 @@ func (r *VirtualKeyReconciler) createSecret(ctx context.Context, virtualKey *aut
 	}
 
 	return r.Create(ctx, secret)
+}
+
+// syncVirtualKey syncs the virtual key with the litellm service should changes be detected
+func (r *VirtualKeyReconciler) syncVirtualKey(ctx context.Context, virtualKey *authv1alpha1.VirtualKey) error {
+	log := log.FromContext(ctx)
+
+	key, err := r.getKeyFromSecret(ctx, virtualKey)
+	if err != nil {
+		log.Error(err, "Failed to get key from secret")
+		return err
+	}
+
+	virtualKeyRequest, err := createVirtualKeyRequest(virtualKey)
+	if err != nil {
+		log.Error(err, "Failed to create virtual key request")
+		return err
+	}
+
+	virtualKeyResponse, err := r.GetVirtualKey(ctx, key)
+	if err != nil {
+		log.Error(err, "Failed to get virtual key from litellm")
+		return err
+	}
+
+	if r.UpdateNeeded(ctx, &virtualKeyResponse, &virtualKeyRequest) {
+		log.Info("Updating VirtualKey: " + virtualKey.Spec.KeyAlias + " in litellm")
+		// When updating a key, we need to pass the key in the request but this usually resides in the Secret
+		virtualKeyRequest.Key = key
+
+		_, err := r.UpdateVirtualKey(ctx, &virtualKeyRequest)
+		if err != nil {
+			log.Error(err, "Failed to update virtual key in litellm")
+			return err
+		}
+
+		updateStatus(virtualKey, virtualKeyResponse, virtualKey.Status.KeySecretRef)
+
+		if err := r.Status().Update(ctx, virtualKey); err != nil {
+			log.Error(err, "Failed to update VirtualKey status")
+			return err
+		} else {
+			log.Info("Updated VirtualKey: " + virtualKey.Spec.KeyAlias + " in litellm")
+		}
+	}
+
+	return nil
+}
+
+// getKeyFromSecret gets the key from the secret associated with the VirtualKey
+func (r *VirtualKeyReconciler) getKeyFromSecret(ctx context.Context, virtualKey *authv1alpha1.VirtualKey) (string, error) {
+	namespacedName := types.NamespacedName{
+		Name:      virtualKey.Status.KeySecretRef,
+		Namespace: virtualKey.Namespace,
+	}
+	var secret corev1.Secret
+	if err := r.Get(ctx, namespacedName, &secret); err != nil {
+		return "", err
+	}
+	return string(secret.Data["key"]), nil
 }
 
 // createVirtualKeyRequest creates a VirtualKeyRequest from a VirtualKey
@@ -257,13 +339,14 @@ func createVirtualKeyRequest(virtualKey *authv1alpha1.VirtualKey) (litellm.Virtu
 }
 
 // updateStatus updates the status of the k8s VirtualKey from the litellm response
-func (r *VirtualKeyReconciler) updateStatus(ctx context.Context, virtualKey *authv1alpha1.VirtualKey, virtualKeyResponse litellm.VirtualKeyResponse, secretKeyName string) error {
+func updateStatus(virtualKey *authv1alpha1.VirtualKey, virtualKeyResponse litellm.VirtualKeyResponse, secretKeyName string) {
 	virtualKey.Status.Aliases = virtualKeyResponse.Aliases
 	virtualKey.Status.AllowedCacheControls = virtualKeyResponse.AllowedCacheControls
 	virtualKey.Status.AllowedRoutes = virtualKeyResponse.AllowedRoutes
 	virtualKey.Status.Blocked = virtualKeyResponse.Blocked
 	virtualKey.Status.BudgetDuration = virtualKeyResponse.BudgetDuration
 	virtualKey.Status.BudgetID = virtualKeyResponse.BudgetID
+	virtualKey.Status.BudgetResetAt = virtualKeyResponse.BudgetResetAt
 	virtualKey.Status.Config = virtualKeyResponse.Config
 	virtualKey.Status.CreatedAt = virtualKeyResponse.CreatedAt
 	virtualKey.Status.CreatedBy = virtualKeyResponse.CreatedBy
@@ -293,14 +376,4 @@ func (r *VirtualKeyReconciler) updateStatus(ctx context.Context, virtualKey *aut
 	virtualKey.Status.UpdatedAt = virtualKeyResponse.UpdatedAt
 	virtualKey.Status.UpdatedBy = virtualKeyResponse.UpdatedBy
 	virtualKey.Status.UserID = virtualKeyResponse.UserID
-
-	_, err := r.appendCondition(ctx, virtualKey, metav1.Condition{
-		Type:               "GenerateVirtualKey",
-		Status:             metav1.ConditionTrue,
-		LastTransitionTime: metav1.Now(),
-		Reason:             "GenerateVirtualKeySuccess",
-		Message:            "VirtualKey generated in Litellm",
-	})
-
-	return err
 }

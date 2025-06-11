@@ -97,6 +97,8 @@ type VirtualKeyStatus struct {
 	BudgetDuration string `json:"budgetDuration,omitempty"`
 	// BudgetID is the identifier for the budget
 	BudgetID string `json:"budgetID,omitempty"`
+	// BudgetResetAt is the date and time when the budget will reset
+	BudgetResetAt string `json:"budgetResetAt,omitempty"`
 	// Config contains additional configuration settings
 	Config map[string]string `json:"config,omitempty"`
 	// CreatedAt is the date and time when the key was created
