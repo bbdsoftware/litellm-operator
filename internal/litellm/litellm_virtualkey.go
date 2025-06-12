@@ -4,13 +4,18 @@ import (
 	"context"
 	"encoding/json"
 
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
 type LitellmVirtualKey interface {
-	GenerateVirtualKey(ctx context.Context, req *VirtualKeyRequest) (VirtualKeyResponse, error)
-	DeleteVirtualKey(ctx context.Context, keyAlias string) error
 	CheckVirtualKeyExists(ctx context.Context, keyAlias string) (bool, error)
+	DeleteVirtualKey(ctx context.Context, keyAlias string) error
+	GenerateVirtualKey(ctx context.Context, req *VirtualKeyRequest) (VirtualKeyResponse, error)
+	GetVirtualKey(ctx context.Context, key string) (VirtualKeyResponse, error)
+	UpdateNeeded(ctx context.Context, virtualKey *VirtualKeyResponse, req *VirtualKeyRequest) bool
+	UpdateVirtualKey(ctx context.Context, req *VirtualKeyRequest) (VirtualKeyResponse, error)
 }
 
 type VirtualKeyRequest struct {
@@ -51,6 +56,7 @@ type VirtualKeyResponse struct {
 	Blocked              bool              `json:"blocked,omitempty"`
 	BudgetDuration       string            `json:"budget_duration,omitempty"`
 	BudgetID             string            `json:"budget_id,omitempty"`
+	BudgetResetAt        string            `json:"budget_reset_at,omitempty"`
 	Config               map[string]string `json:"config,omitempty"`
 	CreatedAt            string            `json:"created_at,omitempty"`
 	CreatedBy            string            `json:"created_by,omitempty"`
@@ -66,8 +72,8 @@ type VirtualKeyResponse struct {
 	MaxParallelRequests  int               `json:"max_parallel_requests,omitempty"`
 	Metadata             map[string]string `json:"metadata,omitempty"`
 	ModelMaxBudget       map[string]string `json:"model_max_budget,omitempty"`
-	ModelRPMLimit        map[string]string `json:"model_rpm_limit,omitempty"`
-	ModelTPMLimit        map[string]string `json:"model_tpm_limit,omitempty"`
+	ModelRPMLimit        map[string]int    `json:"model_rpm_limit,omitempty"`
+	ModelTPMLimit        map[string]int    `json:"model_tpm_limit,omitempty"`
 	Models               []string          `json:"models,omitempty"`
 	Permissions          map[string]string `json:"permissions,omitempty"`
 	RPMLimit             int               `json:"rpm_limit,omitempty"`
@@ -107,6 +113,30 @@ func (l *LitellmClient) GenerateVirtualKey(ctx context.Context, req *VirtualKeyR
 	return virtualKeyResponse, nil
 }
 
+func (l *LitellmClient) UpdateVirtualKey(ctx context.Context, req *VirtualKeyRequest) (VirtualKeyResponse, error) {
+	log := log.FromContext(ctx)
+
+	body, err := json.Marshal(req)
+	if err != nil {
+		log.Error(err, "Failed to marshal virtual key request payload")
+		return VirtualKeyResponse{}, err
+	}
+
+	response, err := l.makeRequest(ctx, "POST", "/key/update", body)
+	if err != nil {
+		log.Error(err, "Failed to update virtual key in Litellm")
+		return VirtualKeyResponse{}, err
+	}
+
+	var virtualKeyResponse VirtualKeyResponse
+	if err := json.Unmarshal(response, &virtualKeyResponse); err != nil {
+		log.Error(err, "Failed to unmarshal virtual key response from Litellm")
+		return VirtualKeyResponse{}, err
+	}
+
+	return virtualKeyResponse, nil
+}
+
 // DeleteVirtualKey deletes a virtual key from the Litellm service
 func (l *LitellmClient) DeleteVirtualKey(ctx context.Context, keyAlias string) error {
 	log := log.FromContext(ctx)
@@ -132,10 +162,7 @@ func (l *LitellmClient) CheckVirtualKeyExists(ctx context.Context, keyAlias stri
 	}
 
 	var response struct {
-		Keys []struct {
-			KeyAlias string `json:"key_alias"`
-			KeyName  string `json:"key_name"`
-		} `json:"keys"`
+		Keys []string `json:"keys"`
 	}
 
 	if err := json.Unmarshal(body, &response); err != nil {
@@ -144,6 +171,134 @@ func (l *LitellmClient) CheckVirtualKeyExists(ctx context.Context, keyAlias stri
 	}
 
 	// Check if any key exists with the given alias
-	// Since key aliases are unique, we only need to check the first key if any exists
-	return len(response.Keys) > 0 && response.Keys[0].KeyAlias == keyAlias, nil
+	if len(response.Keys) == 0 {
+		return false, nil
+	}
+	return true, nil
+}
+
+// GetVirtualKey gets a virtual key from the Litellm service
+func (l *LitellmClient) GetVirtualKey(ctx context.Context, key string) (VirtualKeyResponse, error) {
+	log := log.FromContext(ctx)
+
+	body, err := l.makeRequest(ctx, "GET", "/key/info?key="+key, nil)
+	if err != nil {
+		log.Error(err, "Failed to get virtual key")
+		return VirtualKeyResponse{}, err
+	}
+
+	var response struct {
+		KeyInfo VirtualKeyResponse `json:"info"`
+	}
+
+	if err := json.Unmarshal(body, &response); err != nil {
+		log.Error(err, "Failed to unmarshal virtual key response from Litellm")
+		return VirtualKeyResponse{}, err
+	}
+
+	return response.KeyInfo, nil
+}
+
+// UpdateNeeded checks if the virtual key needs to be updated
+func (l *LitellmClient) UpdateNeeded(ctx context.Context, virtualKey *VirtualKeyResponse, req *VirtualKeyRequest) bool {
+	log := log.FromContext(ctx)
+
+	if !cmp.Equal(virtualKey.Aliases, req.Aliases, cmp.Option(cmpopts.EquateEmpty())) {
+		log.Info("Aliases changed")
+		return true
+	}
+
+	if !cmp.Equal(virtualKey.AllowedCacheControls, req.AllowedCacheControls, cmp.Option(cmpopts.EquateEmpty())) {
+		log.Info("AllowedCacheControls changed")
+		return true
+	}
+	if !cmp.Equal(virtualKey.AllowedRoutes, req.AllowedRoutes, cmp.Option(cmpopts.EquateEmpty())) {
+		log.Info("AllowedRoutes changed")
+		return true
+	}
+	if virtualKey.Blocked != req.Blocked {
+		log.Info("Blocked changed")
+		return true
+	}
+	if virtualKey.BudgetDuration != req.BudgetDuration {
+		log.Info("BudgetDuration changed")
+		return true
+	}
+	if virtualKey.BudgetID != req.BudgetID {
+		log.Info("BudgetID changed")
+		return true
+	}
+	if !cmp.Equal(virtualKey.Config, req.Config, cmp.Option(cmpopts.EquateEmpty())) {
+		log.Info("Config changed")
+		return true
+	}
+	if virtualKey.Duration != req.Duration {
+		log.Info("Duration changed")
+		return true
+	}
+	if !cmp.Equal(virtualKey.EnforcedParams, req.EnforcedParams, cmp.Option(cmpopts.EquateEmpty())) {
+		log.Info("EnforcedParams changed")
+		return true
+	}
+	if !cmp.Equal(virtualKey.Guardrails, req.Guardrails, cmp.Option(cmpopts.EquateEmpty())) {
+		log.Info("Guardrails changed")
+		return true
+	}
+	if virtualKey.KeyAlias != req.KeyAlias {
+		log.Info("KeyAlias changed")
+		return true
+	}
+	if virtualKey.MaxBudget != req.MaxBudget {
+		log.Info("MaxBudget changed")
+		return true
+	}
+	if virtualKey.MaxParallelRequests != req.MaxParallelRequests {
+		log.Info("MaxParallelRequests changed")
+		return true
+	}
+	if !cmp.Equal(virtualKey.Metadata, req.Metadata, cmp.Option(cmpopts.EquateEmpty())) {
+		log.Info("Metadata changed")
+		return true
+	}
+	if !cmp.Equal(virtualKey.ModelMaxBudget, req.ModelMaxBudget, cmp.Option(cmpopts.EquateEmpty())) {
+		log.Info("ModelMaxBudget changed")
+		return true
+	}
+	if !cmp.Equal(virtualKey.ModelRPMLimit, req.ModelRPMLimit, cmp.Option(cmpopts.EquateEmpty())) {
+		log.Info("ModelRPMLimit changed")
+		return true
+	}
+	if !cmp.Equal(virtualKey.ModelTPMLimit, req.ModelTPMLimit, cmp.Option(cmpopts.EquateEmpty())) {
+		log.Info("ModelTPMLimit changed")
+		return true
+	}
+	if !cmp.Equal(virtualKey.Models, req.Models, cmp.Option(cmpopts.EquateEmpty())) {
+		log.Info("Models changed")
+		return true
+	}
+	if !cmp.Equal(virtualKey.Permissions, req.Permissions, cmp.Option(cmpopts.EquateEmpty())) {
+		log.Info("Permissions changed")
+		return true
+	}
+	if virtualKey.RPMLimit != req.RPMLimit {
+		log.Info("RPMLimit changed")
+		return true
+	}
+	if !cmp.Equal(virtualKey.Tags, req.Tags, cmp.Option(cmpopts.EquateEmpty())) {
+		log.Info("Tags changed")
+		return true
+	}
+	if virtualKey.TeamID != req.TeamID {
+		log.Info("TeamID changed")
+		return true
+	}
+	if virtualKey.TPMLimit != req.TPMLimit {
+		log.Info("TPMLimit changed")
+		return true
+	}
+	if virtualKey.UserID != req.UserID {
+		log.Info("UserID changed")
+		return true
+	}
+	return false
 }

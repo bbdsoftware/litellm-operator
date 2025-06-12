@@ -178,6 +178,10 @@ spec:
               budgetID:
                 description: BudgetID is the identifier for the budget
                 type: string
+              budgetResetAt:
+                description: BudgetResetAt is the date and time when the budget will
+                  reset
+                type: string
               conditions:
                 items:
                   description: Condition contains details for one aspect of the current
@@ -296,12 +300,12 @@ spec:
                 type: object
               modelRPMLimit:
                 additionalProperties:
-                  type: string
+                  type: integer
                 description: ModelRPMLimit sets RPM limits per model
                 type: object
               modelTPMLimit:
                 additionalProperties:
-                  type: string
+                  type: integer
                 description: ModelTPMLimit sets TPM limits per model
                 type: object
               models:

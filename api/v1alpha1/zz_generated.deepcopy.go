@@ -650,14 +650,14 @@ func (in *VirtualKeyStatus) DeepCopyInto(out *VirtualKeyStatus) {
 	}
 	if in.ModelRPMLimit != nil {
 		in, out := &in.ModelRPMLimit, &out.ModelRPMLimit
-		*out = make(map[string]string, len(*in))
+		*out = make(map[string]int, len(*in))
 		for key, val := range *in {
 			(*out)[key] = val
 		}
 	}
 	if in.ModelTPMLimit != nil {
 		in, out := &in.ModelTPMLimit, &out.ModelTPMLimit
-		*out = make(map[string]string, len(*in))
+		*out = make(map[string]int, len(*in))
 		for key, val := range *in {
 			(*out)[key] = val
 		}

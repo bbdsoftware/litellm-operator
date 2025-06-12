@@ -97,6 +97,8 @@ type VirtualKeyStatus struct {
 	BudgetDuration string `json:"budgetDuration,omitempty"`
 	// BudgetID is the identifier for the budget
 	BudgetID string `json:"budgetID,omitempty"`
+	// BudgetResetAt is the date and time when the budget will reset
+	BudgetResetAt string `json:"budgetResetAt,omitempty"`
 	// Config contains additional configuration settings
 	Config map[string]string `json:"config,omitempty"`
 	// CreatedAt is the date and time when the key was created
@@ -130,9 +132,9 @@ type VirtualKeyStatus struct {
 	// ModelMaxBudget sets budget limits per model
 	ModelMaxBudget map[string]string `json:"modelMaxBudget,omitempty"`
 	// ModelRPMLimit sets RPM limits per model
-	ModelRPMLimit map[string]string `json:"modelRPMLimit,omitempty"`
+	ModelRPMLimit map[string]int `json:"modelRPMLimit,omitempty"`
 	// ModelTPMLimit sets TPM limits per model
-	ModelTPMLimit map[string]string `json:"modelTPMLimit,omitempty"`
+	ModelTPMLimit map[string]int `json:"modelTPMLimit,omitempty"`
 	// Models specifies which models can be used
 	Models []string `json:"models,omitempty"`
 	// Permissions defines key permissions
