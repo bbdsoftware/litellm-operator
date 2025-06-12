@@ -297,7 +297,6 @@ func (r *UserReconciler) updateStatus(ctx context.Context, user *authv1alpha1.Us
 	user.Status.LiteLLMBudgetTable = userResponse.LiteLLMBudgetTable
 	user.Status.MaxBudget = fmt.Sprintf("%.2f", userResponse.MaxBudget)
 	user.Status.MaxParallelRequests = userResponse.MaxParallelRequests
-	user.Status.Metadata = userResponse.Metadata
 	user.Status.ModelMaxBudget = userResponse.ModelMaxBudget
 	user.Status.ModelRPMLimit = userResponse.ModelRPMLimit
 	user.Status.ModelTPMLimit = userResponse.ModelTPMLimit

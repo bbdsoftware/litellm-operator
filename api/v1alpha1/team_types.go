@@ -57,7 +57,7 @@ type TeamSpec struct {
 	OrganizationID string `json:"organizationID,omitempty"`
 	// RPMLimit is the maximum requests per minute limit for the team - all keys associated with this team_id will have at max this RPM limit
 	RPMLimit int `json:"rpmLimit,omitempty"`
-	// Tags is the list of tags that are used for tracking spend and/or doing tag-based routing
+	// Tags for tracking spend and/or doing tag-based routing. Requires Enterprise license
 	Tags []string `json:"tags,omitempty"`
 	// TeamAlias is the alias of the team
 	TeamAlias string `json:"teamAlias,omitempty"`
@@ -90,8 +90,6 @@ type TeamStatus struct {
 	MaxParallelRequests int `json:"maxParallelRequests,omitempty"`
 	// MembersWithRole is the list of members with role
 	MembersWithRole []TeamMemberWithRole `json:"membersWithRole,omitempty"`
-	// Metadata is the metadata of the team
-	Metadata map[string]string `json:"metadata,omitempty"`
 	// ModelID is the ID of the model
 	ModelID string `json:"modelID,omitempty"`
 	// Models is the list of models that are associated with the team. All keys for this team_id will have at most, these models.
@@ -102,7 +100,7 @@ type TeamStatus struct {
 	RPMLimit int `json:"rpmLimit,omitempty"`
 	// Spend is the current spend of the team
 	Spend string `json:"spend,omitempty"`
-	// Tags is the list of tags that are used for tracking spend and/or doing tag-based routing
+	// Tags for tracking spend and/or doing tag-based routing. Requires Enterprise license
 	Tags []string `json:"tags,omitempty"`
 	// TeamAlias is the alias of the team
 	TeamAlias string `json:"teamAlias,omitempty"`

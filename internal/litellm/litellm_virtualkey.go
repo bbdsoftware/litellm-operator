@@ -70,7 +70,6 @@ type VirtualKeyResponse struct {
 	LiteLLMBudgetTable   string            `json:"litellm_budget_table,omitempty"`
 	MaxBudget            float64           `json:"max_budget,omitempty"`
 	MaxParallelRequests  int               `json:"max_parallel_requests,omitempty"`
-	Metadata             map[string]string `json:"metadata,omitempty"`
 	ModelMaxBudget       map[string]string `json:"model_max_budget,omitempty"`
 	ModelRPMLimit        map[string]int    `json:"model_rpm_limit,omitempty"`
 	ModelTPMLimit        map[string]int    `json:"model_tpm_limit,omitempty"`
@@ -254,10 +253,6 @@ func (l *LitellmClient) UpdateNeeded(ctx context.Context, virtualKey *VirtualKey
 	}
 	if virtualKey.MaxParallelRequests != req.MaxParallelRequests {
 		log.Info("MaxParallelRequests changed")
-		return true
-	}
-	if !cmp.Equal(virtualKey.Metadata, req.Metadata, cmp.Option(cmpopts.EquateEmpty())) {
-		log.Info("Metadata changed")
 		return true
 	}
 	if !cmp.Equal(virtualKey.ModelMaxBudget, req.ModelMaxBudget, cmp.Option(cmpopts.EquateEmpty())) {

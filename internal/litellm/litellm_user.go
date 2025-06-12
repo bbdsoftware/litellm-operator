@@ -64,7 +64,6 @@ type UserResponse struct {
 	LiteLLMBudgetTable   string            `json:"litellm_budget_table,omitempty"`
 	MaxBudget            float64           `json:"max_budget,omitempty"`
 	MaxParallelRequests  int               `json:"max_parallel_requests,omitempty"`
-	Metadata             map[string]string `json:"metadata,omitempty"`
 	ModelMaxBudget       map[string]string `json:"model_max_budget,omitempty"`
 	ModelRPMLimit        map[string]string `json:"model_rpm_limit,omitempty"`
 	ModelTPMLimit        map[string]string `json:"model_tpm_limit,omitempty"`

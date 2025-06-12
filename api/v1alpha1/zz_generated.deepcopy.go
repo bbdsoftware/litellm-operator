@@ -161,13 +161,6 @@ func (in *TeamStatus) DeepCopyInto(out *TeamStatus) {
 		*out = make([]TeamMemberWithRole, len(*in))
 		copy(*out, *in)
 	}
-	if in.Metadata != nil {
-		in, out := &in.Metadata, &out.Metadata
-		*out = make(map[string]string, len(*in))
-		for key, val := range *in {
-			(*out)[key] = val
-		}
-	}
 	if in.Models != nil {
 		in, out := &in.Models, &out.Models
 		*out = make([]string, len(*in))
@@ -374,13 +367,6 @@ func (in *UserStatus) DeepCopyInto(out *UserStatus) {
 		in, out := &in.Guardrails, &out.Guardrails
 		*out = make([]string, len(*in))
 		copy(*out, *in)
-	}
-	if in.Metadata != nil {
-		in, out := &in.Metadata, &out.Metadata
-		*out = make(map[string]string, len(*in))
-		for key, val := range *in {
-			(*out)[key] = val
-		}
 	}
 	if in.ModelMaxBudget != nil {
 		in, out := &in.ModelMaxBudget, &out.ModelMaxBudget
@@ -633,13 +619,6 @@ func (in *VirtualKeyStatus) DeepCopyInto(out *VirtualKeyStatus) {
 		in, out := &in.Guardrails, &out.Guardrails
 		*out = make([]string, len(*in))
 		copy(*out, *in)
-	}
-	if in.Metadata != nil {
-		in, out := &in.Metadata, &out.Metadata
-		*out = make(map[string]string, len(*in))
-		for key, val := range *in {
-			(*out)[key] = val
-		}
 	}
 	if in.ModelMaxBudget != nil {
 		in, out := &in.ModelMaxBudget, &out.ModelMaxBudget

@@ -137,7 +137,8 @@ spec:
                 description: Spend tracks the current spend amount
                 type: string
               tags:
-                description: Tags are labels for the key
+                description: Tags for tracking spend and/or doing tag-based routing.
+                  Requires Enterprise license
                 items:
                   type: string
                 type: array
@@ -288,11 +289,6 @@ spec:
               maxParallelRequests:
                 description: MaxParallelRequests limits concurrent requests
                 type: integer
-              metadata:
-                additionalProperties:
-                  type: string
-                description: Metadata contains additional metadata
-                type: object
               modelMaxBudget:
                 additionalProperties:
                   type: string
@@ -325,7 +321,8 @@ spec:
                 description: Spend tracks the current spend amount
                 type: string
               tags:
-                description: Tags are labels for the key
+                description: Tags for tracking spend and/or doing tag-based routing.
+                  Requires Enterprise license
                 items:
                   type: string
                 type: array
