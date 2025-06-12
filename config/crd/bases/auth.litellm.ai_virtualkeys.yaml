@@ -300,12 +300,12 @@ spec:
                 type: object
               modelRPMLimit:
                 additionalProperties:
-                  type: string
+                  type: integer
                 description: ModelRPMLimit sets RPM limits per model
                 type: object
               modelTPMLimit:
                 additionalProperties:
-                  type: string
+                  type: integer
                 description: ModelTPMLimit sets TPM limits per model
                 type: object
               models:

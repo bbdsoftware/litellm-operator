@@ -3,8 +3,9 @@ package litellm
 import (
 	"context"
 	"encoding/json"
-	"reflect"
 
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
@@ -71,8 +72,8 @@ type VirtualKeyResponse struct {
 	MaxParallelRequests  int               `json:"max_parallel_requests,omitempty"`
 	Metadata             map[string]string `json:"metadata,omitempty"`
 	ModelMaxBudget       map[string]string `json:"model_max_budget,omitempty"`
-	ModelRPMLimit        map[string]string `json:"model_rpm_limit,omitempty"`
-	ModelTPMLimit        map[string]string `json:"model_tpm_limit,omitempty"`
+	ModelRPMLimit        map[string]int    `json:"model_rpm_limit,omitempty"`
+	ModelTPMLimit        map[string]int    `json:"model_tpm_limit,omitempty"`
 	Models               []string          `json:"models,omitempty"`
 	Permissions          map[string]string `json:"permissions,omitempty"`
 	RPMLimit             int               `json:"rpm_limit,omitempty"`
@@ -202,40 +203,16 @@ func (l *LitellmClient) GetVirtualKey(ctx context.Context, key string) (VirtualK
 func (l *LitellmClient) UpdateNeeded(ctx context.Context, virtualKey *VirtualKeyResponse, req *VirtualKeyRequest) bool {
 	log := log.FromContext(ctx)
 
-	// Helper function to compare slices, treating nil and empty as equivalent
-	sliceChanged := func(virtual, request interface{}) bool {
-		v := reflect.ValueOf(virtual)
-		r := reflect.ValueOf(request)
-
-		// Handle nil cases
-		if v.IsNil() && r.IsNil() {
-			return false
-		}
-		if v.IsNil() {
-			return r.Len() > 0
-		}
-		if r.IsNil() {
-			return v.Len() > 0
-		}
-
-		// If both are non-nil, compare lengths first
-		if v.Len() == 0 && r.Len() == 0 {
-			return false
-		}
-
-		// If both have elements, do deep comparison
-		return !reflect.DeepEqual(virtual, request)
-	}
-
-	if sliceChanged(virtualKey.Aliases, req.Aliases) {
+	if !cmp.Equal(virtualKey.Aliases, req.Aliases, cmp.Option(cmpopts.EquateEmpty())) {
 		log.Info("Aliases changed")
 		return true
 	}
-	if sliceChanged(virtualKey.AllowedCacheControls, req.AllowedCacheControls) {
+
+	if !cmp.Equal(virtualKey.AllowedCacheControls, req.AllowedCacheControls, cmp.Option(cmpopts.EquateEmpty())) {
 		log.Info("AllowedCacheControls changed")
 		return true
 	}
-	if sliceChanged(virtualKey.AllowedRoutes, req.AllowedRoutes) {
+	if !cmp.Equal(virtualKey.AllowedRoutes, req.AllowedRoutes, cmp.Option(cmpopts.EquateEmpty())) {
 		log.Info("AllowedRoutes changed")
 		return true
 	}
@@ -251,7 +228,7 @@ func (l *LitellmClient) UpdateNeeded(ctx context.Context, virtualKey *VirtualKey
 		log.Info("BudgetID changed")
 		return true
 	}
-	if sliceChanged(virtualKey.Config, req.Config) {
+	if !cmp.Equal(virtualKey.Config, req.Config, cmp.Option(cmpopts.EquateEmpty())) {
 		log.Info("Config changed")
 		return true
 	}
@@ -259,11 +236,11 @@ func (l *LitellmClient) UpdateNeeded(ctx context.Context, virtualKey *VirtualKey
 		log.Info("Duration changed")
 		return true
 	}
-	if sliceChanged(virtualKey.EnforcedParams, req.EnforcedParams) {
+	if !cmp.Equal(virtualKey.EnforcedParams, req.EnforcedParams, cmp.Option(cmpopts.EquateEmpty())) {
 		log.Info("EnforcedParams changed")
 		return true
 	}
-	if sliceChanged(virtualKey.Guardrails, req.Guardrails) {
+	if !cmp.Equal(virtualKey.Guardrails, req.Guardrails, cmp.Option(cmpopts.EquateEmpty())) {
 		log.Info("Guardrails changed")
 		return true
 	}
@@ -279,27 +256,27 @@ func (l *LitellmClient) UpdateNeeded(ctx context.Context, virtualKey *VirtualKey
 		log.Info("MaxParallelRequests changed")
 		return true
 	}
-	if sliceChanged(virtualKey.Metadata, req.Metadata) {
+	if !cmp.Equal(virtualKey.Metadata, req.Metadata, cmp.Option(cmpopts.EquateEmpty())) {
 		log.Info("Metadata changed")
 		return true
 	}
-	if sliceChanged(virtualKey.ModelMaxBudget, req.ModelMaxBudget) {
+	if !cmp.Equal(virtualKey.ModelMaxBudget, req.ModelMaxBudget, cmp.Option(cmpopts.EquateEmpty())) {
 		log.Info("ModelMaxBudget changed")
 		return true
 	}
-	if sliceChanged(virtualKey.ModelRPMLimit, req.ModelRPMLimit) {
+	if !cmp.Equal(virtualKey.ModelRPMLimit, req.ModelRPMLimit, cmp.Option(cmpopts.EquateEmpty())) {
 		log.Info("ModelRPMLimit changed")
 		return true
 	}
-	if sliceChanged(virtualKey.ModelTPMLimit, req.ModelTPMLimit) {
+	if !cmp.Equal(virtualKey.ModelTPMLimit, req.ModelTPMLimit, cmp.Option(cmpopts.EquateEmpty())) {
 		log.Info("ModelTPMLimit changed")
 		return true
 	}
-	if sliceChanged(virtualKey.Models, req.Models) {
+	if !cmp.Equal(virtualKey.Models, req.Models, cmp.Option(cmpopts.EquateEmpty())) {
 		log.Info("Models changed")
 		return true
 	}
-	if sliceChanged(virtualKey.Permissions, req.Permissions) {
+	if !cmp.Equal(virtualKey.Permissions, req.Permissions, cmp.Option(cmpopts.EquateEmpty())) {
 		log.Info("Permissions changed")
 		return true
 	}
@@ -307,7 +284,7 @@ func (l *LitellmClient) UpdateNeeded(ctx context.Context, virtualKey *VirtualKey
 		log.Info("RPMLimit changed")
 		return true
 	}
-	if sliceChanged(virtualKey.Tags, req.Tags) {
+	if !cmp.Equal(virtualKey.Tags, req.Tags, cmp.Option(cmpopts.EquateEmpty())) {
 		log.Info("Tags changed")
 		return true
 	}
