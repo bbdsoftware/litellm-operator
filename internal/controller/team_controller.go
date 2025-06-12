@@ -260,7 +260,6 @@ func (r *TeamReconciler) updateStatus(ctx context.Context, team *authv1alpha1.Te
 	team.Status.MaxBudget = fmt.Sprintf("%.2f", teamResponse.MaxBudget)
 	team.Status.MaxParallelRequests = teamResponse.MaxParallelRequests
 	team.Status.MembersWithRole = convertToK8sTeamMemberWithRole(teamResponse.MembersWithRole)
-	team.Status.Metadata = teamResponse.Metadata
 	team.Status.ModelID = teamResponse.ModelID
 	team.Status.Models = teamResponse.Models
 	team.Status.OrganizationID = teamResponse.OrganizationID

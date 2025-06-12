@@ -73,7 +73,7 @@ type VirtualKeySpec struct {
 	SoftBudget string `json:"softBudget,omitempty"`
 	// Spend tracks the current spend amount
 	Spend string `json:"spend,omitempty"`
-	// Tags are labels for the key
+	// Tags for tracking spend and/or doing tag-based routing. Requires Enterprise license
 	Tags []string `json:"tags,omitempty"`
 	// TeamID identifies the team associated with the key
 	TeamID string `json:"teamID,omitempty"`
@@ -127,14 +127,6 @@ type VirtualKeyStatus struct {
 	MaxBudget string `json:"maxBudget,omitempty"`
 	// MaxParallelRequests limits concurrent requests
 	MaxParallelRequests int `json:"maxParallelRequests,omitempty"`
-	// Metadata contains additional metadata
-	Metadata map[string]string `json:"metadata,omitempty"`
-	// ModelMaxBudget sets budget limits per model
-	ModelMaxBudget map[string]string `json:"modelMaxBudget,omitempty"`
-	// ModelRPMLimit sets RPM limits per model
-	ModelRPMLimit map[string]int `json:"modelRPMLimit,omitempty"`
-	// ModelTPMLimit sets TPM limits per model
-	ModelTPMLimit map[string]int `json:"modelTPMLimit,omitempty"`
 	// Models specifies which models can be used
 	Models []string `json:"models,omitempty"`
 	// Permissions defines key permissions
@@ -143,7 +135,7 @@ type VirtualKeyStatus struct {
 	RPMLimit int `json:"rpmLimit,omitempty"`
 	// Spend tracks the current spend amount
 	Spend string `json:"spend,omitempty"`
-	// Tags are labels for the key
+	// Tags for tracking spend and/or doing tag-based routing. Requires Enterprise license
 	Tags []string `json:"tags,omitempty"`
 	// TeamID identifies the team associated with the key
 	TeamID string `json:"teamID,omitempty"`

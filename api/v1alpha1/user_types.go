@@ -127,8 +127,6 @@ type UserStatus struct {
 	MaxBudget string `json:"maxBudget,omitempty"`
 	// MaxParallelRequests is the maximum number of parallel requests
 	MaxParallelRequests int `json:"maxParallelRequests,omitempty"`
-	// Metadata is the metadata of the user
-	Metadata map[string]string `json:"metadata,omitempty"`
 	// ModelMaxBudget is the model specific maximum budget
 	ModelMaxBudget map[string]string `json:"modelMaxBudget,omitempty"`
 	// ModelRPMLimit is the model specific maximum requests per minute
@@ -143,7 +141,7 @@ type UserStatus struct {
 	RPMLimit int `json:"rpmLimit,omitempty"`
 	// Spend is the amount spent by user
 	Spend string `json:"spend,omitempty"`
-	// Tags is the list of tags associated with the user
+	// Tags for tracking spend and/or doing tag-based routing. Requires Enterprise license
 	Tags []string `json:"tags,omitempty"`
 	// Teams is the list of teams that the user is a member of
 	Teams []string `json:"teams,omitempty"`

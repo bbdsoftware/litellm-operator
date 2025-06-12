@@ -50,7 +50,6 @@ type TeamResponse struct {
 	MaxParallelRequests   int                  `json:"max_parallel_requests,omitempty"`
 	Members               []string             `json:"members,omitempty"`
 	MembersWithRole       []TeamMemberWithRole `json:"members_with_roles,omitempty"`
-	Metadata              map[string]string    `json:"metadata,omitempty"`
 	ModelID               string               `json:"model_id,omitempty"`
 	Models                []string             `json:"models,omitempty"`
 	OrganizationID        string               `json:"organization_id,omitempty"`

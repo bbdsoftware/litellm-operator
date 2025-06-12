@@ -70,22 +70,22 @@ type VirtualKeyResponse struct {
 	LiteLLMBudgetTable   string            `json:"litellm_budget_table,omitempty"`
 	MaxBudget            float64           `json:"max_budget,omitempty"`
 	MaxParallelRequests  int               `json:"max_parallel_requests,omitempty"`
-	Metadata             map[string]string `json:"metadata,omitempty"`
-	ModelMaxBudget       map[string]string `json:"model_max_budget,omitempty"`
-	ModelRPMLimit        map[string]int    `json:"model_rpm_limit,omitempty"`
-	ModelTPMLimit        map[string]int    `json:"model_tpm_limit,omitempty"`
-	Models               []string          `json:"models,omitempty"`
-	Permissions          map[string]string `json:"permissions,omitempty"`
-	RPMLimit             int               `json:"rpm_limit,omitempty"`
-	Spend                float64           `json:"spend,omitempty"`
-	Tags                 []string          `json:"tags,omitempty"`
-	TeamID               string            `json:"team_id,omitempty"`
-	Token                string            `json:"token,omitempty"`
-	TokenID              string            `json:"token_id,omitempty"`
-	TPMLimit             int               `json:"tpm_limit,omitempty"`
-	UpdatedAt            string            `json:"updated_at,omitempty"`
-	UpdatedBy            string            `json:"updated_by,omitempty"`
-	UserID               string            `json:"user_id,omitempty"`
+	// These don't actually come back here, they are injected into the metadata field which complicates things, so skip for now
+	// ModelMaxBudget       map[string]string `json:"model_max_budget,omitempty"`
+	// ModelRPMLimit        map[string]int    `json:"model_rpm_limit,omitempty"`
+	// ModelTPMLimit        map[string]int    `json:"model_tpm_limit,omitempty"`
+	Models      []string          `json:"models,omitempty"`
+	Permissions map[string]string `json:"permissions,omitempty"`
+	RPMLimit    int               `json:"rpm_limit,omitempty"`
+	Spend       float64           `json:"spend,omitempty"`
+	Tags        []string          `json:"tags,omitempty"`
+	TeamID      string            `json:"team_id,omitempty"`
+	Token       string            `json:"token,omitempty"`
+	TokenID     string            `json:"token_id,omitempty"`
+	TPMLimit    int               `json:"tpm_limit,omitempty"`
+	UpdatedAt   string            `json:"updated_at,omitempty"`
+	UpdatedBy   string            `json:"updated_by,omitempty"`
+	UserID      string            `json:"user_id,omitempty"`
 }
 
 // GenerateVirtualKey generates a new virtual key for the Litellm service
@@ -254,22 +254,6 @@ func (l *LitellmClient) UpdateNeeded(ctx context.Context, virtualKey *VirtualKey
 	}
 	if virtualKey.MaxParallelRequests != req.MaxParallelRequests {
 		log.Info("MaxParallelRequests changed")
-		return true
-	}
-	if !cmp.Equal(virtualKey.Metadata, req.Metadata, cmp.Option(cmpopts.EquateEmpty())) {
-		log.Info("Metadata changed")
-		return true
-	}
-	if !cmp.Equal(virtualKey.ModelMaxBudget, req.ModelMaxBudget, cmp.Option(cmpopts.EquateEmpty())) {
-		log.Info("ModelMaxBudget changed")
-		return true
-	}
-	if !cmp.Equal(virtualKey.ModelRPMLimit, req.ModelRPMLimit, cmp.Option(cmpopts.EquateEmpty())) {
-		log.Info("ModelRPMLimit changed")
-		return true
-	}
-	if !cmp.Equal(virtualKey.ModelTPMLimit, req.ModelTPMLimit, cmp.Option(cmpopts.EquateEmpty())) {
-		log.Info("ModelTPMLimit changed")
 		return true
 	}
 	if !cmp.Equal(virtualKey.Models, req.Models, cmp.Option(cmpopts.EquateEmpty())) {
