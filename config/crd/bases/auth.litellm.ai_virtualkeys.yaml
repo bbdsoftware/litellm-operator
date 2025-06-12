@@ -289,21 +289,6 @@ spec:
               maxParallelRequests:
                 description: MaxParallelRequests limits concurrent requests
                 type: integer
-              modelMaxBudget:
-                additionalProperties:
-                  type: string
-                description: ModelMaxBudget sets budget limits per model
-                type: object
-              modelRPMLimit:
-                additionalProperties:
-                  type: integer
-                description: ModelRPMLimit sets RPM limits per model
-                type: object
-              modelTPMLimit:
-                additionalProperties:
-                  type: integer
-                description: ModelTPMLimit sets TPM limits per model
-                type: object
               models:
                 description: Models specifies which models can be used
                 items:

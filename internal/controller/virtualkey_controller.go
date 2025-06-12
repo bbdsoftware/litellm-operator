@@ -361,9 +361,6 @@ func updateStatus(virtualKey *authv1alpha1.VirtualKey, virtualKeyResponse litell
 	virtualKey.Status.LiteLLMBudgetTable = virtualKeyResponse.LiteLLMBudgetTable
 	virtualKey.Status.MaxBudget = fmt.Sprintf("%.2f", virtualKeyResponse.MaxBudget)
 	virtualKey.Status.MaxParallelRequests = virtualKeyResponse.MaxParallelRequests
-	virtualKey.Status.ModelMaxBudget = virtualKeyResponse.ModelMaxBudget
-	virtualKey.Status.ModelRPMLimit = virtualKeyResponse.ModelRPMLimit
-	virtualKey.Status.ModelTPMLimit = virtualKeyResponse.ModelTPMLimit
 	virtualKey.Status.Models = virtualKeyResponse.Models
 	virtualKey.Status.Permissions = virtualKeyResponse.Permissions
 	virtualKey.Status.RPMLimit = virtualKeyResponse.RPMLimit
