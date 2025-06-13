@@ -182,7 +182,7 @@ func (r *UserReconciler) createUser(ctx context.Context, user *authv1alpha1.User
 		})
 	}
 
-	secretName := "litellm-key-" + userResponse.UserAlias
+	secretName := getSecretName(userResponse.UserAlias)
 
 	err = r.updateStatus(ctx, user, userResponse, secretName)
 	if err != nil {
