@@ -24,6 +24,7 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	meta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -84,12 +85,11 @@ func (r *UserReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 		userExists, err := r.CheckUserExists(ctx, user.Spec.UserEmail)
 		if err != nil {
 			log.Error(err, "Failed to check if User exists")
-			r.appendCondition(ctx, user, metav1.Condition{
-				Type:               "CreateUser",
-				Status:             metav1.ConditionFalse,
-				LastTransitionTime: metav1.Now(),
-				Reason:             "CheckUserExistsFailure",
-				Message:            err.Error(),
+			r.updateConditions(ctx, user, metav1.Condition{
+				Type:    "Ready",
+				Status:  metav1.ConditionFalse,
+				Reason:  "UnableToCheckUserExists",
+				Message: err.Error(),
 			})
 			return ctrl.Result{}, err
 		}
@@ -97,12 +97,11 @@ func (r *UserReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 		if userExists {
 			log.Info("User: " + user.Spec.UserAlias + " already exists in litellm - skipping")
 
-			return r.appendCondition(ctx, user, metav1.Condition{
-				Type:               "CreateUser",
-				Status:             metav1.ConditionFalse,
-				LastTransitionTime: metav1.Now(),
-				Reason:             "CreateUserFailure",
-				Message:            "User already exists in litellm",
+			return r.updateConditions(ctx, user, metav1.Condition{
+				Type:    "Ready",
+				Status:  metav1.ConditionFalse,
+				Reason:  "UserAlreadyExists",
+				Message: "User already exists in litellm",
 			})
 		}
 
@@ -120,14 +119,15 @@ func (r *UserReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Complete(r)
 }
 
-// appendCondition appends a condition to the User status and updates the User
-func (r *UserReconciler) appendCondition(ctx context.Context, user *authv1alpha1.User, condition metav1.Condition) (ctrl.Result, error) {
+// updateConditions updates the User status with the given condition
+func (r *UserReconciler) updateConditions(ctx context.Context, user *authv1alpha1.User, condition metav1.Condition) (ctrl.Result, error) {
 	log := log.FromContext(ctx)
 
-	user.Status.Conditions = append(user.Status.Conditions, condition)
-	if err := r.Status().Update(ctx, user); err != nil {
-		log.Error(err, "unable to update User status with condition")
-		return ctrl.Result{}, err
+	if meta.SetStatusCondition(&user.Status.Conditions, condition) {
+		if err := r.Status().Update(ctx, user); err != nil {
+			log.Error(err, "unable to update User status with condition")
+			return ctrl.Result{}, err
+		}
 	}
 
 	return ctrl.Result{}, nil
@@ -138,12 +138,11 @@ func (r *UserReconciler) deleteUser(ctx context.Context, user *authv1alpha1.User
 	log := log.FromContext(ctx)
 
 	if err := r.DeleteUser(ctx, user.Status.UserID); err != nil {
-		return r.appendCondition(ctx, user, metav1.Condition{
-			Type:               "DeleteUser",
-			Status:             metav1.ConditionFalse,
-			LastTransitionTime: metav1.Now(),
-			Reason:             "DeleteUserFailure",
-			Message:            err.Error(),
+		return r.updateConditions(ctx, user, metav1.Condition{
+			Type:    "DeleteUser",
+			Status:  metav1.ConditionFalse,
+			Reason:  "DeleteUserFailure",
+			Message: err.Error(),
 		})
 	}
 
@@ -162,12 +161,11 @@ func (r *UserReconciler) createUser(ctx context.Context, user *authv1alpha1.User
 
 	userRequest, err := createUserRequest(user)
 	if err != nil {
-		if _, err := r.appendCondition(ctx, user, metav1.Condition{
-			Type:               "CreateUser",
-			Status:             metav1.ConditionFalse,
-			LastTransitionTime: metav1.Now(),
-			Reason:             "CreateUserFailure",
-			Message:            err.Error(),
+		if _, err := r.updateConditions(ctx, user, metav1.Condition{
+			Type:    "CreateUser",
+			Status:  metav1.ConditionFalse,
+			Reason:  "CreateUserFailure",
+			Message: err.Error(),
 		}); err != nil {
 			return ctrl.Result{}, err
 		}
@@ -176,12 +174,11 @@ func (r *UserReconciler) createUser(ctx context.Context, user *authv1alpha1.User
 
 	userResponse, err := r.CreateUser(ctx, &userRequest)
 	if err != nil {
-		return r.appendCondition(ctx, user, metav1.Condition{
-			Type:               "CreateUser",
-			Status:             metav1.ConditionFalse,
-			LastTransitionTime: metav1.Now(),
-			Reason:             "CreateUserFailure",
-			Message:            err.Error(),
+		return r.updateConditions(ctx, user, metav1.Condition{
+			Type:    "CreateUser",
+			Status:  metav1.ConditionFalse,
+			Reason:  "CreateUserFailure",
+			Message: err.Error(),
 		})
 	}
 
@@ -314,12 +311,11 @@ func (r *UserReconciler) updateStatus(ctx context.Context, user *authv1alpha1.Us
 	user.Status.UserID = userResponse.UserID
 	user.Status.UserRole = userResponse.UserRole
 
-	_, err := r.appendCondition(ctx, user, metav1.Condition{
-		Type:               "CreateUser",
-		Status:             metav1.ConditionTrue,
-		LastTransitionTime: metav1.Now(),
-		Reason:             "CreateUserSuccess",
-		Message:            "User created in Litellm",
+	_, err := r.updateConditions(ctx, user, metav1.Condition{
+		Type:    "CreateUser",
+		Status:  metav1.ConditionTrue,
+		Reason:  "CreateUserSuccess",
+		Message: "User created in Litellm",
 	})
 
 	return err
