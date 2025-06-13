@@ -23,6 +23,7 @@ import (
 	"strconv"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	meta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -83,7 +84,7 @@ func (r *TeamReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 		teamExists, err := r.CheckTeamExists(ctx, team.Spec.TeamAlias)
 		if err != nil {
 			log.Error(err, "Failed to check if Team exists")
-			r.appendCondition(ctx, team, metav1.Condition{
+			r.updateConditions(ctx, team, metav1.Condition{
 				Type:               "CreateTeam",
 				Status:             metav1.ConditionFalse,
 				LastTransitionTime: metav1.Now(),
@@ -96,7 +97,7 @@ func (r *TeamReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 		if teamExists {
 			log.Info("Team: " + team.Spec.TeamAlias + " already exists in litellm - skipping")
 
-			return r.appendCondition(ctx, team, metav1.Condition{
+			return r.updateConditions(ctx, team, metav1.Condition{
 				Type:               "CreateTeam",
 				Status:             metav1.ConditionFalse,
 				LastTransitionTime: metav1.Now(),
@@ -118,14 +119,15 @@ func (r *TeamReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Complete(r)
 }
 
-// appendCondition appends a condition to the Team status and updates the Team
-func (r *TeamReconciler) appendCondition(ctx context.Context, team *authv1alpha1.Team, condition metav1.Condition) (ctrl.Result, error) {
+// updateConditions updates the Team status with the given condition
+func (r *TeamReconciler) updateConditions(ctx context.Context, team *authv1alpha1.Team, condition metav1.Condition) (ctrl.Result, error) {
 	log := log.FromContext(ctx)
 
-	team.Status.Conditions = append(team.Status.Conditions, condition)
-	if err := r.Status().Update(ctx, team); err != nil {
-		log.Error(err, "unable to update Team status with condition")
-		return ctrl.Result{}, err
+	if meta.SetStatusCondition(&team.Status.Conditions, condition) {
+		if err := r.Status().Update(ctx, team); err != nil {
+			log.Error(err, "unable to update Team status with condition")
+			return ctrl.Result{}, err
+		}
 	}
 
 	return ctrl.Result{}, nil
@@ -136,7 +138,7 @@ func (r *TeamReconciler) deleteTeam(ctx context.Context, team *authv1alpha1.Team
 	log := log.FromContext(ctx)
 
 	if err := r.DeleteTeam(ctx, team.Status.TeamID); err != nil {
-		return r.appendCondition(ctx, team, metav1.Condition{
+		return r.updateConditions(ctx, team, metav1.Condition{
 			Type:               "DeleteTeam",
 			Status:             metav1.ConditionFalse,
 			LastTransitionTime: metav1.Now(),
@@ -186,7 +188,7 @@ func (r *TeamReconciler) createTeam(ctx context.Context, team *authv1alpha1.Team
 
 	teamRequest, err := createTeamRequest(team)
 	if err != nil {
-		return r.appendCondition(ctx, team, metav1.Condition{
+		return r.updateConditions(ctx, team, metav1.Condition{
 			Type:               "CreateTeam",
 			Status:             metav1.ConditionFalse,
 			LastTransitionTime: metav1.Now(),
@@ -197,7 +199,7 @@ func (r *TeamReconciler) createTeam(ctx context.Context, team *authv1alpha1.Team
 
 	createTeamResponse, err := r.CreateTeam(ctx, &teamRequest)
 	if err != nil {
-		return r.appendCondition(ctx, team, metav1.Condition{
+		return r.updateConditions(ctx, team, metav1.Condition{
 			Type:               "CreateTeam",
 			Status:             metav1.ConditionFalse,
 			LastTransitionTime: metav1.Now(),
@@ -272,7 +274,7 @@ func (r *TeamReconciler) updateStatus(ctx context.Context, team *authv1alpha1.Te
 	team.Status.TPMLimit = teamResponse.TPMLimit
 	team.Status.UpdatedAt = teamResponse.UpdatedAt
 
-	_, err := r.appendCondition(ctx, team, metav1.Condition{
+	_, err := r.updateConditions(ctx, team, metav1.Condition{
 		Type:               "TeamCreated",
 		Status:             metav1.ConditionTrue,
 		LastTransitionTime: metav1.Now(),

@@ -23,7 +23,9 @@ import (
 	"strconv"
 
 	corev1 "k8s.io/api/core/v1"
-
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	meta "k8s.io/apimachinery/pkg/api/meta"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -33,8 +35,6 @@ import (
 
 	authv1alpha1 "github.com/bbdsoftware/litellm-operator/api/v1alpha1"
 	"github.com/bbdsoftware/litellm-operator/internal/litellm"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // VirtualKeyReconciler reconciles a VirtualKey object
@@ -87,6 +87,12 @@ func (r *VirtualKeyReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	exists, err := r.CheckVirtualKeyExists(ctx, virtualKey.Spec.KeyAlias)
 	if err != nil {
 		log.Error(err, "Failed to check if VirtualKey exists")
+		r.updateConditions(ctx, virtualKey, metav1.Condition{
+			Type:    "Ready",
+			Status:  metav1.ConditionFalse,
+			Reason:  "UnableToCheckVirtualKeyExists",
+			Message: err.Error(),
+		})
 		return ctrl.Result{}, err
 	}
 
@@ -114,14 +120,15 @@ func (r *VirtualKeyReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Complete(r)
 }
 
-// appendCondition appends a condition to the VirtualKey status and updates the VirtualKey
-func (r *VirtualKeyReconciler) appendCondition(ctx context.Context, virtualKey *authv1alpha1.VirtualKey, condition metav1.Condition) (ctrl.Result, error) {
+// updateConditions updates the VirtualKey status with the given condition
+func (r *VirtualKeyReconciler) updateConditions(ctx context.Context, virtualKey *authv1alpha1.VirtualKey, condition metav1.Condition) (ctrl.Result, error) {
 	log := log.FromContext(ctx)
 
-	virtualKey.Status.Conditions = append(virtualKey.Status.Conditions, condition)
-	if err := r.Status().Update(ctx, virtualKey); err != nil {
-		log.Error(err, "unable to update VirtualKey status with condition")
-		return ctrl.Result{}, err
+	if meta.SetStatusCondition(&virtualKey.Status.Conditions, condition) {
+		if err := r.Status().Update(ctx, virtualKey); err != nil {
+			log.Error(err, "unable to update VirtualKey status with condition")
+			return ctrl.Result{}, err
+		}
 	}
 
 	return ctrl.Result{}, nil
@@ -132,12 +139,11 @@ func (r *VirtualKeyReconciler) deleteVirtualKey(ctx context.Context, virtualKey 
 	log := log.FromContext(ctx)
 
 	if err := r.DeleteVirtualKey(ctx, virtualKey.Status.KeyAlias); err != nil {
-		return r.appendCondition(ctx, virtualKey, metav1.Condition{
-			Type:               "DeleteVirtualKey",
-			Status:             metav1.ConditionFalse,
-			LastTransitionTime: metav1.Now(),
-			Reason:             "DeleteVirtualKeyFailure",
-			Message:            err.Error(),
+		return r.updateConditions(ctx, virtualKey, metav1.Condition{
+			Type:    "Deleted",
+			Status:  metav1.ConditionFalse,
+			Reason:  "DeletionFailed",
+			Message: err.Error(),
 		})
 	}
 
@@ -156,12 +162,11 @@ func (r *VirtualKeyReconciler) generateVirtualKey(ctx context.Context, virtualKe
 
 	virtualKeyRequest, err := createVirtualKeyRequest(virtualKey)
 	if err != nil {
-		if _, err := r.appendCondition(ctx, virtualKey, metav1.Condition{
-			Type:               "GenerateVirtualKey",
-			Status:             metav1.ConditionFalse,
-			LastTransitionTime: metav1.Now(),
-			Reason:             "GenerateVirtualKeyFailure",
-			Message:            err.Error(),
+		if _, err := r.updateConditions(ctx, virtualKey, metav1.Condition{
+			Type:    "Ready",
+			Status:  metav1.ConditionFalse,
+			Reason:  "InvalidSpec",
+			Message: err.Error(),
 		}); err != nil {
 			return ctrl.Result{}, err
 		}
@@ -170,24 +175,22 @@ func (r *VirtualKeyReconciler) generateVirtualKey(ctx context.Context, virtualKe
 
 	virtualKeyResponse, err := r.GenerateVirtualKey(ctx, &virtualKeyRequest)
 	if err != nil {
-		return r.appendCondition(ctx, virtualKey, metav1.Condition{
-			Type:               "GenerateVirtualKey",
-			Status:             metav1.ConditionFalse,
-			LastTransitionTime: metav1.Now(),
-			Reason:             "GenerateVirtualKeyFailure",
-			Message:            err.Error(),
+		return r.updateConditions(ctx, virtualKey, metav1.Condition{
+			Type:    "Ready",
+			Status:  metav1.ConditionFalse,
+			Reason:  "LitellmError",
+			Message: err.Error(),
 		})
 	}
 
 	secretName := "litellm-key-" + virtualKeyResponse.KeyAlias
 
 	updateStatus(virtualKey, virtualKeyResponse, secretName)
-	_, err = r.appendCondition(ctx, virtualKey, metav1.Condition{
-		Type:               "GenerateVirtualKey",
-		Status:             metav1.ConditionTrue,
-		LastTransitionTime: metav1.Now(),
-		Reason:             "GenerateVirtualKeySuccess",
-		Message:            "VirtualKey generated in Litellm",
+	_, err = r.updateConditions(ctx, virtualKey, metav1.Condition{
+		Type:    "Ready",
+		Status:  metav1.ConditionTrue,
+		Reason:  "LitellmSuccess",
+		Message: "VirtualKey generated in Litellm",
 	})
 	if err != nil {
 		return ctrl.Result{}, err
