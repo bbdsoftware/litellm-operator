@@ -29,3 +29,8 @@ func ensureMetadata(metadata map[string]string) map[string]string {
 	}
 	return operatorMetadata
 }
+
+// getSecretName returns the name of the secret for a given alias
+func getSecretName(alias string) string {
+	return "litellm-key-" + alias
+}

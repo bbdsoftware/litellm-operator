@@ -183,7 +183,7 @@ func (r *VirtualKeyReconciler) generateVirtualKey(ctx context.Context, virtualKe
 		})
 	}
 
-	secretName := "litellm-key-" + virtualKeyResponse.KeyAlias
+	secretName := getSecretName(virtualKeyResponse.KeyAlias)
 
 	updateStatus(virtualKey, virtualKeyResponse, secretName)
 	_, err = r.updateConditions(ctx, virtualKey, metav1.Condition{
@@ -283,7 +283,7 @@ func (r *VirtualKeyReconciler) syncVirtualKey(ctx context.Context, virtualKey *a
 // getKeyFromSecret gets the key from the secret associated with the VirtualKey
 func (r *VirtualKeyReconciler) getKeyFromSecret(ctx context.Context, virtualKey *authv1alpha1.VirtualKey) (string, error) {
 	namespacedName := types.NamespacedName{
-		Name:      virtualKey.Status.KeySecretRef,
+		Name:      getSecretName(virtualKey.Spec.KeyAlias),
 		Namespace: virtualKey.Namespace,
 	}
 	var secret corev1.Secret
