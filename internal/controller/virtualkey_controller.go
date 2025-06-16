@@ -185,7 +185,7 @@ func (r *VirtualKeyReconciler) generateVirtualKey(ctx context.Context, virtualKe
 
 	secretName := getSecretName(virtualKeyResponse.KeyAlias)
 
-	updateStatus(virtualKey, virtualKeyResponse, secretName)
+	updateVirtualKeyStatus(virtualKey, virtualKeyResponse, secretName)
 	_, err = r.updateConditions(ctx, virtualKey, metav1.Condition{
 		Type:    "Ready",
 		Status:  metav1.ConditionTrue,
@@ -256,18 +256,18 @@ func (r *VirtualKeyReconciler) syncVirtualKey(ctx context.Context, virtualKey *a
 		return err
 	}
 
-	if r.UpdateNeeded(ctx, &virtualKeyResponse, &virtualKeyRequest) {
+	if r.IsVirtualKeyUpdateNeeded(ctx, &virtualKeyResponse, &virtualKeyRequest) {
 		log.Info("Updating VirtualKey: " + virtualKey.Spec.KeyAlias + " in litellm")
 		// When updating a key, we need to pass the key in the request but this usually resides in the Secret
 		virtualKeyRequest.Key = key
 
-		_, err := r.UpdateVirtualKey(ctx, &virtualKeyRequest)
+		updatedResponse, err := r.UpdateVirtualKey(ctx, &virtualKeyRequest)
 		if err != nil {
 			log.Error(err, "Failed to update virtual key in litellm")
 			return err
 		}
 
-		updateStatus(virtualKey, virtualKeyResponse, virtualKey.Status.KeySecretRef)
+		updateVirtualKeyStatus(virtualKey, updatedResponse, virtualKey.Status.KeySecretRef)
 
 		if err := r.Status().Update(ctx, virtualKey); err != nil {
 			log.Error(err, "Failed to update VirtualKey status")
@@ -341,8 +341,8 @@ func createVirtualKeyRequest(virtualKey *authv1alpha1.VirtualKey) (litellm.Virtu
 	return virtualKeyRequest, nil
 }
 
-// updateStatus updates the status of the k8s VirtualKey from the litellm response
-func updateStatus(virtualKey *authv1alpha1.VirtualKey, virtualKeyResponse litellm.VirtualKeyResponse, secretKeyName string) {
+// updateVirtualKeyStatus updates the status of the k8s VirtualKey from the litellm response
+func updateVirtualKeyStatus(virtualKey *authv1alpha1.VirtualKey, virtualKeyResponse litellm.VirtualKeyResponse, secretKeyName string) {
 	virtualKey.Status.Aliases = virtualKeyResponse.Aliases
 	virtualKey.Status.AllowedCacheControls = virtualKeyResponse.AllowedCacheControls
 	virtualKey.Status.AllowedRoutes = virtualKeyResponse.AllowedRoutes

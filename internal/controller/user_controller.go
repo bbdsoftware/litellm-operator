@@ -73,6 +73,7 @@ func (r *UserReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 		return ctrl.Result{}, err
 	}
 
+	// If the User is being deleted, delete the user from litellm
 	if user.GetDeletionTimestamp() != nil {
 		if controllerutil.ContainsFinalizer(user, finalizerName) {
 			log.Info("Deleting User: " + user.Status.UserAlias + " from litellm")
@@ -81,32 +82,40 @@ func (r *UserReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 		return ctrl.Result{}, nil
 	}
 
-	if user.Status.Conditions == nil {
-		userExists, err := r.CheckUserExists(ctx, user.Spec.UserEmail)
-		if err != nil {
-			log.Error(err, "Failed to check if User exists")
-			r.updateConditions(ctx, user, metav1.Condition{
-				Type:    "Ready",
-				Status:  metav1.ConditionFalse,
-				Reason:  "UnableToCheckUserExists",
-				Message: err.Error(),
-			})
-			return ctrl.Result{}, err
-		}
+	userID, err := r.CheckUserExists(ctx, user.Spec.UserEmail)
+	if err != nil {
+		log.Error(err, "Failed to check if User exists")
+		r.updateConditions(ctx, user, metav1.Condition{
+			Type:    "Ready",
+			Status:  metav1.ConditionFalse,
+			Reason:  "UnableToCheckUserExists",
+			Message: err.Error(),
+		})
+		return ctrl.Result{}, err
+	}
 
-		if userExists {
-			log.Info("User: " + user.Spec.UserAlias + " already exists in litellm - skipping")
-
-			return r.updateConditions(ctx, user, metav1.Condition{
-				Type:    "Ready",
-				Status:  metav1.ConditionFalse,
-				Reason:  "UserAlreadyExists",
-				Message: "User already exists in litellm",
-			})
-		}
-
+	// User does not exist, create it
+	if userID == "" {
 		log.Info("Creating User: " + user.Spec.UserAlias + " in litellm")
 		return r.createUser(ctx, user)
+	}
+
+	// If the UserID is not the same as the one in the CR, then the user is not managed by this CR
+	if userID != user.Status.UserID {
+		log.Info(fmt.Sprintf("User with email: %v already exists", user.Spec.UserEmail))
+		return r.updateConditions(ctx, user, metav1.Condition{
+			Type:    "Ready",
+			Status:  metav1.ConditionFalse,
+			Reason:  "DuplicateEmail",
+			Message: "User with this email already exists",
+		})
+	}
+
+	// Sync user if required
+	err = r.syncUser(ctx, user)
+	if err != nil {
+		log.Error(err, "Failed to sync user")
+		return ctrl.Result{}, err
 	}
 
 	return ctrl.Result{}, nil
@@ -162,9 +171,9 @@ func (r *UserReconciler) createUser(ctx context.Context, user *authv1alpha1.User
 	userRequest, err := createUserRequest(user)
 	if err != nil {
 		if _, err := r.updateConditions(ctx, user, metav1.Condition{
-			Type:    "CreateUser",
+			Type:    "Ready",
 			Status:  metav1.ConditionFalse,
-			Reason:  "CreateUserFailure",
+			Reason:  "InvalidSpec",
 			Message: err.Error(),
 		}); err != nil {
 			return ctrl.Result{}, err
@@ -175,16 +184,22 @@ func (r *UserReconciler) createUser(ctx context.Context, user *authv1alpha1.User
 	userResponse, err := r.CreateUser(ctx, &userRequest)
 	if err != nil {
 		return r.updateConditions(ctx, user, metav1.Condition{
-			Type:    "CreateUser",
+			Type:    "Ready",
 			Status:  metav1.ConditionFalse,
-			Reason:  "CreateUserFailure",
+			Reason:  "LitellmError",
 			Message: err.Error(),
 		})
 	}
 
 	secretName := getSecretName(userResponse.UserAlias)
 
-	err = r.updateStatus(ctx, user, userResponse, secretName)
+	updateUserStatus(user, userResponse, secretName)
+	_, err = r.updateConditions(ctx, user, metav1.Condition{
+		Type:    "Ready",
+		Status:  metav1.ConditionTrue,
+		Reason:  "LitellmSuccess",
+		Message: "User created in Litellm",
+	})
 	if err != nil {
 		return ctrl.Result{}, err
 	}
@@ -225,6 +240,46 @@ func (r *UserReconciler) createSecret(ctx context.Context, user *authv1alpha1.Us
 	}
 
 	return r.Create(ctx, secret)
+}
+
+// syncUser syncs the user with the litellm service should changes be detected
+func (r *UserReconciler) syncUser(ctx context.Context, user *authv1alpha1.User) error {
+	log := log.FromContext(ctx)
+
+	userRequest, err := createUserRequest(user)
+	if err != nil {
+		log.Error(err, "Failed to create user request")
+		return err
+	}
+
+	// Need to set the userID in the request, else it will generate a new one
+	userRequest.UserID = user.Status.UserID
+
+	userResponse, err := r.GetUser(ctx, user.Status.UserID)
+	if err != nil {
+		log.Error(err, "Failed to get user from litellm")
+		return err
+	}
+
+	if r.IsUserUpdateNeeded(ctx, &userResponse, &userRequest) {
+		log.Info("Updating User: " + user.Spec.UserAlias + " in litellm")
+		updatedResponse, err := r.UpdateUser(ctx, &userRequest)
+		if err != nil {
+			log.Error(err, "Failed to update user in litellm")
+			return err
+		}
+
+		updateUserStatus(user, updatedResponse, user.Status.KeySecretRef)
+
+		if err := r.Status().Update(ctx, user); err != nil {
+			log.Error(err, "Failed to update User status")
+			return err
+		} else {
+			log.Info("Updated User: " + user.Spec.UserAlias + " in litellm")
+		}
+	}
+
+	return nil
 }
 
 // createUserRequest creates a UserRequest from a User
@@ -274,8 +329,8 @@ func createUserRequest(user *authv1alpha1.User) (litellm.UserRequest, error) {
 	return userRequest, nil
 }
 
-// updateStatus updates the status of the k8s User from the litellm response
-func (r *UserReconciler) updateStatus(ctx context.Context, user *authv1alpha1.User, userResponse litellm.UserResponse, keySecret string) error {
+// updateUserStatus updates the status of the k8s User from the litellm response
+func updateUserStatus(user *authv1alpha1.User, userResponse litellm.UserResponse, secretKeyName string) {
 	user.Status.Aliases = userResponse.Aliases
 	user.Status.AllowedCacheControls = userResponse.AllowedCacheControls
 	user.Status.AllowedRoutes = userResponse.AllowedRoutes
@@ -290,13 +345,14 @@ func (r *UserReconciler) updateStatus(ctx context.Context, user *authv1alpha1.Us
 	user.Status.Guardrails = userResponse.Guardrails
 	user.Status.KeyAlias = userResponse.KeyAlias
 	user.Status.KeyName = userResponse.KeyName
-	user.Status.KeySecretRef = keySecret
+	user.Status.KeySecretRef = secretKeyName
 	user.Status.LiteLLMBudgetTable = userResponse.LiteLLMBudgetTable
 	user.Status.MaxBudget = fmt.Sprintf("%.2f", userResponse.MaxBudget)
 	user.Status.MaxParallelRequests = userResponse.MaxParallelRequests
-	user.Status.ModelMaxBudget = userResponse.ModelMaxBudget
-	user.Status.ModelRPMLimit = userResponse.ModelRPMLimit
-	user.Status.ModelTPMLimit = userResponse.ModelTPMLimit
+	// These don't actually come back here, they are injected into the metadata field which complicates things, so skip for now
+	// user.Status.ModelMaxBudget = userResponse.ModelMaxBudget
+	// user.Status.ModelRPMLimit = userResponse.ModelRPMLimit
+	// user.Status.ModelTPMLimit = userResponse.ModelTPMLimit
 	user.Status.Models = userResponse.Models
 	user.Status.Permissions = userResponse.Permissions
 	user.Status.RPMLimit = userResponse.RPMLimit
@@ -310,13 +366,4 @@ func (r *UserReconciler) updateStatus(ctx context.Context, user *authv1alpha1.Us
 	user.Status.UserEmail = userResponse.UserEmail
 	user.Status.UserID = userResponse.UserID
 	user.Status.UserRole = userResponse.UserRole
-
-	_, err := r.updateConditions(ctx, user, metav1.Condition{
-		Type:    "CreateUser",
-		Status:  metav1.ConditionTrue,
-		Reason:  "CreateUserSuccess",
-		Message: "User created in Litellm",
-	})
-
-	return err
 }

@@ -14,7 +14,7 @@ type LitellmVirtualKey interface {
 	DeleteVirtualKey(ctx context.Context, keyAlias string) error
 	GenerateVirtualKey(ctx context.Context, req *VirtualKeyRequest) (VirtualKeyResponse, error)
 	GetVirtualKey(ctx context.Context, key string) (VirtualKeyResponse, error)
-	UpdateNeeded(ctx context.Context, virtualKey *VirtualKeyResponse, req *VirtualKeyRequest) bool
+	IsVirtualKeyUpdateNeeded(ctx context.Context, virtualKey *VirtualKeyResponse, req *VirtualKeyRequest) bool
 	UpdateVirtualKey(ctx context.Context, req *VirtualKeyRequest) (VirtualKeyResponse, error)
 }
 
@@ -200,7 +200,7 @@ func (l *LitellmClient) GetVirtualKey(ctx context.Context, key string) (VirtualK
 }
 
 // UpdateNeeded checks if the virtual key needs to be updated
-func (l *LitellmClient) UpdateNeeded(ctx context.Context, virtualKey *VirtualKeyResponse, req *VirtualKeyRequest) bool {
+func (l *LitellmClient) IsVirtualKeyUpdateNeeded(ctx context.Context, virtualKey *VirtualKeyResponse, req *VirtualKeyRequest) bool {
 	log := log.FromContext(ctx)
 
 	if !cmp.Equal(virtualKey.Aliases, req.Aliases, cmp.Option(cmpopts.EquateEmpty())) {

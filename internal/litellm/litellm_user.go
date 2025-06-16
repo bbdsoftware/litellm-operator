@@ -4,13 +4,18 @@ import (
 	"context"
 	"encoding/json"
 
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
 type LitellmUser interface {
+	CheckUserExists(ctx context.Context, userEmail string) (string, error)
 	CreateUser(ctx context.Context, req *UserRequest) (UserResponse, error)
 	DeleteUser(ctx context.Context, userID string) error
-	CheckUserExists(ctx context.Context, userEmail string) (bool, error)
+	GetUser(ctx context.Context, userID string) (UserResponse, error)
+	IsUserUpdateNeeded(ctx context.Context, user *UserResponse, req *UserRequest) bool
+	UpdateUser(ctx context.Context, req *UserRequest) (UserResponse, error)
 }
 
 type UserRequest struct {
@@ -64,25 +69,26 @@ type UserResponse struct {
 	LiteLLMBudgetTable   string            `json:"litellm_budget_table,omitempty"`
 	MaxBudget            float64           `json:"max_budget,omitempty"`
 	MaxParallelRequests  int               `json:"max_parallel_requests,omitempty"`
-	ModelMaxBudget       map[string]string `json:"model_max_budget,omitempty"`
-	ModelRPMLimit        map[string]string `json:"model_rpm_limit,omitempty"`
-	ModelTPMLimit        map[string]string `json:"model_tpm_limit,omitempty"`
-	Models               []string          `json:"models,omitempty"`
-	Permissions          map[string]string `json:"permissions,omitempty"`
-	RPMLimit             int               `json:"rpm_limit,omitempty"`
-	SendInviteEmail      bool              `json:"send_invite_email,omitempty"`
-	Spend                float64           `json:"spend,omitempty"`
-	SSOUserID            string            `json:"sso_user_id,omitempty"`
-	Tags                 []string          `json:"tags,omitempty"`
-	Teams                []string          `json:"teams,omitempty"`
-	Token                string            `json:"token,omitempty"`
-	TPMLimit             int               `json:"tpm_limit,omitempty"`
-	UpdatedAt            string            `json:"updated_at,omitempty"`
-	UpdatedBy            string            `json:"updated_by,omitempty"`
-	UserAlias            string            `json:"user_alias,omitempty"`
-	UserEmail            string            `json:"user_email,omitempty"`
-	UserID               string            `json:"user_id,omitempty"`
-	UserRole             string            `json:"user_role,omitempty"`
+	// These don't actually come back here, they are injected into the metadata field which complicates things, so skip for now
+	// ModelMaxBudget       map[string]string `json:"model_max_budget,omitempty"`
+	// ModelRPMLimit        map[string]string `json:"model_rpm_limit,omitempty"`
+	// ModelTPMLimit        map[string]string `json:"model_tpm_limit,omitempty"`
+	Models          []string          `json:"models,omitempty"`
+	Permissions     map[string]string `json:"permissions,omitempty"`
+	RPMLimit        int               `json:"rpm_limit,omitempty"`
+	SendInviteEmail bool              `json:"send_invite_email,omitempty"`
+	Spend           float64           `json:"spend,omitempty"`
+	SSOUserID       string            `json:"sso_user_id,omitempty"`
+	Tags            []string          `json:"tags,omitempty"`
+	Teams           []string          `json:"teams,omitempty"`
+	Token           string            `json:"token,omitempty"`
+	TPMLimit        int               `json:"tpm_limit,omitempty"`
+	UpdatedAt       string            `json:"updated_at,omitempty"`
+	UpdatedBy       string            `json:"updated_by,omitempty"`
+	UserAlias       string            `json:"user_alias,omitempty"`
+	UserEmail       string            `json:"user_email,omitempty"`
+	UserID          string            `json:"user_id,omitempty"`
+	UserRole        string            `json:"user_role,omitempty"`
 }
 
 // CreateUser creates a new user in the Litellm service
@@ -111,6 +117,38 @@ func (l *LitellmClient) CreateUser(ctx context.Context, req *UserRequest) (UserR
 	return userResponse, nil
 }
 
+// UpdateUser updates an existing user in the Litellm service
+func (l *LitellmClient) UpdateUser(ctx context.Context, req *UserRequest) (UserResponse, error) {
+	log := log.FromContext(ctx)
+
+	// These are not implemented in the update endpoint
+	req.Duration = ""
+	req.KeyAlias = ""
+
+	body, err := json.Marshal(req)
+	if err != nil {
+		log.Error(err, "Failed to marshal user request payload")
+		return UserResponse{}, err
+	}
+
+	response, err := l.makeRequest(ctx, "POST", "/user/update", body)
+	if err != nil {
+		log.Error(err, "Failed to update user in Litellm")
+		return UserResponse{}, err
+	}
+
+	var responseBody struct {
+		User UserResponse `json:"data"`
+	}
+
+	if err := json.Unmarshal(response, &responseBody); err != nil {
+		log.Error(err, "Failed to unmarshal update user response from Litellm")
+		return UserResponse{}, err
+	}
+
+	return responseBody.User, nil
+}
+
 // DeleteUser deletes a user from the Litellm service
 func (l *LitellmClient) DeleteUser(ctx context.Context, userID string) error {
 	log := log.FromContext(ctx)
@@ -126,13 +164,13 @@ func (l *LitellmClient) DeleteUser(ctx context.Context, userID string) error {
 }
 
 // CheckUserExists checks if a user already exists in the Litellm service
-func (l *LitellmClient) CheckUserExists(ctx context.Context, userEmail string) (bool, error) {
+func (l *LitellmClient) CheckUserExists(ctx context.Context, userEmail string) (string, error) {
 	log := log.FromContext(ctx)
 
 	body, err := l.makeRequest(ctx, "GET", "/user/list?user_email="+userEmail, nil)
 	if err != nil {
 		log.Error(err, "Failed to check if User exists")
-		return false, err
+		return "", err
 	}
 
 	var response struct {
@@ -144,10 +182,147 @@ func (l *LitellmClient) CheckUserExists(ctx context.Context, userEmail string) (
 
 	if err := json.Unmarshal(body, &response); err != nil {
 		log.Error(err, "Failed to unmarshal response from Litellm")
-		return false, err
+		return "", err
 	}
 
 	// Check if any user exists with the given email
 	// Since emails are unique, we only need to check the first user if any exists
-	return len(response.Users) > 0 && response.Users[0].UserEmail == userEmail, nil
+	if len(response.Users) > 0 && response.Users[0].UserEmail == userEmail {
+		return response.Users[0].UserID, nil
+	}
+
+	return "", nil
+}
+
+// GetUser gets a user from the Litellm service
+func (l *LitellmClient) GetUser(ctx context.Context, userID string) (UserResponse, error) {
+	log := log.FromContext(ctx)
+
+	body, err := l.makeRequest(ctx, "GET", "/user/info?user_id="+userID, nil)
+	if err != nil {
+		log.Error(err, "Failed to get user")
+		return UserResponse{}, err
+	}
+
+	var response struct {
+		User UserResponse `json:"user_info"`
+	}
+
+	if err := json.Unmarshal(body, &response); err != nil {
+		log.Error(err, "Failed to unmarshal user response from Litellm")
+		return UserResponse{}, err
+	}
+
+	return response.User, nil
+}
+
+// IsUserUpdateNeeded checks if a user needs to be updated in the Litellm service
+func (l *LitellmClient) IsUserUpdateNeeded(ctx context.Context, user *UserResponse, req *UserRequest) bool {
+	log := log.FromContext(ctx)
+
+	if !cmp.Equal(user.Aliases, req.Aliases, cmp.Option(cmpopts.EquateEmpty())) {
+		log.Info("Aliases changed")
+		return true
+	}
+
+	if !cmp.Equal(user.AllowedCacheControls, req.AllowedCacheControls, cmp.Option(cmpopts.EquateEmpty())) {
+		log.Info("AllowedCacheControls changed")
+		return true
+	}
+
+	// AutoCreateKey is absent in the response so don't check it
+
+	if user.Blocked != req.Blocked {
+		log.Info("Blocked changed")
+		return true
+	}
+
+	if user.BudgetDuration != req.BudgetDuration {
+		log.Info("BudgetDuration changed")
+		return true
+	}
+
+	if !cmp.Equal(user.Config, req.Config, cmp.Option(cmpopts.EquateEmpty())) {
+		log.Info("Config changed")
+		return true
+	}
+
+	if user.Duration != req.Duration {
+		log.Info("Duration changed")
+		return true
+	}
+
+	if !cmp.Equal(user.Guardrails, req.Guardrails, cmp.Option(cmpopts.EquateEmpty())) {
+		log.Info("Guardrails changed")
+		return true
+	}
+
+	// KeyAlias returns in a different format in the response so don't check it
+
+	if user.MaxBudget != req.MaxBudget {
+		log.Info("MaxBudget changed")
+		return true
+	}
+
+	if user.MaxParallelRequests != req.MaxParallelRequests {
+		log.Info("MaxParallelRequests changed")
+		return true
+	}
+
+	if !cmp.Equal(user.Models, req.Models, cmp.Option(cmpopts.EquateEmpty())) {
+		log.Info("Models changed")
+		return true
+	}
+
+	if !cmp.Equal(user.Permissions, req.Permissions, cmp.Option(cmpopts.EquateEmpty())) {
+		log.Info("Permissions changed")
+		return true
+	}
+
+	if user.RPMLimit != req.RPMLimit {
+		log.Info("RPMLimit changed")
+		return true
+	}
+
+	if user.SendInviteEmail != req.SendInviteEmail {
+		log.Info("SendInviteEmail changed")
+		return true
+	}
+
+	if user.SSOUserID != req.SSOUserID {
+		log.Info("SSOUserID changed")
+		return true
+	}
+
+	if !cmp.Equal(user.Teams, req.Teams, cmp.Option(cmpopts.EquateEmpty())) {
+		log.Info("Teams changed")
+		return true
+	}
+
+	if user.TPMLimit != req.TPMLimit {
+		log.Info("TPMLimit changed")
+		return true
+	}
+
+	if user.UserAlias != req.UserAlias {
+		log.Info("UserAlias changed")
+		return true
+	}
+
+	if user.UserEmail != req.UserEmail {
+		log.Info("UserEmail changed")
+		return true
+	}
+
+	if user.UserID != req.UserID {
+		log.Info("UserID changed")
+		return true
+	}
+
+	if user.UserRole != req.UserRole {
+		log.Info("UserRole changed")
+		return true
+	}
+
+	return false
 }
