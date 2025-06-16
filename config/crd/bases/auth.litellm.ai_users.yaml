@@ -150,6 +150,9 @@ spec:
               userEmail:
                 description: UserEmail is the email of the user
                 type: string
+                x-kubernetes-validations:
+                - message: UserEmail is immutable
+                  rule: self == oldSelf
               userID:
                 description: UserID is the ID of the user. If not set, a unique ID
                   will be generated.
@@ -159,6 +162,8 @@ spec:
                   "proxy_admin_viewer", "internal_user", "internal_user_viewer", "team",
                   "customer"
                 type: string
+            required:
+            - userEmail
             type: object
           status:
             description: UserStatus defines the observed state of User

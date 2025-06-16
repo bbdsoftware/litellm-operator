@@ -77,6 +77,8 @@ type UserSpec struct {
 	// UserAlias is the alias of the user
 	UserAlias string `json:"userAlias,omitempty"`
 	// UserEmail is the email of the user
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:XValidation:rule="self == oldSelf",message="UserEmail is immutable"
 	UserEmail string `json:"userEmail,omitempty"`
 	// UserID is the ID of the user. If not set, a unique ID will be generated.
 	UserID string `json:"userID,omitempty"`
