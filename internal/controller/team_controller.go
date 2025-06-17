@@ -72,6 +72,7 @@ func (r *TeamReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 		return ctrl.Result{}, err
 	}
 
+	// If the Team is being deleted, delete the team from litellm
 	if team.GetDeletionTimestamp() != nil {
 		if controllerutil.ContainsFinalizer(team, finalizerName) {
 			log.Info("Deleting Team: " + team.Status.TeamAlias + " from litellm")
@@ -80,35 +81,43 @@ func (r *TeamReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 		return ctrl.Result{}, nil
 	}
 
-	if team.Status.Conditions == nil {
-		teamExists, err := r.CheckTeamExists(ctx, team.Spec.TeamAlias)
-		if err != nil {
-			log.Error(err, "Failed to check if Team exists")
-			r.updateConditions(ctx, team, metav1.Condition{
-				Type:               "CreateTeam",
-				Status:             metav1.ConditionFalse,
-				LastTransitionTime: metav1.Now(),
-				Reason:             "CheckTeamExistsFailure",
-				Message:            err.Error(),
-			})
-			return ctrl.Result{}, err
-		}
+	teamID, err := r.CheckTeamExists(ctx, team.Spec.TeamAlias)
+	if err != nil {
+		log.Error(err, "Failed to check if Team exists")
+		r.updateConditions(ctx, team, metav1.Condition{
+			Type:               "Ready",
+			Status:             metav1.ConditionFalse,
+			LastTransitionTime: metav1.Now(),
+			Reason:             "UnableToCheckTeamExists",
+			Message:            err.Error(),
+		})
+		return ctrl.Result{}, err
+	}
 
-		if teamExists {
-			log.Info("Team: " + team.Spec.TeamAlias + " already exists in litellm - skipping")
-
-			return r.updateConditions(ctx, team, metav1.Condition{
-				Type:               "CreateTeam",
-				Status:             metav1.ConditionFalse,
-				LastTransitionTime: metav1.Now(),
-				Reason:             "CreateTeamFailure",
-				Message:            "Team already exists in litellm",
-			})
-		}
-
+	// Team does not exist, create it
+	if teamID == "" {
 		log.Info("Creating Team: " + team.Spec.TeamAlias + " in litellm")
 		return r.createTeam(ctx, team)
 	}
+
+	// If the TeamID is not the same as the one in the CR, then the team is not managed by this CR
+	if teamID != team.Status.TeamID {
+		log.Info(fmt.Sprintf("Team with alias: %v already exists", team.Spec.TeamAlias))
+		return r.updateConditions(ctx, team, metav1.Condition{
+			Type:    "Ready",
+			Status:  metav1.ConditionFalse,
+			Reason:  "DuplicateAlias",
+			Message: "Team with this alias already exists",
+		})
+	}
+
+	// Sync team if required
+	err = r.syncTeam(ctx, team)
+	if err != nil {
+		log.Error(err, "Failed to sync team")
+		return ctrl.Result{}, err
+	}
+
 	return ctrl.Result{}, nil
 }
 
@@ -156,19 +165,6 @@ func (r *TeamReconciler) deleteTeam(ctx context.Context, team *authv1alpha1.Team
 	return ctrl.Result{}, nil
 }
 
-// convertToLitellmTeamMemberWithRole converts the TeamMemberWithRole to the Litellm TeamMemberWithRole
-func convertToLitellmTeamMemberWithRole(membersWithRole []authv1alpha1.TeamMemberWithRole) []litellm.TeamMemberWithRole {
-	litellmMembersWithRole := []litellm.TeamMemberWithRole{}
-	for _, member := range membersWithRole {
-		litellmMembersWithRole = append(litellmMembersWithRole, litellm.TeamMemberWithRole{
-			UserID:    member.UserID,
-			UserEmail: member.UserEmail,
-			Role:      member.Role,
-		})
-	}
-	return litellmMembersWithRole
-}
-
 // convertToK8sTeamMemberWithRole converts the Litellm TeamMemberWithRole to TeamMemberWithRole
 func convertToK8sTeamMemberWithRole(membersWithRole []litellm.TeamMemberWithRole) []authv1alpha1.TeamMemberWithRole {
 	k8sMembersWithRole := []authv1alpha1.TeamMemberWithRole{}
@@ -189,10 +185,10 @@ func (r *TeamReconciler) createTeam(ctx context.Context, team *authv1alpha1.Team
 	teamRequest, err := createTeamRequest(team)
 	if err != nil {
 		return r.updateConditions(ctx, team, metav1.Condition{
-			Type:               "CreateTeam",
+			Type:               "Ready",
 			Status:             metav1.ConditionFalse,
 			LastTransitionTime: metav1.Now(),
-			Reason:             "CreateTeamFailure",
+			Reason:             "InvalidSpec",
 			Message:            err.Error(),
 		})
 	}
@@ -200,15 +196,21 @@ func (r *TeamReconciler) createTeam(ctx context.Context, team *authv1alpha1.Team
 	createTeamResponse, err := r.CreateTeam(ctx, &teamRequest)
 	if err != nil {
 		return r.updateConditions(ctx, team, metav1.Condition{
-			Type:               "CreateTeam",
+			Type:               "Ready",
 			Status:             metav1.ConditionFalse,
 			LastTransitionTime: metav1.Now(),
-			Reason:             "CreateTeamFailure",
+			Reason:             "LitellmError",
 			Message:            err.Error(),
 		})
 	}
 
-	err = r.updateStatus(ctx, team, createTeamResponse)
+	updateTeamStatus(team, createTeamResponse)
+	_, err = r.updateConditions(ctx, team, metav1.Condition{
+		Type:    "Ready",
+		Status:  metav1.ConditionTrue,
+		Reason:  "LitellmSuccess",
+		Message: "Team created in Litellm",
+	})
 	if err != nil {
 		return ctrl.Result{}, err
 	}
@@ -218,8 +220,49 @@ func (r *TeamReconciler) createTeam(ctx context.Context, team *authv1alpha1.Team
 		log.Error(err, "Failed to add finalizer")
 		return ctrl.Result{}, err
 	}
+
 	log.Info("Created Team: " + team.Spec.TeamAlias + " in litellm")
 	return ctrl.Result{}, nil
+}
+
+// syncTeam syncs the team with the litellm service should changes be detected
+func (r *TeamReconciler) syncTeam(ctx context.Context, team *authv1alpha1.Team) error {
+	log := log.FromContext(ctx)
+
+	teamRequest, err := createTeamRequest(team)
+	if err != nil {
+		log.Error(err, "Failed to create team request")
+		return err
+	}
+
+	// Need to set the teamID in the request
+	teamRequest.TeamID = team.Status.TeamID
+
+	teamResponse, err := r.GetTeam(ctx, team.Status.TeamID)
+	if err != nil {
+		log.Error(err, "Failed to get team from litellm")
+		return err
+	}
+
+	if r.IsTeamUpdateNeeded(ctx, &teamResponse, &teamRequest) {
+		log.Info("Updating Team: " + team.Spec.TeamAlias + " in litellm")
+		updatedResponse, err := r.UpdateTeam(ctx, &teamRequest)
+		if err != nil {
+			log.Error(err, "Failed to update team in litellm")
+			return err
+		}
+
+		updateTeamStatus(team, updatedResponse)
+
+		if err := r.Status().Update(ctx, team); err != nil {
+			log.Error(err, "Failed to update Team status")
+			return err
+		} else {
+			log.Info("Updated Team: " + team.Spec.TeamAlias + " in litellm")
+		}
+	}
+
+	return nil
 }
 
 // createTeamRequest creates a TeamRequest from a Team
@@ -228,7 +271,6 @@ func createTeamRequest(team *authv1alpha1.Team) (litellm.TeamRequest, error) {
 		Blocked:               team.Spec.Blocked,
 		BudgetDuration:        team.Spec.BudgetDuration,
 		Guardrails:            team.Spec.Guardrails,
-		MembersWithRole:       convertToLitellmTeamMemberWithRole(team.Spec.MembersWithRole),
 		Metadata:              ensureMetadata(team.Spec.Metadata),
 		ModelAliases:          team.Spec.ModelAliases,
 		Models:                team.Spec.Models,
@@ -253,7 +295,7 @@ func createTeamRequest(team *authv1alpha1.Team) (litellm.TeamRequest, error) {
 }
 
 // updateStatus updates the status of the k8s Team from the litellm response
-func (r *TeamReconciler) updateStatus(ctx context.Context, team *authv1alpha1.Team, teamResponse litellm.TeamResponse) error {
+func updateTeamStatus(team *authv1alpha1.Team, teamResponse litellm.TeamResponse) {
 	team.Status.Blocked = teamResponse.Blocked
 	team.Status.BudgetDuration = teamResponse.BudgetDuration
 	team.Status.BudgetResetAt = teamResponse.BudgetResetAt
@@ -273,14 +315,4 @@ func (r *TeamReconciler) updateStatus(ctx context.Context, team *authv1alpha1.Te
 	team.Status.TeamMemberPermissions = teamResponse.TeamMemberPermissions
 	team.Status.TPMLimit = teamResponse.TPMLimit
 	team.Status.UpdatedAt = teamResponse.UpdatedAt
-
-	_, err := r.updateConditions(ctx, team, metav1.Condition{
-		Type:               "TeamCreated",
-		Status:             metav1.ConditionTrue,
-		LastTransitionTime: metav1.Now(),
-		Reason:             "TeamCreated",
-		Message:            "Team created in litellm",
-	})
-
-	return err
 }

@@ -57,23 +57,6 @@ spec:
               maxBudget:
                 description: MaxBudget is the maximum budget for the team
                 type: string
-              membersWithRole:
-                description: MembersWithRole is the list of members with role. If
-                  not set, the team will be created with no members.
-                items:
-                  properties:
-                    role:
-                      description: Role is the role of the user - one of "admin" or
-                        "user"
-                      type: string
-                    userEmail:
-                      description: UserEmail is the email of the user
-                      type: string
-                    userID:
-                      description: UserID is the ID of the user
-                      type: string
-                  type: object
-                type: array
               metadata:
                 additionalProperties:
                   type: string

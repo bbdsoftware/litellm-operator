@@ -107,11 +107,6 @@ func (in *TeamSpec) DeepCopyInto(out *TeamSpec) {
 		*out = make([]string, len(*in))
 		copy(*out, *in)
 	}
-	if in.MembersWithRole != nil {
-		in, out := &in.MembersWithRole, &out.MembersWithRole
-		*out = make([]TeamMemberWithRole, len(*in))
-		copy(*out, *in)
-	}
 	if in.Metadata != nil {
 		in, out := &in.Metadata, &out.Metadata
 		*out = make(map[string]string, len(*in))
