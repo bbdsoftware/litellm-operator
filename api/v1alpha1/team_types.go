@@ -45,8 +45,6 @@ type TeamSpec struct {
 	Guardrails []string `json:"guardrails,omitempty"`
 	// MaxBudget is the maximum budget for the team
 	MaxBudget string `json:"maxBudget,omitempty"`
-	// MembersWithRole is the list of members with role. If not set, the team will be created with no members.
-	MembersWithRole []TeamMemberWithRole `json:"membersWithRole,omitempty"`
 	// Metadata is the metadata of the team
 	Metadata map[string]string `json:"metadata,omitempty"`
 	// ModelAliases are model aliases for the team
