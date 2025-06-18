@@ -62,11 +62,16 @@ func (l *LitellmClient) makeRequest(ctx context.Context, method, path string, bo
 	return respBody, nil
 }
 
+// various ways in which litellm can return an error
 type litellmError struct {
 	Message string `json:"message"`
 	Type    string `json:"type"`
 	Param   string `json:"param"`
 	Code    string `json:"code"`
+}
+
+type litellmErrorDetail struct {
+	Error string `json:"error"`
 }
 
 // logLitellmError logs an errorJSON object
@@ -77,11 +82,27 @@ func logLitellmError(log logr.Logger, errorJSON litellmError, message string) {
 // processLitellmError processes and logs the error message from the litellm service
 func processLitellmError(log logr.Logger, message string, body []byte) (litellmError, error) {
 	var errorResponse struct {
-		Error litellmError `json:"error"`
+		Error  *litellmError       `json:"error,omitempty"`
+		Detail *litellmErrorDetail `json:"detail,omitempty"`
 	}
 	if err := json.Unmarshal(body, &errorResponse); err != nil {
 		return litellmError{}, err
 	}
-	logLitellmError(log, errorResponse.Error, message)
-	return errorResponse.Error, nil
+
+	if errorResponse.Error != nil {
+		logLitellmError(log, *errorResponse.Error, message)
+		return *errorResponse.Error, nil
+	}
+
+	if errorResponse.Detail != nil {
+		errorDetail := litellmError{
+			Message: errorResponse.Detail.Error,
+		}
+
+		logLitellmError(log, errorDetail, message)
+		return errorDetail, nil
+	}
+
+	log.Error(errors.New("unknown error"), string(body))
+	return litellmError{}, nil
 }

@@ -10,10 +10,10 @@ import (
 )
 
 type LitellmUser interface {
-	CheckUserExists(ctx context.Context, userEmail string) (string, error)
 	CreateUser(ctx context.Context, req *UserRequest) (UserResponse, error)
 	DeleteUser(ctx context.Context, userID string) error
 	GetUser(ctx context.Context, userID string) (UserResponse, error)
+	GetUserID(ctx context.Context, userEmail string) (string, error)
 	IsUserUpdateNeeded(ctx context.Context, user *UserResponse, req *UserRequest) bool
 	UpdateUser(ctx context.Context, req *UserRequest) (UserResponse, error)
 }
@@ -163,8 +163,8 @@ func (l *LitellmClient) DeleteUser(ctx context.Context, userID string) error {
 	return nil
 }
 
-// CheckUserExists checks if a user already exists in the Litellm service
-func (l *LitellmClient) CheckUserExists(ctx context.Context, userEmail string) (string, error) {
+// GetUserID gets the ID of a user from the Litellm service, returns empty string if user email not found
+func (l *LitellmClient) GetUserID(ctx context.Context, userEmail string) (string, error) {
 	log := log.FromContext(ctx)
 
 	body, err := l.makeRequest(ctx, "GET", "/user/list?user_email="+userEmail, nil)

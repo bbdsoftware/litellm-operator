@@ -82,7 +82,7 @@ func (r *UserReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 		return ctrl.Result{}, nil
 	}
 
-	userID, err := r.CheckUserExists(ctx, user.Spec.UserEmail)
+	userID, err := r.GetUserID(ctx, user.Spec.UserEmail)
 	if err != nil {
 		log.Error(err, "Failed to check if User exists")
 		r.updateConditions(ctx, user, metav1.Condition{
