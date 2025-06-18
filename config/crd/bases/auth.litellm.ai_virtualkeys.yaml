@@ -88,6 +88,9 @@ spec:
               keyAlias:
                 description: KeyAlias is the user defined key alias
                 type: string
+                x-kubernetes-validations:
+                - message: KeyAlias is immutable
+                  rule: self == oldSelf
               maxBudget:
                 description: MaxBudget sets the maximum budget limit
                 type: string
@@ -151,6 +154,8 @@ spec:
               userID:
                 description: UserID identifies the user associated with the key
                 type: string
+            required:
+            - keyAlias
             type: object
           status:
             description: VirtualKeyStatus defines the observed state of VirtualKey

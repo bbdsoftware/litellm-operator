@@ -58,6 +58,8 @@ type TeamSpec struct {
 	// Tags for tracking spend and/or doing tag-based routing. Requires Enterprise license
 	Tags []string `json:"tags,omitempty"`
 	// TeamAlias is the alias of the team
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:XValidation:rule="self == oldSelf",message="TeamAlias is immutable"
 	TeamAlias string `json:"teamAlias,omitempty"`
 	// TeamID is the ID of the team. If not set, a unique ID will be generated.
 	TeamID string `json:"teamID,omitempty"`

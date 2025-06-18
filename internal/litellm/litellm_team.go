@@ -10,10 +10,10 @@ import (
 )
 
 type LitellmTeam interface {
-	CheckTeamExists(ctx context.Context, teamAlias string) (string, error)
 	CreateTeam(ctx context.Context, req *TeamRequest) (TeamResponse, error)
 	DeleteTeam(ctx context.Context, teamID string) error
 	GetTeam(ctx context.Context, teamID string) (TeamResponse, error)
+	GetTeamID(ctx context.Context, teamAlias string) (string, error)
 	IsTeamUpdateNeeded(ctx context.Context, team *TeamResponse, req *TeamRequest) bool
 	UpdateTeam(ctx context.Context, req *TeamRequest) (TeamResponse, error)
 }
@@ -134,13 +134,13 @@ func (l *LitellmClient) DeleteTeam(ctx context.Context, teamID string) error {
 	return nil
 }
 
-// CheckTeamExists checks if a team exists in the Litellm service
-func (l *LitellmClient) CheckTeamExists(ctx context.Context, teamAlias string) (string, error) {
+// GetTeamID gets the ID of a team from the Litellm service, returns empty string if team alias not found
+func (l *LitellmClient) GetTeamID(ctx context.Context, teamAlias string) (string, error) {
 	log := log.FromContext(ctx)
 
 	body, err := l.makeRequest(ctx, "GET", "/v2/team/list?team_alias="+teamAlias, nil)
 	if err != nil {
-		log.Error(err, "Failed to check if Team exists")
+		log.Error(err, "Failed to list teams")
 		return "", err
 	}
 

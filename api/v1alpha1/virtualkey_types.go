@@ -48,6 +48,8 @@ type VirtualKeySpec struct {
 	// Key is the actual key value
 	Key string `json:"key,omitempty"`
 	// KeyAlias is the user defined key alias
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:XValidation:rule="self == oldSelf",message="KeyAlias is immutable"
 	KeyAlias string `json:"keyAlias,omitempty"`
 	// MaxBudget sets the maximum budget limit
 	MaxBudget string `json:"maxBudget,omitempty"`

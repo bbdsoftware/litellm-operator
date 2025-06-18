@@ -7,6 +7,7 @@ rules:
 - apiGroups:
   - auth.litellm.ai
   resources:
+  - teammemberassociations
   - teams
   - users
   - virtualkeys
@@ -21,6 +22,7 @@ rules:
 - apiGroups:
   - auth.litellm.ai
   resources:
+  - teammemberassociations/finalizers
   - teams/finalizers
   - users/finalizers
   - virtualkeys/finalizers
@@ -29,6 +31,7 @@ rules:
 - apiGroups:
   - auth.litellm.ai
   resources:
+  - teammemberassociations/status
   - teams/status
   - users/status
   - virtualkeys/status

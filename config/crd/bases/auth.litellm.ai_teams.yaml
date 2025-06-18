@@ -92,6 +92,9 @@ spec:
               teamAlias:
                 description: TeamAlias is the alias of the team
                 type: string
+                x-kubernetes-validations:
+                - message: TeamAlias is immutable
+                  rule: self == oldSelf
               teamID:
                 description: TeamID is the ID of the team. If not set, a unique ID
                   will be generated.
@@ -107,6 +110,8 @@ spec:
                 description: TPMLimit is the maximum tokens per minute limit for the
                   team - all keys with this team_id will have at max this TPM limit
                 type: integer
+            required:
+            - teamAlias
             type: object
           status:
             description: TeamStatus defines the observed state of Team
