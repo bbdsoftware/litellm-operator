@@ -21,6 +21,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -33,16 +34,18 @@ import (
 
 type FakeLitellmVirtualKeyClient struct{}
 
+var fakeVirtualKeyResponse = litellm.VirtualKeyResponse{
+	KeyAlias:  "test-virtual-key-alias",
+	KeyName:   "test-virtual-key-name",
+	UserID:    "test-user-id",
+	Expires:   "2024-03-20T10:00:00Z",
+	Key:       "test-secret-key",
+	TokenID:   "test-token-id",
+	MaxBudget: 100.0,
+}
+
 func (l *FakeLitellmVirtualKeyClient) GenerateVirtualKey(ctx context.Context, req *litellm.VirtualKeyRequest) (litellm.VirtualKeyResponse, error) {
-	return litellm.VirtualKeyResponse{
-		KeyAlias:  "test-virtual-key-alias",
-		KeyName:   "test-virtual-key-name",
-		UserID:    "test-user-id",
-		Expires:   "2024-03-20T10:00:00Z",
-		Key:       "test-secret-key",
-		TokenID:   "test-token-id",
-		MaxBudget: 100.0,
-	}, nil
+	return fakeVirtualKeyResponse, nil
 }
 
 func (l *FakeLitellmVirtualKeyClient) DeleteVirtualKey(ctx context.Context, keyAlias string) error {
@@ -51,6 +54,22 @@ func (l *FakeLitellmVirtualKeyClient) DeleteVirtualKey(ctx context.Context, keyA
 
 func (l *FakeLitellmVirtualKeyClient) CheckVirtualKeyExists(ctx context.Context, virtualKeyID string) (bool, error) {
 	return true, nil
+}
+
+func (l *FakeLitellmVirtualKeyClient) GetVirtualKey(ctx context.Context, keyAlias string) (litellm.VirtualKeyResponse, error) {
+	return fakeVirtualKeyResponse, nil
+}
+
+func (l *FakeLitellmVirtualKeyClient) GetVirtualKeyID(ctx context.Context, keyAlias string) (string, error) {
+	return "test-virtual-key-id", nil
+}
+
+func (l *FakeLitellmVirtualKeyClient) IsVirtualKeyUpdateNeeded(ctx context.Context, virtualKeyResponse *litellm.VirtualKeyResponse, virtualKeyRequest *litellm.VirtualKeyRequest) bool {
+	return false
+}
+
+func (l *FakeLitellmVirtualKeyClient) UpdateVirtualKey(ctx context.Context, req *litellm.VirtualKeyRequest) (litellm.VirtualKeyResponse, error) {
+	return fakeVirtualKeyResponse, nil
 }
 
 var _ = Describe("VirtualKey Controller", func() {
@@ -69,14 +88,31 @@ var _ = Describe("VirtualKey Controller", func() {
 			By("creating the custom resource for the Kind VirtualKey")
 			err := k8sClient.Get(ctx, typeNamespacedName, virtualkey)
 			if err != nil && errors.IsNotFound(err) {
+				// create VirtualKey
 				resource := &authv1alpha1.VirtualKey{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      resourceName,
 						Namespace: "default",
 					},
-					// TODO(user): Specify other spec details if needed.
+					Spec: authv1alpha1.VirtualKeySpec{
+						KeyAlias: "test-key-alias",
+					},
+					Status: authv1alpha1.VirtualKeyStatus{
+						KeySecretRef: getSecretName("test-key-alias"),
+					},
 				}
 				Expect(k8sClient.Create(ctx, resource)).To(Succeed())
+				// create Secret
+				secret := &corev1.Secret{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      getSecretName(resource.Spec.KeyAlias),
+						Namespace: "default",
+					},
+					Data: map[string][]byte{
+						"key": []byte("fake-key-data"),
+					},
+				}
+				Expect(k8sClient.Create(ctx, secret)).To(Succeed())
 			}
 		})
 

@@ -18,10 +18,11 @@ package controller
 
 import (
 	"context"
+	"errors"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"k8s.io/apimachinery/pkg/api/errors"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
@@ -32,41 +33,55 @@ import (
 )
 
 type FakeLitellmTeamClient struct {
-	teamExists bool
+	teamExists   bool
+	updateNeeded bool
+}
+
+var fakeTeamResponse = litellm.TeamResponse{
+	CreatedAt:      "2024-03-20T10:00:00Z",
+	UpdatedAt:      "2024-03-20T10:00:00Z",
+	TeamID:         "test-team-id",
+	TeamAlias:      "test-alias",
+	OrganizationID: "test-org",
+	MembersWithRole: []litellm.TeamMemberWithRole{
+		{
+			UserID:    "user1",
+			UserEmail: "user1@example.com",
+			Role:      "admin",
+		},
+	},
 }
 
 func (l *FakeLitellmTeamClient) CreateTeam(ctx context.Context, req *litellm.TeamRequest) (litellm.TeamResponse, error) {
-	return litellm.TeamResponse{
-		CreatedAt:      "2024-03-20T10:00:00Z",
-		UpdatedAt:      "2024-03-20T10:00:00Z",
-		TeamID:         "test-team-id",
-		TeamAlias:      req.TeamAlias,
-		OrganizationID: req.OrganizationID,
-		MembersWithRole: []litellm.TeamMemberWithRole{
-			{
-				UserID:    "user1",
-				UserEmail: "user1@example.com",
-				Role:      "admin",
-			},
-		},
-		TeamMemberPermissions: req.TeamMemberPermissions,
-		TPMLimit:              req.TPMLimit,
-		RPMLimit:              req.RPMLimit,
-		MaxBudget:             100.0,
-		BudgetDuration:        req.BudgetDuration,
-		BudgetResetAt:         "2024-04-20T10:00:00Z",
-		Models:                req.Models,
-		Tags:                  req.Tags,
-		Metadata:              req.Metadata,
-	}, nil
+	fakeTeamResponse.TeamAlias = req.TeamAlias
+	fakeTeamResponse.OrganizationID = req.OrganizationID
+	return fakeTeamResponse, nil
 }
 
 func (l *FakeLitellmTeamClient) DeleteTeam(ctx context.Context, teamID string) error {
 	return nil
 }
 
-func (l *FakeLitellmTeamClient) CheckTeamExists(ctx context.Context, teamAlias string) (bool, error) {
-	return l.teamExists, nil
+func (l *FakeLitellmTeamClient) GetTeam(ctx context.Context, teamID string) (litellm.TeamResponse, error) {
+	if l.teamExists {
+		return fakeTeamResponse, nil
+	}
+	return litellm.TeamResponse{}, errors.New("team not found")
+}
+
+func (l *FakeLitellmTeamClient) GetTeamID(ctx context.Context, teamAlias string) (string, error) {
+	if l.teamExists {
+		return "test-team-id", nil
+	}
+	return "", nil
+}
+
+func (l *FakeLitellmTeamClient) IsTeamUpdateNeeded(ctx context.Context, teamResponse *litellm.TeamResponse, teamRequest *litellm.TeamRequest) bool {
+	return l.updateNeeded
+}
+
+func (l *FakeLitellmTeamClient) UpdateTeam(ctx context.Context, req *litellm.TeamRequest) (litellm.TeamResponse, error) {
+	return fakeTeamResponse, nil
 }
 
 var _ = Describe("Team Controller", func() {
@@ -84,7 +99,7 @@ var _ = Describe("Team Controller", func() {
 		BeforeEach(func() {
 			By("creating the custom resource for the Kind Team")
 			err := k8sClient.Get(ctx, typeNamespacedName, team)
-			if err != nil && errors.IsNotFound(err) {
+			if err != nil && apierrors.IsNotFound(err) {
 				resource := &authv1alpha1.Team{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      resourceName,
@@ -152,10 +167,10 @@ var _ = Describe("Team Controller", func() {
 
 				By("Verifying the conditions were updated")
 				Expect(team.Status.Conditions).To(HaveLen(1))
-				Expect(team.Status.Conditions[0].Type).To(Equal("TeamCreated"))
+				Expect(team.Status.Conditions[0].Type).To(Equal("Ready"))
 				Expect(team.Status.Conditions[0].Status).To(Equal(metav1.ConditionTrue))
-				Expect(team.Status.Conditions[0].Reason).To(Equal("TeamCreated"))
-				Expect(team.Status.Conditions[0].Message).To(Equal("Team created in litellm"))
+				Expect(team.Status.Conditions[0].Reason).To(Equal("LitellmSuccess"))
+				Expect(team.Status.Conditions[0].Message).To(Equal("Team created in Litellm"))
 			})
 		})
 
@@ -178,10 +193,10 @@ var _ = Describe("Team Controller", func() {
 				err = k8sClient.Get(ctx, typeNamespacedName, team)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(team.Status.Conditions).To(HaveLen(1))
-				Expect(team.Status.Conditions[0].Type).To(Equal("CreateTeam"))
+				Expect(team.Status.Conditions[0].Type).To(Equal("Ready"))
 				Expect(team.Status.Conditions[0].Status).To(Equal(metav1.ConditionFalse))
-				Expect(team.Status.Conditions[0].Reason).To(Equal("CreateTeamFailure"))
-				Expect(team.Status.Conditions[0].Message).To(Equal("Team already exists in litellm"))
+				Expect(team.Status.Conditions[0].Reason).To(Equal("DuplicateAlias"))
+				Expect(team.Status.Conditions[0].Message).To(Equal("Team with this alias already exists"))
 			})
 		})
 	})

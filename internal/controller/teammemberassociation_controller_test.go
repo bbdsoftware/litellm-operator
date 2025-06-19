@@ -28,7 +28,42 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	authv1alpha1 "github.com/bbdsoftware/litellm-operator/api/v1alpha1"
+	"github.com/bbdsoftware/litellm-operator/internal/litellm"
 )
+
+type FakeLitellmTeamMemberAssociationClient struct{}
+
+func (l *FakeLitellmTeamMemberAssociationClient) CreateTeamMemberAssociation(ctx context.Context, req *litellm.TeamMemberAssociationRequest) (litellm.TeamMemberAssociationResponse, error) {
+	return litellm.TeamMemberAssociationResponse{}, nil
+}
+
+func (l *FakeLitellmTeamMemberAssociationClient) DeleteTeamMemberAssociation(ctx context.Context, teamAlias string, userEmail string) error {
+	return nil
+}
+
+func (l *FakeLitellmTeamMemberAssociationClient) GetTeamMemberAssociation(ctx context.Context, teamAlias string, userEmail string) (litellm.TeamMemberAssociationResponse, error) {
+	return litellm.TeamMemberAssociationResponse{}, nil
+}
+
+func (l *FakeLitellmTeamMemberAssociationClient) IsTeamMemberAssociationUpdateNeeded(ctx context.Context, teamMemberAssociationResponse *litellm.TeamMemberAssociationResponse, teamMemberAssociationRequest *litellm.TeamMemberAssociationRequest) bool {
+	return false
+}
+
+func (l *FakeLitellmTeamMemberAssociationClient) UpdateTeamMemberAssociation(ctx context.Context, req *litellm.TeamMemberAssociationRequest) (litellm.TeamMemberAssociationResponse, error) {
+	return litellm.TeamMemberAssociationResponse{}, nil
+}
+
+func (l *FakeLitellmTeamMemberAssociationClient) GetTeam(ctx context.Context, teamAlias string) (litellm.TeamResponse, error) {
+	return litellm.TeamResponse{}, nil
+}
+
+func (l *FakeLitellmTeamMemberAssociationClient) GetTeamID(ctx context.Context, teamAlias string) (string, error) {
+	return "test-team-id", nil
+}
+
+func (l *FakeLitellmTeamMemberAssociationClient) GetUserID(ctx context.Context, userEmail string) (string, error) {
+	return "test-user-id", nil
+}
 
 var _ = Describe("TeamMemberAssociation Controller", func() {
 	Context("When reconciling a resource", func() {
@@ -51,7 +86,11 @@ var _ = Describe("TeamMemberAssociation Controller", func() {
 						Name:      resourceName,
 						Namespace: "default",
 					},
-					// TODO(user): Specify other spec details if needed.
+					Spec: authv1alpha1.TeamMemberAssociationSpec{
+						TeamAlias: "test-team-alias",
+						UserEmail: "test-user-email",
+						Role:      "user",
+					},
 				}
 				Expect(k8sClient.Create(ctx, resource)).To(Succeed())
 			}
@@ -69,8 +108,9 @@ var _ = Describe("TeamMemberAssociation Controller", func() {
 		It("should successfully reconcile the resource", func() {
 			By("Reconciling the created resource")
 			controllerReconciler := &TeamMemberAssociationReconciler{
-				Client: k8sClient,
-				Scheme: k8sClient.Scheme(),
+				Client:                       k8sClient,
+				Scheme:                       k8sClient.Scheme(),
+				LitellmTeamMemberAssociation: &FakeLitellmTeamMemberAssociationClient{},
 			}
 
 			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
