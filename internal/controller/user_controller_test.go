@@ -28,7 +28,44 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	authv1alpha1 "github.com/bbdsoftware/litellm-operator/api/v1alpha1"
+	"github.com/bbdsoftware/litellm-operator/internal/litellm"
 )
+
+type FakeLitellmUserClient struct{}
+
+var fakeUserResponse = litellm.UserResponse{
+	UserID:    "test-user-id",
+	UserEmail: "test-user-email",
+	UserRole:  "admin",
+}
+
+func (l *FakeLitellmUserClient) CreateUser(ctx context.Context, req *litellm.UserRequest) (litellm.UserResponse, error) {
+	return fakeUserResponse, nil
+}
+
+func (l *FakeLitellmUserClient) DeleteUser(ctx context.Context, userID string) error {
+	return nil
+}
+
+func (l *FakeLitellmUserClient) CheckUserExists(ctx context.Context, userID string) (bool, error) {
+	return true, nil
+}
+
+func (l *FakeLitellmUserClient) GetUser(ctx context.Context, userID string) (litellm.UserResponse, error) {
+	return fakeUserResponse, nil
+}
+
+func (l *FakeLitellmUserClient) GetUserID(ctx context.Context, userEmail string) (string, error) {
+	return "test-user-id", nil
+}
+
+func (l *FakeLitellmUserClient) IsUserUpdateNeeded(ctx context.Context, userResponse *litellm.UserResponse, userRequest *litellm.UserRequest) bool {
+	return false
+}
+
+func (l *FakeLitellmUserClient) UpdateUser(ctx context.Context, req *litellm.UserRequest) (litellm.UserResponse, error) {
+	return fakeUserResponse, nil
+}
 
 var _ = Describe("User Controller", func() {
 	Context("When reconciling a resource", func() {
@@ -51,7 +88,9 @@ var _ = Describe("User Controller", func() {
 						Name:      resourceName,
 						Namespace: "default",
 					},
-					// TODO(user): Specify other spec details if needed.
+					Spec: authv1alpha1.UserSpec{
+						UserEmail: "test-user-email",
+					},
 				}
 				Expect(k8sClient.Create(ctx, resource)).To(Succeed())
 			}
@@ -69,8 +108,9 @@ var _ = Describe("User Controller", func() {
 		It("should successfully reconcile the resource", func() {
 			By("Reconciling the created resource")
 			controllerReconciler := &UserReconciler{
-				Client: k8sClient,
-				Scheme: k8sClient.Scheme(),
+				Client:      k8sClient,
+				Scheme:      k8sClient.Scheme(),
+				LitellmUser: &FakeLitellmUserClient{},
 			}
 
 			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
