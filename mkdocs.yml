@@ -1,0 +1,72 @@
+site_name: LiteLLM Operator
+site_description: A Kubernetes operator for managing LiteLLM resources
+site_url: https://bbdsoftware.github.io/litellm-operator/
+repo_url: https://github.com/bbdsoftware/litellm-operator
+repo_name: litellm-operator
+
+nav:
+  - Home: index.md
+  - Getting Started:
+    - Installation: getting-started/installation.md
+    - Quick Start: getting-started/quickstart.md
+  - User Guide:
+    - Virtual Keys: user-guide/virtual-keys.md
+    - Users: user-guide/users.md
+    - Teams: user-guide/teams.md
+    - Team Member Associations: user-guide/team-member-associations.md
+  - Developer Guide:
+    - Architecture: developer-guide/architecture.md
+    - Development: developer-guide/development.md
+    - Contributing: developer-guide/contributing.md
+  - Reference:
+    - API Reference: reference/api.md
+    - CRD Specifications: reference/crds.md
+  - Community:
+    - Code of Conduct: community/code-of-conduct.md
+    - Security Policy: community/security.md
+
+theme:
+  name: material
+  palette:
+    # Palette toggle for light mode
+    - scheme: default
+      toggle:
+        icon: material/brightness-7 
+        name: Switch to dark mode
+    # Palette toggle for dark mode
+    - scheme: slate
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - search.highlight
+    - search.share
+    - content.code.copy
+    - content.code.annotate
+
+plugins:
+  - search
+  - git-revision-date-localized
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.tabbed:
+      alternate_style: true
+  - tables
+  - toc:
+      permalink: true
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/bbdsoftware/litellm-operator 
