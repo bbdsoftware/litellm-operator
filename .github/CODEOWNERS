@@ -1,0 +1,34 @@
+# CODEOWNERS file for litellm-operator
+# See https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# Global ownership - replace with actual GitHub usernames/teams
+* @your-team
+
+# API definitions and CRDs
+/api/ @your-team @api-reviewers
+/config/crd/ @your-team @api-reviewers
+
+# Controllers
+/internal/controller/ @your-team @controller-reviewers
+
+# LiteLLM integration
+/internal/litellm/ @your-team @litellm-experts
+
+# Configuration and deployment
+/config/ @your-team @platform-team
+/Dockerfile @your-team @platform-team
+/Makefile @your-team
+
+# Documentation
+/README.md @your-team @docs-team
+*.md @docs-team
+
+# CI/CD and GitHub workflows
+/.github/ @your-team @platform-team
+
+# Go modules and dependencies
+/go.mod @your-team
+/go.sum @your-team
+
+# Tests
+/test/ @your-team @qa-team 

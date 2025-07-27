@@ -1,0 +1,111 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+  packages: write
+  id-token: write
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - uses: actions/setup-go@v5
+      with:
+        go-version: '1.21'
+
+    - name: Run tests
+      run: make test
+
+    - name: Run linting
+      uses: golangci/golangci-lint-action@v6
+      with:
+        version: latest
+
+  goreleaser:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - uses: actions/setup-go@v5
+      with:
+        go-version: '1.21'
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Log in to GitHub Container Registry
+      uses: docker/login-action@v3
+      with:
+        registry: ghcr.io
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Install Cosign
+      uses: sigstore/cosign-installer@v3
+
+    - name: Generate Kubernetes manifests
+      run: |
+        # Generate CRDs
+        make generate manifests
+        
+        # Create combined CRD file
+        mkdir -p dist
+        cat config/crd/bases/*.yaml > dist/crds.yaml
+        
+        # Generate operator deployment manifest
+        cd config/manager && kustomize edit set image controller=ghcr.io/${{ github.repository_owner }}/litellm-operator:${{ github.ref_name }}
+        cd ../..
+        kustomize build config/default > dist/operator.yaml
+
+    - name: Run GoReleaser
+      uses: goreleaser/goreleaser-action@v6
+      with:
+        distribution: goreleaser
+        version: '~> v2'
+        args: release --clean
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        GITHUB_REPOSITORY_OWNER: ${{ github.repository_owner }}
+
+    - name: Sign container images
+      run: |
+        # Sign the container images
+        cosign sign --yes ghcr.io/${{ github.repository_owner }}/litellm-operator:${{ github.ref_name }}
+        cosign sign --yes ghcr.io/${{ github.repository_owner }}/litellm-operator:latest
+      env:
+        COSIGN_EXPERIMENTAL: 1
+
+  update-manifests:
+    needs: goreleaser
+    runs-on: ubuntu-latest
+    if: ${{ !contains(github.ref, 'rc') && !contains(github.ref, 'beta') && !contains(github.ref, 'alpha') }}
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        ref: main
+
+    - name: Update operator image in manifests
+      run: |
+        # Update the default kustomization to use the new image
+        cd config/manager
+        kustomize edit set image controller=ghcr.io/${{ github.repository_owner }}/litellm-operator:${{ github.ref_name }}
+        
+        # Commit the changes
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        git add .
+        git diff --staged --quiet || git commit -m "chore: update operator image to ${{ github.ref_name }}"
+        git push 
