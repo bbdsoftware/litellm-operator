@@ -1,4 +1,4 @@
-# Contributing to YourOperator
+# Contributing to LiteLLM Operator
 
 Thank you for considering contributing!  
 See our [Code of Conduct](/CODE_OF_CONDUCT.md).
@@ -17,9 +17,9 @@ See our [Code of Conduct](/CODE_OF_CONDUCT.md).
 
 ## Pull Requests
 
-- Please review the [PR process](/.github/PULL_REQUEST_TEMPLATE.md).
+- Please review the [PR process](https://github.com/bbdsoftware/litellm-operator/blob/main/.github/PULL_REQUEST_TEMPLATE.md).
 - All PRs require at least one review.
 
 ## Development
 
-See [development.md](/docs/developer-guide/development.md).
+See [development.md](development.md).
