@@ -1,2 +1,0 @@
-efd666a6ebe093051e412577769c5b55f63cd34ffd2b79ce0bcbda0cec8cf151  litellm-operator_0.1-SNAPSHOT-cde105e_linux_amd64.tar.gz
-5a3f497ead2876786e8ff69c3e58f03092c8070f44024d395d00fca99d30a136  litellm-operator_0.1-SNAPSHOT-cde105e_linux_arm64.tar.gz
