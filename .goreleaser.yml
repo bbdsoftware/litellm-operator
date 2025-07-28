@@ -31,13 +31,14 @@ builds:
       - goos: darwin
 
 archives:
-  - name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+  - id: binaries
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
     files:
       - README.md
       - LICENSE
       - CHANGELOG.md
-  - name_template: "{{ .ProjectName }}_{{ .Version }}_source"
-    format: tar.gz
+  - id: source
+    name_template: "{{ .ProjectName }}_{{ .Version }}_source"
     files:
       - .gitignore
       - go.mod
@@ -59,8 +60,6 @@ archives:
       - MAINTAINERS.md
       - PROJECT
       - ROADMAP.md
-      - go.mod
-      - go.sum
       - .goreleaser.yml
       
 dockers:
@@ -169,11 +168,11 @@ release:
     #### Using kubectl
     
     ```bash
-    # Install CRDs
-    kubectl apply -f https://github.com/{{ .Env.GITHUB_REPOSITORY_OWNER }}/{{ .ProjectName }}/releases/download/{{ .Version }}/crds.yaml
+    # Install CRDs using kustomize
+    kubectl apply -k https://github.com/{{ .Env.GITHUB_REPOSITORY_OWNER }}/{{ .ProjectName }}/config/crd
     
-    # Install operator
-    kubectl apply -f https://github.com/{{ .Env.GITHUB_REPOSITORY_OWNER }}/{{ .ProjectName }}/releases/download/{{ .Version }}/operator.yaml
+    # Install the operator using kustomize
+    kubectl apply -k https://github.com/{{ .Env.GITHUB_REPOSITORY_OWNER }}/{{ .ProjectName }}/config/default
     ```
 
 
