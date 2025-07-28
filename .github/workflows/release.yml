@@ -29,6 +29,7 @@ jobs:
     - uses: actions/setup-go@v5
       with:
         go-version: '1.21'
+        cache: true
 
     - name: Run tests
       run: make test
@@ -41,6 +42,11 @@ jobs:
   goreleaser:
     needs: test
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - name: build
+            args: release --clean
     steps:
     - uses: actions/checkout@v4
       with:
@@ -49,9 +55,13 @@ jobs:
     - uses: actions/setup-go@v5
       with:
         go-version: '1.21'
+        cache: true
 
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v3
+      with:
+        driver-opts: |
+          image=moby/buildkit:v0.12.0
 
     - name: Log in to GitHub Container Registry
       uses: docker/login-action@v3
@@ -59,6 +69,8 @@ jobs:
         registry: ghcr.io
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
+
+
 
     - name: Install Cosign
       uses: sigstore/cosign-installer@v3
@@ -68,6 +80,14 @@ jobs:
       with:
         version: v3.12.0
 
+    - name: Cache Helm charts
+      uses: actions/cache@v4
+      with:
+        path: ~/.cache/helm
+        key: ${{ runner.os }}-helm-${{ hashFiles('helm/Chart.yaml') }}
+        restore-keys: |
+          ${{ runner.os }}-helm-
+
     - name: Generate CRDs
       run: |
         # Generate CRDs
@@ -76,16 +96,20 @@ jobs:
         # Create combined CRD file
         mkdir -p dist
         cat config/crd/bases/*.yaml > dist/crds.yaml
+      env:
+        GOOS: linux
+        GOARCH: amd64
 
     - name: Run GoReleaser
       uses: goreleaser/goreleaser-action@v6
       with:
         distribution: goreleaser
         version: '~> v2'
-        args: release --clean
+        args: ${{ matrix.args }}
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         GITHUB_REPOSITORY_OWNER: ${{ github.repository_owner }}
+        DOCKER_BUILDKIT: 1
 
     - name: Generate operator manifest and package Helm chart
       run: |
@@ -108,10 +132,11 @@ jobs:
         # Update CRDs in helm chart
         cp dist/crds.yaml helm/crds/
         
-        # Package Helm chart
-        helm package helm/ --destination dist/
+        # Package Helm chart with parallel processing
+        helm package helm/ --destination dist/ --parallel
       env:
         GITHUB_REF: ${{ github.ref }}
+        HELM_EXPERIMENTAL_OCI: 1
 
     - name: Upload additional release assets
       run: |
