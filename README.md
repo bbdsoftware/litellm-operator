@@ -3,8 +3,8 @@
 A Kubernetes operator for managing litellm resources.
 
 [![CI](https://github.com/bbdsoftware/litellm-operator/actions/workflows/ci.yml/badge.svg)](https://github.com/bbdsoftware/litellm-operator/actions/workflows/ci.yml)
-[![Deploy Documentation](https://github.com/bbdsoftware/litellm-operator/actions/workflows/docs.yml/badge.svg)](https://github.com/bbdsoftware/litellm-operator/actions/workflows/docs.yml)
 [![Release](https://github.com/bbdsoftware/litellm-operator/actions/workflows/release.yml/badge.svg)](https://github.com/bbdsoftware/litellm-operator/actions/workflows/release.yml)
+[![Documentation](https://img.shields.io/badge/docs-GitHub%20Pages-blue.svg)](https://bbdsoftware.github.io/litellm-operator/)
 [![Go Report Card](https://goreportcard.com/badge/github.com/bbd/litellm-operator)](https://goreportcard.com/report/github.com/bbd/litellm-operator)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Go Version](https://img.shields.io/badge/Go-1.22+-blue.svg)](https://golang.org)
