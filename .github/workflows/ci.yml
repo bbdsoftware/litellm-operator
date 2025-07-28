@@ -89,7 +89,7 @@ jobs:
 
     - name: Wait for operator to be ready
       run: |
-        kubectl wait --for=condition=available --timeout=300s deployment/litellm-operator-controller-manager -n litellm-operator-system
+        kubectl wait --for=condition=available --timeout=300s deployment/litellm-operator-controller-manager -n litellm
 
     - name: Run e2e tests
       run: make test-e2e

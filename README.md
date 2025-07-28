@@ -2,6 +2,10 @@
 
 A Kubernetes operator for managing litellm resources.
 
+[![CI](https://github.com/bbd/litellm-operator/actions/workflows/ci.yml/badge.svg)](https://github.com/bbd/litellm-operator/actions/workflows/ci.yml)
+[![Documentation](https://github.com/bbd/litellm-operator/actions/workflows/docs.yml/badge.svg)](https://github.com/bbd/litellm-operator/actions/workflows/docs.yml)
+[![Release](https://github.com/bbd/litellm-operator/actions/workflows/release.yml/badge.svg)](https://github.com/bbd/litellm-operator/actions/workflows/release.yml)
+
 ## Description
 
 The operator is used to manage REST API operations on litellm resources:
