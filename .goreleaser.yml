@@ -31,7 +31,9 @@ archives:
   - id: default
     builds:
       - manager
-    format: tar.gz
+    format_overrides:
+      - goos: linux
+        format: tar.gz
     name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
     files:
       - README.md
@@ -89,9 +91,6 @@ docker_manifests:
 
 checksum:
   name_template: 'checksums.txt'
-
-snapshot:
-  name_template: "{{ incpatch .Version }}-next"
 
 changelog:
   sort: asc
@@ -157,8 +156,4 @@ release:
     - glob: "config/crd/bases/*.yaml"
       name_template: "crds.yaml"
 
-# Handle SBOMs for supply chain security
-sboms:
-  - artifacts: archive
-  - id: source
-    artifacts: source 
+ 
