@@ -37,8 +37,11 @@ archives:
       - README.md
       - LICENSE
       - CHANGELOG.md
+    ids:
+      - manager
   - id: source
     name_template: "{{ .ProjectName }}_{{ .Version }}_source"
+    meta: true
     files:
       - .gitignore
       - go.mod
