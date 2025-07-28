@@ -108,9 +108,65 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         GITHUB_REPOSITORY_OWNER: ${{ github.repository_owner }}
         DOCKER_BUILDKIT: 1
+
+    - name: Wait for images to be available
+      run: |
+        # Wait for the manifest images to be available in the registry
+        echo "Waiting for container images to be available..."
+        max_attempts=30
+        attempt=1
+        
+        while [ $attempt -le $max_attempts ]; do
+          echo "Attempt $attempt/$max_attempts: Checking for image ghcr.io/${{ github.repository_owner }}/litellm-operator:${{ github.ref_name }}"
+          
+          if docker manifest inspect ghcr.io/${{ github.repository_owner }}/litellm-operator:${{ github.ref_name }} >/dev/null 2>&1; then
+            echo "✅ Image ghcr.io/${{ github.repository_owner }}/litellm-operator:${{ github.ref_name }} is available"
+            break
+          fi
+          
+          if [ $attempt -eq $max_attempts ]; then
+            echo "❌ Image not available after $max_attempts attempts"
+            exit 1
+          fi
+          
+          echo "⏳ Image not ready yet, waiting 10 seconds..."
+          sleep 10
+          attempt=$((attempt + 1))
+        done
+        
+        # Also check for latest tag
+        attempt=1
+        while [ $attempt -le $max_attempts ]; do
+          echo "Attempt $attempt/$max_attempts: Checking for image ghcr.io/${{ github.repository_owner }}/litellm-operator:latest"
+          
+          if docker manifest inspect ghcr.io/${{ github.repository_owner }}/litellm-operator:latest >/dev/null 2>&1; then
+            echo "✅ Image ghcr.io/${{ github.repository_owner }}/litellm-operator:latest is available"
+            break
+          fi
+          
+          if [ $attempt -eq $max_attempts ]; then
+            echo "❌ Latest image not available after $max_attempts attempts"
+            exit 1
+          fi
+          
+          echo "⏳ Latest image not ready yet, waiting 10 seconds..."
+          sleep 10
+          attempt=$((attempt + 1))
+        done
+
     - name: Sign container images
       run: |
-        # Sign the container images
+        # Sign the container images using digests for better security
+        echo "Signing versioned image..."
+        VERSION_DIGEST=$(docker manifest inspect ghcr.io/${{ github.repository_owner }}/litellm-operator:${{ github.ref_name }} | jq -r '.config.digest')
+        cosign sign --yes ghcr.io/${{ github.repository_owner }}/litellm-operator@$VERSION_DIGEST
+        
+        echo "Signing latest image..."
+        LATEST_DIGEST=$(docker manifest inspect ghcr.io/${{ github.repository_owner }}/litellm-operator:latest | jq -r '.config.digest')
+        cosign sign --yes ghcr.io/${{ github.repository_owner }}/litellm-operator@$LATEST_DIGEST
+        
+        # Also sign the tag-based references for backward compatibility
+        echo "Signing tag-based references..."
         cosign sign --yes ghcr.io/${{ github.repository_owner }}/litellm-operator:${{ github.ref_name }}
         cosign sign --yes ghcr.io/${{ github.repository_owner }}/litellm-operator:latest
       env:
