@@ -63,7 +63,12 @@ jobs:
     - name: Install Cosign
       uses: sigstore/cosign-installer@v3
 
-    - name: Generate Kubernetes manifests
+    - name: Install Helm
+      uses: azure/setup-helm@v3
+      with:
+        version: v3.12.0
+
+    - name: Generate CRDs
       run: |
         # Generate CRDs
         make generate manifests
@@ -71,11 +76,6 @@ jobs:
         # Create combined CRD file
         mkdir -p dist
         cat config/crd/bases/*.yaml > dist/crds.yaml
-        
-        # Generate operator deployment manifest
-        cd config/manager && kustomize edit set image controller=ghcr.io/${{ github.repository_owner }}/litellm-operator:${{ github.ref_name }}
-        cd ../..
-        kustomize build config/default > dist/operator.yaml
 
     - name: Run GoReleaser
       uses: goreleaser/goreleaser-action@v6
@@ -86,6 +86,39 @@ jobs:
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         GITHUB_REPOSITORY_OWNER: ${{ github.repository_owner }}
+
+    - name: Generate operator manifest and package Helm chart
+      run: |
+        # Extract version from tag (remove 'v' prefix)
+        VERSION=${GITHUB_REF#refs/tags/v}
+        
+        # Generate operator deployment manifest with correct image
+        cd config/manager
+        kustomize edit set image controller=ghcr.io/${{ github.repository_owner }}/litellm-operator:${{ github.ref_name }}
+        cd ../..
+        kustomize build config/default > dist/operator.yaml
+        
+        # Update Helm chart version and appVersion
+        sed -i "s/^version: .*/version: $VERSION/" helm/Chart.yaml
+        sed -i "s/^appVersion: .*/appVersion: \"$VERSION\"/" helm/Chart.yaml
+        
+        # Update default image tag in values.yaml
+        sed -i "s/^    tag: .*/    tag: \"$VERSION\"/" helm/values.yaml
+        
+        # Update CRDs in helm chart
+        cp dist/crds.yaml helm/crds/
+        
+        # Package Helm chart
+        helm package helm/ --destination dist/
+      env:
+        GITHUB_REF: ${{ github.ref }}
+
+    - name: Upload additional release assets
+      run: |
+        # Upload operator manifest and Helm chart to the release
+        gh release upload ${{ github.ref_name }} dist/operator.yaml dist/*.tgz --clobber
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
     - name: Sign container images
       run: |
@@ -107,13 +140,26 @@ jobs:
 
     - name: Update operator image in manifests
       run: |
+        # Extract version from tag (remove 'v' prefix)
+        VERSION=${GITHUB_REF#refs/tags/v}
+        
         # Update the default kustomization to use the new image
         cd config/manager
         kustomize edit set image controller=ghcr.io/${{ github.repository_owner }}/litellm-operator:${{ github.ref_name }}
+        cd ../..
+        
+        # Update Helm chart version and appVersion
+        sed -i "s/^version: .*/version: $VERSION/" helm/Chart.yaml
+        sed -i "s/^appVersion: .*/appVersion: \"$VERSION\"/" helm/Chart.yaml
+        
+        # Update default image tag in values.yaml
+        sed -i "s/^    tag: .*/    tag: \"$VERSION\"/" helm/values.yaml
         
         # Commit the changes
         git config --local user.email "action@github.com"
         git config --local user.name "GitHub Action"
         git add .
-        git diff --staged --quiet || git commit -m "chore: update operator image to ${{ github.ref_name }}"
-        git push 
+        git diff --staged --quiet || git commit -m "chore: update operator image and helm chart to ${{ github.ref_name }}"
+        git push
+      env:
+        GITHUB_REF: ${{ github.ref }} 
