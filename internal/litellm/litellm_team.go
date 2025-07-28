@@ -170,7 +170,7 @@ func (l *LitellmClient) GetTeam(ctx context.Context, teamID string) (TeamRespons
 
 	body, err := l.makeRequest(ctx, "GET", "/team/info?team_id="+teamID, nil)
 	if err != nil {
-		log.Error(err, "Failed to get team")
+		log.Error(err, "Failed to get team with ID: "+teamID)
 		return TeamResponse{}, err
 	}
 

@@ -1,0 +1,23 @@
+{{- if .Values.operator.metrics.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "litellm-operator.fullname" . }}-metrics
+  namespace: {{ include "litellm-operator.namespace" . }}
+  labels:
+    {{- include "litellm-operator.labels" . | nindent 4 }}
+  {{- with .Values.operator.metrics.service.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  type: {{ .Values.operator.metrics.service.type }}
+  ports:
+  - port: {{ .Values.operator.metrics.service.port }}
+    targetPort: {{ .Values.operator.metrics.service.targetPort }}
+    protocol: TCP
+    name: metrics
+  selector:
+    {{- include "litellm-operator.selectorLabels" . | nindent 4 }}
+    control-plane: controller-manager
+{{- end }} 

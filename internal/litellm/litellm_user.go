@@ -14,6 +14,7 @@ type LitellmUser interface {
 	DeleteUser(ctx context.Context, userID string) error
 	GetUser(ctx context.Context, userID string) (UserResponse, error)
 	GetUserID(ctx context.Context, userEmail string) (string, error)
+	GetTeam(ctx context.Context, teamID string) (TeamResponse, error)
 	IsUserUpdateNeeded(ctx context.Context, user *UserResponse, req *UserRequest) bool
 	UpdateUser(ctx context.Context, req *UserRequest) (UserResponse, error)
 }

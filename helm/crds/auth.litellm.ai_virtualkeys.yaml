@@ -1,0 +1,346 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.16.1
+  name: virtualkeys.auth.litellm.ai
+spec:
+  group: auth.litellm.ai
+  names:
+    kind: VirtualKey
+    listKind: VirtualKeyList
+    plural: virtualkeys
+    singular: virtualkey
+  scope: Namespaced
+  versions:
+  - name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: VirtualKey is the Schema for the virtualkeys API
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: VirtualKeySpec defines the desired state of VirtualKey
+            properties:
+              aliases:
+                additionalProperties:
+                  type: string
+                description: Aliases maps additional aliases for the key
+                type: object
+              allowedCacheControls:
+                description: AllowedCacheControls defines allowed cache control settings
+                items:
+                  type: string
+                type: array
+              allowedRoutes:
+                description: AllowedRoutes defines allowed API routes
+                items:
+                  type: string
+                type: array
+              blocked:
+                description: Blocked indicates if the key is blocked
+                type: boolean
+              budgetDuration:
+                description: BudgetDuration specifies the duration for budget tracking
+                type: string
+              budgetID:
+                description: BudgetID is the identifier for the budget
+                type: string
+              config:
+                additionalProperties:
+                  type: string
+                description: Config contains additional configuration settings
+                type: object
+              duration:
+                description: Duration specifies how long the key is valid
+                type: string
+              enforcedParams:
+                description: EnforcedParams lists parameters that must be included
+                  in requests
+                items:
+                  type: string
+                type: array
+              guardrails:
+                description: Guardrails defines guardrail settings
+                items:
+                  type: string
+                type: array
+              key:
+                description: Key is the actual key value
+                type: string
+              keyAlias:
+                description: KeyAlias is the user defined key alias
+                type: string
+                x-kubernetes-validations:
+                - message: KeyAlias is immutable
+                  rule: self == oldSelf
+              maxBudget:
+                description: MaxBudget sets the maximum budget limit
+                type: string
+              maxParallelRequests:
+                description: MaxParallelRequests limits concurrent requests
+                type: integer
+              metadata:
+                additionalProperties:
+                  type: string
+                description: Metadata contains additional metadata
+                type: object
+              modelMaxBudget:
+                additionalProperties:
+                  type: string
+                description: ModelMaxBudget sets budget limits per model
+                type: object
+              modelRPMLimit:
+                additionalProperties:
+                  type: integer
+                description: ModelRPMLimit sets RPM limits per model
+                type: object
+              modelTPMLimit:
+                additionalProperties:
+                  type: integer
+                description: ModelTPMLimit sets TPM limits per model
+                type: object
+              models:
+                description: Models specifies which models can be used
+                items:
+                  type: string
+                type: array
+              permissions:
+                additionalProperties:
+                  type: string
+                description: Permissions defines key permissions
+                type: object
+              rpmLimit:
+                description: RPMLimit sets global RPM limit
+                type: integer
+              sendInviteEmail:
+                description: SendInviteEmail indicates whether to send an invite email
+                type: boolean
+              softBudget:
+                description: SoftBudget sets a soft budget limit
+                type: string
+              spend:
+                description: Spend tracks the current spend amount
+                type: string
+              tags:
+                description: Tags for tracking spend and/or doing tag-based routing.
+                  Requires Enterprise license
+                items:
+                  type: string
+                type: array
+              teamID:
+                description: TeamID identifies the team associated with the key
+                type: string
+              tpmLimit:
+                description: TPMLimit sets global TPM limit
+                type: integer
+              userID:
+                description: UserID identifies the user associated with the key
+                type: string
+            required:
+            - keyAlias
+            type: object
+          status:
+            description: VirtualKeyStatus defines the observed state of VirtualKey
+            properties:
+              aliases:
+                additionalProperties:
+                  type: string
+                description: Aliases maps additional aliases for the key
+                type: object
+              allowedCacheControls:
+                description: AllowedCacheControls defines allowed cache control settings
+                items:
+                  type: string
+                type: array
+              allowedRoutes:
+                description: AllowedRoutes defines allowed API routes
+                items:
+                  type: string
+                type: array
+              blocked:
+                description: Blocked indicates if the key is blocked
+                type: boolean
+              budgetDuration:
+                description: BudgetDuration is the duration of the budget
+                type: string
+              budgetID:
+                description: BudgetID is the identifier for the budget
+                type: string
+              budgetResetAt:
+                description: BudgetResetAt is the date and time when the budget will
+                  reset
+                type: string
+              conditions:
+                items:
+                  description: Condition contains details for one aspect of the current
+                    state of this API Resource.
+                  properties:
+                    lastTransitionTime:
+                      description: |-
+                        lastTransitionTime is the last time the condition transitioned from one status to another.
+                        This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                      format: date-time
+                      type: string
+                    message:
+                      description: |-
+                        message is a human readable message indicating details about the transition.
+                        This may be an empty string.
+                      maxLength: 32768
+                      type: string
+                    observedGeneration:
+                      description: |-
+                        observedGeneration represents the .metadata.generation that the condition was set based upon.
+                        For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                        with respect to the current state of the instance.
+                      format: int64
+                      minimum: 0
+                      type: integer
+                    reason:
+                      description: |-
+                        reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                        Producers of specific condition types may define expected values and meanings for this field,
+                        and whether the values are considered a guaranteed API.
+                        The value should be a CamelCase string.
+                        This field may not be empty.
+                      maxLength: 1024
+                      minLength: 1
+                      pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                      type: string
+                    status:
+                      description: status of the condition, one of True, False, Unknown.
+                      enum:
+                      - "True"
+                      - "False"
+                      - Unknown
+                      type: string
+                    type:
+                      description: type of condition in CamelCase or in foo.example.com/CamelCase.
+                      maxLength: 316
+                      pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                      type: string
+                  required:
+                  - lastTransitionTime
+                  - message
+                  - reason
+                  - status
+                  - type
+                  type: object
+                type: array
+              config:
+                additionalProperties:
+                  type: string
+                description: Config contains additional configuration settings
+                type: object
+              createdAt:
+                description: CreatedAt is the date and time when the key was created
+                type: string
+              createdBy:
+                description: CreatedBy tracks who created the key
+                type: string
+              duration:
+                description: Duration specifies how long the key is valid
+                type: string
+              enforcedParams:
+                description: EnforcedParams lists parameters that must be included
+                  in requests
+                items:
+                  type: string
+                type: array
+              expires:
+                description: Expires is the date and time when the key will expire
+                type: string
+              guardrails:
+                description: Guardrails defines guardrail settings
+                items:
+                  type: string
+                type: array
+              keyAlias:
+                description: KeyAlias is the user defined key alias
+                type: string
+              keyID:
+                description: KeyID is the generated ID of the key
+                type: string
+              keyName:
+                description: KeyName is the redacted secret key
+                type: string
+              keySecretRef:
+                description: KeySecretRef is the reference to the secret containing
+                  the key
+                type: string
+              liteLLMBudgetTable:
+                description: LiteLLMBudgetTable is the budget table reference
+                type: string
+              maxBudget:
+                description: MaxBudget is the maximum budget for the key
+                type: string
+              maxParallelRequests:
+                description: MaxParallelRequests limits concurrent requests
+                type: integer
+              models:
+                description: Models specifies which models can be used
+                items:
+                  type: string
+                type: array
+              permissions:
+                additionalProperties:
+                  type: string
+                description: Permissions defines key permissions
+                type: object
+              rpmLimit:
+                description: RPMLimit sets global RPM limit
+                type: integer
+              spend:
+                description: Spend tracks the current spend amount
+                type: string
+              tags:
+                description: Tags for tracking spend and/or doing tag-based routing.
+                  Requires Enterprise license
+                items:
+                  type: string
+                type: array
+              teamID:
+                description: TeamID identifies the team associated with the key
+                type: string
+              token:
+                description: Token contains the actual API key
+                type: string
+              tokenID:
+                description: TokenID is the unique identifier for the token
+                type: string
+              tpmLimit:
+                description: TPMLimit sets global TPM limit
+                type: integer
+              updatedAt:
+                description: UpdatedAt is the date and time when the key was last
+                  updated
+                type: string
+              updatedBy:
+                description: UpdatedBy tracks who last updated the key
+                type: string
+              userID:
+                description: UserID identifies the user associated with the key
+                type: string
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}

@@ -1,0 +1,10 @@
+{{- if .Values.crd.install }}
+# Custom Resource Definitions for LiteLLM Operator
+# These CRDs define the custom resources that the operator manages
+
+{{- $files := .Files }}
+{{- range $path, $_ := .Files.Glob "crds/*.yaml" }}
+{{ $files.Get $path }}
+---
+{{- end }}
+{{- end }} 

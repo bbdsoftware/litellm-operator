@@ -59,6 +59,13 @@ func (l *FakeLitellmUserClient) GetUserID(ctx context.Context, userEmail string)
 	return "test-user-id", nil
 }
 
+func (l *FakeLitellmUserClient) GetTeam(ctx context.Context, teamID string) (litellm.TeamResponse, error) {
+	return litellm.TeamResponse{
+		TeamAlias: "test-team-alias",
+		TeamID:    teamID,
+	}, nil
+}
+
 func (l *FakeLitellmUserClient) IsUserUpdateNeeded(ctx context.Context, userResponse *litellm.UserResponse, userRequest *litellm.UserRequest) bool {
 	return false
 }

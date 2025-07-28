@@ -53,4 +53,4 @@ make deploy IMG=<your-registry>/litellm-operator:latest
 
 ## License
 
-This project is licensed under the Apache License 2.0 - see the [LICENSE](https://github.com/yourusername/litellm-operator/blob/main/LICENSE) file for details. 
+This project is licensed under the Apache License 2.0 - see the [LICENSE](https://github.com/litellm-io/litellm-operator/blob/main/LICENSE) file for details. 
