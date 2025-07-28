@@ -50,27 +50,32 @@ jobs:
         fetch-depth: 0
 
     - name: Validate semver tag
+      id: semver
+      uses: matt-usurp/validate-semver@v2
+      with:
+        version: ${{ github.ref }}
+
+    - name: Display version info
       run: |
-        # Extract version from tag (remove 'v' prefix)
-        VERSION=${GITHUB_REF#refs/tags/v}
-        
-        # Validate semver format using regex
-        if [[ ! $VERSION =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(?:-((?:0|[1-9][0-9]*|[0-9]*[a-zA-Z-][0-9a-zA-Z-]*)(?:\.(?:0|[1-9][0-9]*|[0-9]*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\+([0-9a-zA-Z-]+(?:\.[0-9a-zA-Z-]+)*))?$ ]]; then
-          echo "❌ Invalid semver format: $VERSION"
-          echo "Expected format: MAJOR.MINOR.PATCH[-PRERELEASE][+BUILD]"
-          echo "Examples: 0.0.1, 1.0.0, 2.1.3, 1.0.0-alpha, 1.0.0-beta.1, 1.0.0+20130313144700"
-          exit 1
+        echo "✅ Valid semver tag: ${{ steps.semver.outputs.version }}"
+        echo "📊 Version breakdown:"
+        echo "   Major: ${{ steps.semver.outputs.major }}"
+        echo "   Minor: ${{ steps.semver.outputs.minor }}"
+        echo "   Patch: ${{ steps.semver.outputs.patch }}"
+        if [ -n "${{ steps.semver.outputs.prerelease }}" ]; then
+          echo "   Pre-release: ${{ steps.semver.outputs.prerelease }}"
         fi
-        
-        echo "✅ Valid semver tag: $VERSION"
+        if [ -n "${{ steps.semver.outputs.build }}" ]; then
+          echo "   Build: ${{ steps.semver.outputs.build }}"
+        fi
         
         # Additional validation for common issues
-        if [[ $VERSION =~ ^0\.0\. ]]; then
-          echo "⚠️  Warning: Version $VERSION starts with 0.0. This is typically used for initial development."
+        if [[ "${{ steps.semver.outputs.major }}" == "0" && "${{ steps.semver.outputs.minor }}" == "0" ]]; then
+          echo "⚠️  Warning: Version ${{ steps.semver.outputs.version }} starts with 0.0. This is typically used for initial development."
         fi
         
-        if [[ $VERSION =~ - ]]; then
-          echo "ℹ️  Pre-release version detected: $VERSION"
+        if [ -n "${{ steps.semver.outputs.prerelease }}" ]; then
+          echo "ℹ️  Pre-release version detected: ${{ steps.semver.outputs.version }}"
         fi
 
     - uses: actions/setup-go@v5
