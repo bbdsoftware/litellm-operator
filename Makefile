@@ -208,12 +208,6 @@ CONTROLLER_GEN ?= $(LOCALBIN)/controller-gen
 ENVTEST ?= $(LOCALBIN)/setup-envtest
 GOLANGCI_LINT = $(LOCALBIN)/golangci-lint
 
-## Tool Versions
-KUSTOMIZE_VERSION ?= v5.4.3
-CONTROLLER_TOOLS_VERSION ?= v0.16.1
-ENVTEST_VERSION ?= release-0.19
-GOLANGCI_LINT_VERSION ?= v1.59.1
-
 .PHONY: kustomize
 kustomize: $(KUSTOMIZE) ## Download kustomize locally if necessary.
 $(KUSTOMIZE): $(LOCALBIN)
@@ -234,6 +228,12 @@ golangci-lint: $(GOLANGCI_LINT) ## Download golangci-lint locally if necessary.
 $(GOLANGCI_LINT): $(LOCALBIN)
 	$(call go-install-tool,$(GOLANGCI_LINT),github.com/golangci/golangci-lint/cmd/golangci-lint,$(GOLANGCI_LINT_VERSION))
 
+## Tool Versions
+KUSTOMIZE_VERSION ?= v5.4.3
+CONTROLLER_TOOLS_VERSION ?= v0.16.1
+ENVTEST_VERSION ?= release-0.19
+GOLANGCI_LINT_VERSION ?= v1.59.1
+
 # go-install-tool will 'go install' any package with custom target and name of binary, if it doesn't exist
 # $1 - target path with name of binary
 # $2 - package url which can be installed
@@ -249,6 +249,8 @@ mv $(1) $(1)-$(3) ;\
 } ;\
 ln -sf $(1)-$(3) $(1)
 endef
+
+
 
 .PHONY: operator-sdk
 OPERATOR_SDK ?= $(LOCALBIN)/operator-sdk
@@ -322,3 +324,64 @@ catalog-build: opm ## Build a catalog image.
 .PHONY: catalog-push
 catalog-push: ## Push a catalog image.
 	$(MAKE) docker-push IMG=$(CATALOG_IMG)
+
+##@ Helm
+
+.PHONY: helm-lint
+helm-lint: ## Lint the Helm chart.
+	helm lint helm/
+
+.PHONY: helm-template
+helm-template: ## Template the Helm chart.
+	helm template litellm-operator helm/
+
+.PHONY: helm-package
+helm-package: ## Package the Helm chart.
+	helm package helm/
+	mkdir -p dist
+	mv litellm-operator-*.tgz dist/
+
+.PHONY: helm-install
+helm-install: ## Install the Helm chart locally.
+	helm install litellm-operator ./helm
+
+.PHONY: helm-uninstall
+helm-uninstall: ## Uninstall the Helm chart locally.
+	helm uninstall litellm-operator
+
+.PHONY: helm-upgrade
+helm-upgrade: ## Upgrade the Helm chart locally.
+	helm upgrade litellm-operator ./helm
+
+.PHONY: helm-test
+helm-test: ## Test the Helm chart.
+	helm test litellm-operator
+
+.PHONY: helm-docs
+helm-docs: ## Generate Helm chart documentation.
+	helm-docs --chart-search-root=helm --output-file-template=helm/README.md.gotmpl
+
+.PHONY: helm-repo
+helm-repo: ## Create Helm repository index.
+	mkdir -p docs/charts
+	helm repo index docs/charts --url https://bbd.github.io/litellm-operator/charts
+	cp dist/*.tgz docs/charts/
+
+.PHONY: helm-push-oci
+helm-push-oci: ## Push Helm chart to OCI registry.
+	helm push helm/ oci://ghcr.io/bbd/charts
+
+##@ Documentation
+
+.PHONY: mkdocs-serve
+mkdocs-serve: ## Serve MkDocs documentation locally using Docker.
+	docker run --rm -it -p 8000:8000 -v $(PWD):/docs squidfunk/mkdocs-material:latest serve -a 0.0.0.0:8000
+
+.PHONY: mkdocs-build
+mkdocs-build: ## Build MkDocs documentation using Docker.
+	docker run --rm -v $(PWD):/docs squidfunk/mkdocs-material:latest build
+
+
+.PHONY: mkdocs-clean
+mkdocs-clean: ## Clean MkDocs build artifacts.
+	rm -rf site/

@@ -82,6 +82,22 @@ func (r *UserReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 		return ctrl.Result{}, nil
 	}
 
+	// Check that the teamIDs exist before attempting to create the user
+	for _, teamID := range user.Spec.Teams {
+		_, err := r.GetTeam(ctx, teamID)
+		if err != nil {
+			if _, updateErr := r.updateConditions(ctx, user, metav1.Condition{
+				Type:    "Ready",
+				Status:  metav1.ConditionFalse,
+				Reason:  "TeamCheckFailed",
+				Message: err.Error(),
+			}); updateErr != nil {
+				log.Error(updateErr, "Failed to update conditions")
+			}
+			return ctrl.Result{}, nil
+		}
+	}
+
 	userID, err := r.GetUserID(ctx, user.Spec.UserEmail)
 	if err != nil {
 		log.Error(err, "Failed to check if User exists")

@@ -1,0 +1,81 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "litellm-operator.fullname" . }}
+  namespace: {{ include "litellm-operator.namespace" . }}
+  labels:
+    {{- include "litellm-operator.labels" . | nindent 4 }}
+    control-plane: controller-manager
+spec:
+  selector:
+    matchLabels:
+      {{- include "litellm-operator.selectorLabels" . | nindent 6 }}
+      control-plane: controller-manager
+  replicas: {{ .Values.operator.replicas }}
+  template:
+    metadata:
+      annotations:
+        kubectl.kubernetes.io/default-container: manager
+        {{- with .Values.annotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      labels:
+        {{- include "litellm-operator.selectorLabels" . | nindent 8 }}
+        control-plane: controller-manager
+    spec:
+      {{- with .Values.operator.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.operator.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.operator.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        {{- toYaml .Values.operator.securityContext | nindent 8 }}
+      serviceAccountName: {{ include "litellm-operator.fullname" . }}
+      terminationGracePeriodSeconds: 10
+      containers:
+      - command:
+        - /manager
+        args:
+          - --leader-elect
+          - --health-probe-bind-address=:8081
+          {{- if .Values.operator.leaderElection.enabled }}
+          - --leader-elect-namespace={{ .Values.operator.leaderElection.namespace | default .Values.namespace.name }}
+          - --leader-elect-lease-duration={{ .Values.operator.leaderElection.leaseDuration }}
+          - --leader-elect-renew-deadline={{ .Values.operator.leaderElection.renewDeadline }}
+          - --leader-elect-retry-period={{ .Values.operator.leaderElection.retryPeriod }}
+          {{- end }}
+        env:
+        - name: LITELLM_BASE_URL
+          value: {{ .Values.litellm.baseUrl | quote }}
+        - name: LITELLM_MASTER_KEY
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Values.litellm.masterKey.secretName }}
+              key: {{ .Values.litellm.masterKey.secretKey }}
+        image: "{{ .Values.operator.image.repository }}:{{ .Values.operator.image.tag }}"
+        imagePullPolicy: {{ .Values.operator.image.pullPolicy }}
+        name: manager
+        securityContext:
+          {{- toYaml .Values.operator.containerSecurityContext | nindent 10 }}
+        livenessProbe:
+          {{- toYaml .Values.operator.healthChecks.livenessProbe | nindent 10 }}
+        readinessProbe:
+          {{- toYaml .Values.operator.healthChecks.readinessProbe | nindent 10 }}
+        resources:
+          {{- toYaml .Values.operator.resources | nindent 10 }}
+        ports:
+        - containerPort: 8081
+          name: health
+          protocol: TCP
+        {{- if .Values.operator.metrics.enabled }}
+        - containerPort: {{ .Values.operator.metrics.port }}
+          name: metrics
+          protocol: TCP
+        {{- end }} 
