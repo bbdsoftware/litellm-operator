@@ -36,7 +36,33 @@ archives:
       - README.md
       - LICENSE
       - CHANGELOG.md
-
+  - name_template: "{{ .ProjectName }}_{{ .Version }}_source"
+    format: tar.gz
+    files:
+      - .gitignore
+      - go.mod
+      - go.sum
+      - cmd/
+      - api/
+      - internal/
+      - config/
+      - helm/
+      - docs/
+      - test/
+      - Makefile
+      - Dockerfile
+      - README.md
+      - LICENSE
+      - CHANGELOG.md
+      - CONTRIBUTING.md
+      - SECURITY.md
+      - MAINTAINERS.md
+      - PROJECT
+      - ROADMAP.md
+      - go.mod
+      - go.sum
+      - .goreleaser.yml
+      
 dockers:
   - image_templates:
       - "ghcr.io/{{ .Env.GITHUB_REPOSITORY_OWNER }}/{{ .ProjectName }}:{{ .Version }}-amd64"
@@ -150,8 +176,6 @@ release:
     kubectl apply -f https://github.com/{{ .Env.GITHUB_REPOSITORY_OWNER }}/{{ .ProjectName }}/releases/download/{{ .Version }}/operator.yaml
     ```
 
-  extra_files:
-    - glob: "config/crd/bases/*.yaml"
-      name_template: "crds.yaml"
+
 
  
