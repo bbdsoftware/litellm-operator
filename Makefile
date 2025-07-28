@@ -322,3 +322,49 @@ catalog-build: opm ## Build a catalog image.
 .PHONY: catalog-push
 catalog-push: ## Push a catalog image.
 	$(MAKE) docker-push IMG=$(CATALOG_IMG)
+
+##@ Helm
+
+.PHONY: helm-lint
+helm-lint: ## Lint the Helm chart.
+	helm lint helm/
+
+.PHONY: helm-template
+helm-template: ## Template the Helm chart.
+	helm template litellm-operator helm/
+
+.PHONY: helm-package
+helm-package: ## Package the Helm chart.
+	helm package helm/
+	mkdir -p dist
+	mv litellm-operator-*.tgz dist/
+
+.PHONY: helm-install
+helm-install: ## Install the Helm chart locally.
+	helm install litellm-operator ./helm
+
+.PHONY: helm-uninstall
+helm-uninstall: ## Uninstall the Helm chart locally.
+	helm uninstall litellm-operator
+
+.PHONY: helm-upgrade
+helm-upgrade: ## Upgrade the Helm chart locally.
+	helm upgrade litellm-operator ./helm
+
+.PHONY: helm-test
+helm-test: ## Test the Helm chart.
+	helm test litellm-operator
+
+.PHONY: helm-docs
+helm-docs: ## Generate Helm chart documentation.
+	helm-docs --chart-search-root=helm --output-file-template=helm/README.md.gotmpl
+
+.PHONY: helm-repo
+helm-repo: ## Create Helm repository index.
+	mkdir -p docs/charts
+	helm repo index docs/charts --url https://bbd.github.io/litellm-operator/charts
+	cp dist/*.tgz docs/charts/
+
+.PHONY: helm-push-oci
+helm-push-oci: ## Push Helm chart to OCI registry.
+	helm push helm/ oci://ghcr.io/bbd/charts
