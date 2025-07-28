@@ -4,6 +4,14 @@ on:
   push:
     tags:
       - "v*"
+    paths-ignore:
+      - "**/*.md"
+      - "docs/**"
+      - "README.md"
+      - "CHANGELOG.md"
+      - "CONTRIBUTING.md"
+      - "SECURITY.md"
+      - "LICENSE"
 
 permissions:
   contents: write
