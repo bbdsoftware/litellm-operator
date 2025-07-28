@@ -124,7 +124,7 @@ kubectl create clusterrolebinding cluster-admin-binding \
 
 - Check the [troubleshooting guide](../reference/troubleshooting.md)
 - View operator logs: `kubectl logs -n litellm-operator-system deployment/litellm-operator-controller-manager`
-- Submit an issue on [GitHub](https://github.com/yourusername/litellm-operator/issues)
+- Submit an issue on [GitHub](https://github.com/bbdsoftware/litellm-operator/issues/new/choose)
 
 ## Next Steps
 
