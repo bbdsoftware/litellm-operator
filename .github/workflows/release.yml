@@ -190,7 +190,4 @@ jobs:
         commit-message: "chore: update operator image and helm chart to ${{ github.ref_name }}"
         committer: GitHub <noreply@github.com>
         author: GitHub <noreply@github.com>
-        path: |
-          config/manager
-          helm/Chart.yaml
-          helm/values.yaml 
+ 
