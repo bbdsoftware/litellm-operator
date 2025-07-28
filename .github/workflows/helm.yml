@@ -1,5 +1,10 @@
 name: Build and Publish Helm Chart
 
+# This workflow handles:
+# 1. Linting and testing Helm charts on PRs
+# 2. Publishing Helm charts to OCI registry on releases
+# 3. Only publishes when a release is created (not on PR merges)
+
 on:
   push:
     branches: [ main ]
@@ -59,55 +64,6 @@ jobs:
         helm template litellm-operator helm/ --dry-run --set replicaCount=3
         helm template litellm-operator helm/ --dry-run --set image.tag=latest
 
-  package:
-    runs-on: ubuntu-latest
-    needs: [lint, test]
-    if: github.event_name == 'release'
-    steps:
-    - uses: actions/checkout@v4
-      with:
-        fetch-depth: 0
-
-    - name: Install Helm
-      uses: azure/setup-helm@v4
-      with:
-        version: v3.12.0
-
-    - name: Configure Git
-      run: |
-        git config --local user.email "action@github.com"
-        git config --local user.name "GitHub Action"
-
-    - name: Update chart version
-      run: |
-        # Extract version from release tag (remove 'v' prefix)
-        VERSION=${GITHUB_REF#refs/tags/v}
-        echo "Updating chart version to $VERSION"
-        
-        # Update Chart.yaml
-        sed -i "s/^version: .*/version: $VERSION/" helm/Chart.yaml
-        sed -i "s/^appVersion: .*/appVersion: \"$VERSION\"/" helm/Chart.yaml
-        
-        # Update image tag in values.yaml
-        sed -i "s/^    tag: .*/    tag: \"$VERSION\"/" helm/values.yaml
-
-    - name: Package Helm chart
-      run: |
-        helm package helm/
-        mv litellm-operator-*.tgz dist/
-
-    - name: Create Helm repository
-      run: |
-        mkdir -p docs/charts
-        helm repo index docs/charts --url https://bbd.github.io/litellm-operator/charts
-        cp dist/*.tgz docs/charts/
-
-    - name: Deploy to GitHub Pages
-      uses: peaceiris/actions-gh-pages@v4
-      with:
-        github_token: ${{ secrets.GITHUB_TOKEN }}
-        publish_dir: ./docs
-
   publish-oci:
     runs-on: ubuntu-latest
     needs: [lint, test]
@@ -122,24 +78,6 @@ jobs:
       with:
         version: v3.12.0
 
-    - name: Configure Git
-      run: |
-        git config --local user.email "action@github.com"
-        git config --local user.name "GitHub Action"
-
-    - name: Update chart version
-      run: |
-        # Extract version from release tag (remove 'v' prefix)
-        VERSION=${GITHUB_REF#refs/tags/v}
-        echo "Updating chart version to $VERSION"
-        
-        # Update Chart.yaml
-        sed -i "s/^version: .*/version: $VERSION/" helm/Chart.yaml
-        sed -i "s/^appVersion: .*/appVersion: \"$VERSION\"/" helm/Chart.yaml
-        
-        # Update image tag in values.yaml
-        sed -i "s/^    tag: .*/    tag: \"$VERSION\"/" helm/values.yaml
-
     - name: Login to GitHub Container Registry
       uses: docker/login-action@v3
       with:
@@ -147,7 +85,35 @@ jobs:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
 
-    - name: Push Helm chart to OCI registry
+    - name: Verify chart version
       run: |
+        # Extract version from release tag (remove 'v' prefix)
+        RELEASE_VERSION=${GITHUB_REF#refs/tags/v}
+        echo "Release version: $RELEASE_VERSION"
+        
+        # Get chart version from Chart.yaml
+        CHART_VERSION=$(grep '^version:' helm/Chart.yaml | awk '{print $2}')
+        echo "Chart version: $CHART_VERSION"
+        
+        # Verify versions match
+        if [ "$CHART_VERSION" != "$RELEASE_VERSION" ]; then
+          echo "❌ Chart version ($CHART_VERSION) doesn't match release version ($RELEASE_VERSION)"
+          echo "This usually means the PR from the release workflow hasn't been merged yet."
+          exit 1
+        fi
+        
+        echo "✅ Chart version matches release version"
+
+    - name: Package and push Helm chart to OCI registry
+      run: |
+        # Extract version from release tag (remove 'v' prefix)
         VERSION=${GITHUB_REF#refs/tags/v}
-        helm push helm/ oci://ghcr.io/bbd/charts 
+        echo "Publishing chart version $VERSION to GitHub Packages"
+        
+        # Package the chart first
+        helm package helm/
+        
+        # Push the packaged chart to GitHub Container Registry
+        helm push litellm-operator-$VERSION.tgz oci://ghcr.io/bbd/charts
+        
+        echo "Successfully pushed litellm-operator-$VERSION.tgz to ghcr.io/bbd/charts" 

@@ -22,11 +22,15 @@ This is the Helm repository for the LiteLLM Operator.
 
 1. **GitHub Workflow** (`.github/workflows/helm.yml`) that:
    - Lints and tests the chart on every PR
-   - Automatically publishes to GitHub Pages on releases
-   - Pushes to OCI registry (ghcr.io)
+   - Automatically publishes to OCI registry (ghcr.io) on releases
    - Updates chart version to match release tags
 
-2. **Makefile Targets** for local development:
+2. **PR Validation Workflow** (`.github/workflows/helm-pr-validation.yml`) that:
+   - Validates Helm chart changes in PRs
+   - Checks version consistency
+   - Provides feedback on PRs
+
+3. **Makefile Targets** for local development:
    ```bash
    make helm-lint      # Lint the chart
    make helm-package   # Package the chart
@@ -52,14 +56,11 @@ The chart automatically stays current because:
 
 ### **📦 Installation Methods:**
 
-Users can install your operator in multiple ways:
+Users can install your operator using OCI (recommended):
 
 ```bash
-# From GitHub Pages repository
-helm repo add litellm-operator https://bbd.github.io/litellm-operator
-helm install litellm-operator litellm-operator/litellm-operator
-
-# From OCI registry
+# From OCI registry (recommended)
+helm registry login ghcr.io
 helm install litellm-operator oci://ghcr.io/bbd/charts/litellm-operator
 
 # From local chart
@@ -68,9 +69,8 @@ helm install litellm-operator ./helm
 
 ### **🎯 Next Steps:**
 
-1. **Enable GitHub Pages** in your repository settings (point to `/docs` branch)
-2. **Create a release** to trigger the first chart publication
-3. **Test the chart** locally using the Makefile targets
-4. **Update your documentation** to reference the Helm installation method
+1. **Create a release** to trigger the first chart publication
+2. **Test the chart** locally using the Makefile targets
+3. **Update your documentation** to reference the OCI installation method
 
 The Helm chart will now automatically stay up-to-date with every release you create, making it easy for users to deploy and manage your LiteLLM operator! 🚀 

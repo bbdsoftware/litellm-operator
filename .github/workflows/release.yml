@@ -183,6 +183,8 @@ jobs:
           - Updated default image tag in values.yaml
           
           This PR was automatically created by the release workflow.
+          
+          **Note:** The Helm Chart Validation workflow will automatically run on this PR to ensure the chart is properly configured before merging.
         base: main
         delete-branch: true
         commit-message: "chore: update operator image and helm chart to ${{ github.ref_name }}"

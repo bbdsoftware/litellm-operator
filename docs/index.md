@@ -43,6 +43,7 @@ make deploy IMG=<your-registry>/litellm-operator:latest
 - [Getting Started](getting-started/installation.md) - Installation and setup
 - [User Guide](user-guide/virtual-keys.md) - How to use the operator resources
 - [Developer Guide](developer-guide/architecture.md) - Architecture and development info
+- [Release Process](developer-guide/release-process.md) - How to create and manage releases
 - [API Reference](reference/api.md) - Complete API documentation
 
 ## Community

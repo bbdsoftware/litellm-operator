@@ -361,15 +361,10 @@ helm-test: ## Test the Helm chart.
 helm-docs: ## Generate Helm chart documentation.
 	helm-docs --chart-search-root=helm --output-file-template=helm/README.md.gotmpl
 
-.PHONY: helm-repo
-helm-repo: ## Create Helm repository index.
-	mkdir -p docs/charts
-	helm repo index docs/charts --url https://bbd.github.io/litellm-operator/charts
-	cp dist/*.tgz docs/charts/
-
 .PHONY: helm-push-oci
 helm-push-oci: ## Push Helm chart to OCI registry.
-	helm push helm/ oci://ghcr.io/bbd/charts
+	helm package helm/
+	helm push litellm-operator-*.tgz oci://ghcr.io/bbd/charts
 
 ##@ Documentation
 
