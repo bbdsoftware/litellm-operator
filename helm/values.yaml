@@ -11,7 +11,7 @@ operator:
   # Image configuration
   image:
     repository: ghcr.io/bbd/litellm-operator
-    tag: "latest"
+    tag: "0.0.1"
     pullPolicy: IfNotPresent
   
   # Replica count for the operator deployment
