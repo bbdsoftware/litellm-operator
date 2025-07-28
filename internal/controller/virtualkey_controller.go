@@ -87,12 +87,14 @@ func (r *VirtualKeyReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	exists, err := r.CheckVirtualKeyExists(ctx, virtualKey.Spec.KeyAlias)
 	if err != nil {
 		log.Error(err, "Failed to check if VirtualKey exists")
-		r.updateConditions(ctx, virtualKey, metav1.Condition{
+		if _, updateErr := r.updateConditions(ctx, virtualKey, metav1.Condition{
 			Type:    "Ready",
 			Status:  metav1.ConditionFalse,
 			Reason:  "UnableToCheckVirtualKeyExists",
 			Message: err.Error(),
-		})
+		}); updateErr != nil {
+			log.Error(updateErr, "Failed to update conditions")
+		}
 		return ctrl.Result{}, err
 	}
 

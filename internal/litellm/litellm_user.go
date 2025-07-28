@@ -220,12 +220,12 @@ func (l *LitellmClient) GetUser(ctx context.Context, userID string) (UserRespons
 func (l *LitellmClient) IsUserUpdateNeeded(ctx context.Context, user *UserResponse, req *UserRequest) bool {
 	log := log.FromContext(ctx)
 
-	if !cmp.Equal(user.Aliases, req.Aliases, cmp.Option(cmpopts.EquateEmpty())) {
+	if !cmp.Equal(user.Aliases, req.Aliases, cmpopts.EquateEmpty()) {
 		log.Info("Aliases changed")
 		return true
 	}
 
-	if !cmp.Equal(user.AllowedCacheControls, req.AllowedCacheControls, cmp.Option(cmpopts.EquateEmpty())) {
+	if !cmp.Equal(user.AllowedCacheControls, req.AllowedCacheControls, cmpopts.EquateEmpty()) {
 		log.Info("AllowedCacheControls changed")
 		return true
 	}
@@ -242,7 +242,7 @@ func (l *LitellmClient) IsUserUpdateNeeded(ctx context.Context, user *UserRespon
 		return true
 	}
 
-	if !cmp.Equal(user.Config, req.Config, cmp.Option(cmpopts.EquateEmpty())) {
+	if !cmp.Equal(user.Config, req.Config, cmpopts.EquateEmpty()) {
 		log.Info("Config changed")
 		return true
 	}
@@ -252,7 +252,7 @@ func (l *LitellmClient) IsUserUpdateNeeded(ctx context.Context, user *UserRespon
 		return true
 	}
 
-	if !cmp.Equal(user.Guardrails, req.Guardrails, cmp.Option(cmpopts.EquateEmpty())) {
+	if !cmp.Equal(user.Guardrails, req.Guardrails, cmpopts.EquateEmpty()) {
 		log.Info("Guardrails changed")
 		return true
 	}
@@ -269,12 +269,12 @@ func (l *LitellmClient) IsUserUpdateNeeded(ctx context.Context, user *UserRespon
 		return true
 	}
 
-	if !cmp.Equal(user.Models, req.Models, cmp.Option(cmpopts.EquateEmpty())) {
+	if !cmp.Equal(user.Models, req.Models, cmpopts.EquateEmpty()) {
 		log.Info("Models changed")
 		return true
 	}
 
-	if !cmp.Equal(user.Permissions, req.Permissions, cmp.Option(cmpopts.EquateEmpty())) {
+	if !cmp.Equal(user.Permissions, req.Permissions, cmpopts.EquateEmpty()) {
 		log.Info("Permissions changed")
 		return true
 	}
@@ -294,7 +294,7 @@ func (l *LitellmClient) IsUserUpdateNeeded(ctx context.Context, user *UserRespon
 		return true
 	}
 
-	if !cmp.Equal(user.Teams, req.Teams, cmp.Option(cmpopts.EquateEmpty())) {
+	if !cmp.Equal(user.Teams, req.Teams, cmpopts.EquateEmpty()) {
 		log.Info("Teams changed")
 		return true
 	}

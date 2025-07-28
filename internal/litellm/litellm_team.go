@@ -190,7 +190,7 @@ func (l *LitellmClient) GetTeam(ctx context.Context, teamID string) (TeamRespons
 func (l *LitellmClient) IsTeamUpdateNeeded(ctx context.Context, team *TeamResponse, req *TeamRequest) bool {
 	log := log.FromContext(ctx)
 
-	if !cmp.Equal(team.Admins, req.Admins, cmp.Option(cmpopts.EquateEmpty())) {
+	if !cmp.Equal(team.Admins, req.Admins, cmpopts.EquateEmpty()) {
 		log.Info("Admins changed")
 		return true
 	}
@@ -210,22 +210,22 @@ func (l *LitellmClient) IsTeamUpdateNeeded(ctx context.Context, team *TeamRespon
 		return true
 	}
 
-	if !cmp.Equal(team.Members, req.Members, cmp.Option(cmpopts.EquateEmpty())) {
+	if !cmp.Equal(team.Members, req.Members, cmpopts.EquateEmpty()) {
 		log.Info("Members changed")
 		return true
 	}
 
-	if !cmp.Equal(team.OrganizationID, req.OrganizationID, cmp.Option(cmpopts.EquateEmpty())) {
+	if !cmp.Equal(team.OrganizationID, req.OrganizationID, cmpopts.EquateEmpty()) {
 		log.Info("OrganizationID changed")
 		return true
 	}
 
-	if !cmp.Equal(team.RPMLimit, req.RPMLimit, cmp.Option(cmpopts.EquateEmpty())) {
+	if !cmp.Equal(team.RPMLimit, req.RPMLimit, cmpopts.EquateEmpty()) {
 		log.Info("RPMLimit changed")
 		return true
 	}
 
-	if !cmp.Equal(team.TeamAlias, req.TeamAlias, cmp.Option(cmpopts.EquateEmpty())) {
+	if !cmp.Equal(team.TeamAlias, req.TeamAlias, cmpopts.EquateEmpty()) {
 		log.Info("TeamAlias changed")
 		return true
 	}
@@ -235,7 +235,7 @@ func (l *LitellmClient) IsTeamUpdateNeeded(ctx context.Context, team *TeamRespon
 		return true
 	}
 
-	if !cmp.Equal(team.TeamMemberPermissions, req.TeamMemberPermissions, cmp.Option(cmpopts.EquateEmpty())) {
+	if !cmp.Equal(team.TeamMemberPermissions, req.TeamMemberPermissions, cmpopts.EquateEmpty()) {
 		log.Info("TeamMemberPermissions changed")
 		return true
 	}
