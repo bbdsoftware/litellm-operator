@@ -125,16 +125,40 @@ print_info "Starting deletion process..."
 # Delete workflow runs
 DELETED_COUNT=0
 FAILED_COUNT=0
+FAILED_RUNS=()
+CURRENT_RUN=0
 
 for RUN_ID in $WORKFLOW_RUNS; do
-    if gh run delete "$RUN_ID" --confirm 2>/dev/null; then
+    ((CURRENT_RUN++))
+    print_info "Deleting workflow run $RUN_ID ($CURRENT_RUN/$RUN_COUNT)..."
+    
+    # Capture error output for logging with timeout
+    ERROR_OUTPUT=$(timeout 30s gh run delete "$RUN_ID"  2>&1)
+    DELETE_EXIT_CODE=$?
+    
+    if [ $DELETE_EXIT_CODE -eq 0 ]; then
         ((DELETED_COUNT++))
         echo -n "."
+    elif [ $DELETE_EXIT_CODE -eq 124 ]; then
+        ((FAILED_COUNT++))
+        echo -n "T"
+        FAILED_RUNS+=("$RUN_ID: Timeout (30s) - command took too long")
     else
         ((FAILED_COUNT++))
         echo -n "x"
+        FAILED_RUNS+=("$RUN_ID: $ERROR_OUTPUT")
     fi
 done
+
+echo ""
+
+# Display failed deletions with error details
+if [ $FAILED_COUNT -gt 0 ]; then
+    print_error "Failed to delete $FAILED_COUNT workflow runs:"
+    for failed_run in "${FAILED_RUNS[@]}"; do
+        print_error "  - $failed_run"
+    done
+fi
 
 echo ""
 print_success "Deleted $DELETED_COUNT workflow runs"

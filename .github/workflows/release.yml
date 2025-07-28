@@ -108,41 +108,6 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         GITHUB_REPOSITORY_OWNER: ${{ github.repository_owner }}
         DOCKER_BUILDKIT: 1
-
-    - name: Generate operator manifest and package Helm chart
-      run: |
-        # Extract version from tag (remove 'v' prefix)
-        VERSION=${GITHUB_REF#refs/tags/v}
-        
-        # Generate operator deployment manifest with correct image
-        cd config/manager
-        kustomize edit set image controller=ghcr.io/${{ github.repository_owner }}/litellm-operator:${{ github.ref_name }}
-        cd ../..
-        kustomize build config/default > dist/operator.yaml
-        
-        # Update Helm chart version and appVersion
-        sed -i "s/^version: .*/version: $VERSION/" helm/Chart.yaml
-        sed -i "s/^appVersion: .*/appVersion: \"$VERSION\"/" helm/Chart.yaml
-        
-        # Update default image tag in values.yaml
-        sed -i "s/^    tag: .*/    tag: \"$VERSION\"/" helm/values.yaml
-        
-        # Update CRDs in helm chart
-        cp dist/crds.yaml helm/crds/
-        
-        # Package Helm chart with parallel processing
-        helm package helm/ --destination dist/ --parallel
-      env:
-        GITHUB_REF: ${{ github.ref }}
-        HELM_EXPERIMENTAL_OCI: 1
-
-    - name: Upload additional release assets
-      run: |
-        # Upload operator manifest and Helm chart to the release
-        gh release upload ${{ github.ref_name }} dist/operator.yaml dist/*.tgz --clobber
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
     - name: Sign container images
       run: |
         # Sign the container images
