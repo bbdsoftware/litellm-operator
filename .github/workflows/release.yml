@@ -149,7 +149,7 @@ jobs:
         token: ${{ secrets.GITHUB_TOKEN }}
         ref: main
 
-    - name: Update operator image in manifests
+    - name: Update manifests
       run: |
         # Extract version from tag (remove 'v' prefix)
         VERSION=${GITHUB_REF#refs/tags/v}
@@ -165,12 +165,30 @@ jobs:
         
         # Update default image tag in values.yaml
         sed -i "s/^    tag: .*/    tag: \"$VERSION\"/" helm/values.yaml
-        
-        # Commit the changes
-        git config --local user.email "action@github.com"
-        git config --local user.name "GitHub Action"
-        git add .
-        git diff --staged --quiet || git commit -m "chore: update operator image and helm chart to ${{ github.ref_name }}"
-        git push
       env:
-        GITHUB_REF: ${{ github.ref }} 
+        GITHUB_REF: ${{ github.ref }}
+
+    - name: Create Pull Request
+      uses: peter-evans/create-pull-request@v5
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        branch: update-manifests-${{ github.ref_name }}
+        title: "chore: update operator image and helm chart to ${{ github.ref_name }}"
+        body: |
+          This PR updates the operator manifests and Helm chart to version ${{ github.ref_name }}.
+          
+          Changes made:
+          - Updated operator image tag in kustomization
+          - Updated Helm chart version and appVersion
+          - Updated default image tag in values.yaml
+          
+          This PR was automatically created by the release workflow.
+        base: main
+        delete-branch: true
+        commit-message: "chore: update operator image and helm chart to ${{ github.ref_name }}"
+        committer: GitHub <noreply@github.com>
+        author: GitHub <noreply@github.com>
+        path: |
+          config/manager
+          helm/Chart.yaml
+          helm/values.yaml 
