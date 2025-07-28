@@ -50,7 +50,6 @@ theme:
 
 plugins:
   - search
-  - git-revision-date-localized
 
 markdown_extensions:
   - admonition
