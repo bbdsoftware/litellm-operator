@@ -43,6 +43,8 @@ dockers:
       - "ghcr.io/{{ .Env.GITHUB_REPOSITORY_OWNER }}/{{ .ProjectName }}:latest"
     dockerfile: Dockerfile
     use: buildx
+    push_flags:
+      - --push
     build_flag_templates:
       - "--platform=linux/amd64,linux/arm64"
       - "--label=org.opencontainers.image.created={{.Date}}"
