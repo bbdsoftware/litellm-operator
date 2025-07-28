@@ -132,6 +132,19 @@ release:
     
     ### Installation
     
+    #### Using Helm (Recommended)
+    
+    ```bash
+    # Add the Helm repository
+    helm repo add litellm-operator https://{{ .Env.GITHUB_REPOSITORY_OWNER }}.github.io/{{ .ProjectName }}
+    helm repo update
+    
+    # Install the operator
+    helm install litellm-operator litellm-operator/litellm-operator --version {{ .Version }}
+    ```
+    
+    #### Using kubectl
+    
     ```bash
     # Install CRDs
     kubectl apply -f https://github.com/{{ .Env.GITHUB_REPOSITORY_OWNER }}/{{ .ProjectName }}/releases/download/{{ .Version }}/crds.yaml
@@ -143,8 +156,6 @@ release:
   extra_files:
     - glob: "config/crd/bases/*.yaml"
       name_template: "crds.yaml"
-    - glob: "config/default/kustomization.yaml"
-      name_template: "operator.yaml"
 
 # Handle SBOMs for supply chain security
 sboms:
