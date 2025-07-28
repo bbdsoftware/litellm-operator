@@ -2,7 +2,7 @@
 
 # Script to delete a local and remote tag, then re-tag and push
 
-TAG_NAME="v0.1"
+TAG_NAME="v0.0.1"
 
 set -e
 

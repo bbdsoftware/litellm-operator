@@ -55,10 +55,10 @@ jobs:
         VERSION=${GITHUB_REF#refs/tags/v}
         
         # Validate semver format using regex
-        if [[ ! $VERSION =~ ^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-((?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\.(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\+([0-9a-zA-Z-]+(?:\.[0-9a-zA-Z-]+)*))?$ ]]; then
+        if [[ ! $VERSION =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(?:-((?:0|[1-9][0-9]*|[0-9]*[a-zA-Z-][0-9a-zA-Z-]*)(?:\.(?:0|[1-9][0-9]*|[0-9]*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\+([0-9a-zA-Z-]+(?:\.[0-9a-zA-Z-]+)*))?$ ]]; then
           echo "❌ Invalid semver format: $VERSION"
           echo "Expected format: MAJOR.MINOR.PATCH[-PRERELEASE][+BUILD]"
-          echo "Examples: 1.0.0, 2.1.3, 1.0.0-alpha, 1.0.0-beta.1, 1.0.0+20130313144700"
+          echo "Examples: 0.0.1, 1.0.0, 2.1.3, 1.0.0-alpha, 1.0.0-beta.1, 1.0.0+20130313144700"
           exit 1
         fi
         
