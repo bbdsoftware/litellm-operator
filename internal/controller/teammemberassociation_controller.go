@@ -83,13 +83,15 @@ func (r *TeamMemberAssociationReconciler) Reconcile(ctx context.Context, req ctr
 	teamID, err := r.GetTeamID(ctx, teamMemberAssociation.Status.TeamAlias)
 	if err != nil {
 		log.Error(err, "Failed to check if Team exists")
-		r.updateConditions(ctx, teamMemberAssociation, metav1.Condition{
+		if _, updateErr := r.updateConditions(ctx, teamMemberAssociation, metav1.Condition{
 			Type:               "Ready",
 			Status:             metav1.ConditionFalse,
 			LastTransitionTime: metav1.Now(),
 			Reason:             "UnableToCheckTeamExists",
 			Message:            err.Error(),
-		})
+		}); updateErr != nil {
+			log.Error(updateErr, "Failed to update conditions")
+		}
 		return ctrl.Result{}, err
 	}
 
@@ -104,9 +106,13 @@ func (r *TeamMemberAssociationReconciler) Reconcile(ctx context.Context, req ctr
 		return ctrl.Result{}, nil
 	}
 
-	r.createTeamMemberAssociation(ctx, teamMemberAssociation)
+	result, err := r.createTeamMemberAssociation(ctx, teamMemberAssociation)
+	if err != nil {
+		log.Error(err, "Failed to create team member association")
+		return ctrl.Result{}, err
+	}
 
-	return ctrl.Result{}, nil
+	return result, nil
 }
 
 // SetupWithManager sets up the controller with the Manager.

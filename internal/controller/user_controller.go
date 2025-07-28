@@ -85,12 +85,14 @@ func (r *UserReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 	userID, err := r.GetUserID(ctx, user.Spec.UserEmail)
 	if err != nil {
 		log.Error(err, "Failed to check if User exists")
-		r.updateConditions(ctx, user, metav1.Condition{
+		if _, updateErr := r.updateConditions(ctx, user, metav1.Condition{
 			Type:    "Ready",
 			Status:  metav1.ConditionFalse,
 			Reason:  "UnableToCheckUserExists",
 			Message: err.Error(),
-		})
+		}); updateErr != nil {
+			log.Error(updateErr, "Failed to update conditions")
+		}
 		return ctrl.Result{}, err
 	}
 

@@ -203,16 +203,16 @@ func (l *LitellmClient) GetVirtualKey(ctx context.Context, key string) (VirtualK
 func (l *LitellmClient) IsVirtualKeyUpdateNeeded(ctx context.Context, virtualKey *VirtualKeyResponse, req *VirtualKeyRequest) bool {
 	log := log.FromContext(ctx)
 
-	if !cmp.Equal(virtualKey.Aliases, req.Aliases, cmp.Option(cmpopts.EquateEmpty())) {
+	if !cmp.Equal(virtualKey.Aliases, req.Aliases, cmpopts.EquateEmpty()) {
 		log.Info("Aliases changed")
 		return true
 	}
 
-	if !cmp.Equal(virtualKey.AllowedCacheControls, req.AllowedCacheControls, cmp.Option(cmpopts.EquateEmpty())) {
+	if !cmp.Equal(virtualKey.AllowedCacheControls, req.AllowedCacheControls, cmpopts.EquateEmpty()) {
 		log.Info("AllowedCacheControls changed")
 		return true
 	}
-	if !cmp.Equal(virtualKey.AllowedRoutes, req.AllowedRoutes, cmp.Option(cmpopts.EquateEmpty())) {
+	if !cmp.Equal(virtualKey.AllowedRoutes, req.AllowedRoutes, cmpopts.EquateEmpty()) {
 		log.Info("AllowedRoutes changed")
 		return true
 	}
@@ -228,7 +228,7 @@ func (l *LitellmClient) IsVirtualKeyUpdateNeeded(ctx context.Context, virtualKey
 		log.Info("BudgetID changed")
 		return true
 	}
-	if !cmp.Equal(virtualKey.Config, req.Config, cmp.Option(cmpopts.EquateEmpty())) {
+	if !cmp.Equal(virtualKey.Config, req.Config, cmpopts.EquateEmpty()) {
 		log.Info("Config changed")
 		return true
 	}
@@ -236,11 +236,11 @@ func (l *LitellmClient) IsVirtualKeyUpdateNeeded(ctx context.Context, virtualKey
 		log.Info("Duration changed")
 		return true
 	}
-	if !cmp.Equal(virtualKey.EnforcedParams, req.EnforcedParams, cmp.Option(cmpopts.EquateEmpty())) {
+	if !cmp.Equal(virtualKey.EnforcedParams, req.EnforcedParams, cmpopts.EquateEmpty()) {
 		log.Info("EnforcedParams changed")
 		return true
 	}
-	if !cmp.Equal(virtualKey.Guardrails, req.Guardrails, cmp.Option(cmpopts.EquateEmpty())) {
+	if !cmp.Equal(virtualKey.Guardrails, req.Guardrails, cmpopts.EquateEmpty()) {
 		log.Info("Guardrails changed")
 		return true
 	}
@@ -256,11 +256,11 @@ func (l *LitellmClient) IsVirtualKeyUpdateNeeded(ctx context.Context, virtualKey
 		log.Info("MaxParallelRequests changed")
 		return true
 	}
-	if !cmp.Equal(virtualKey.Models, req.Models, cmp.Option(cmpopts.EquateEmpty())) {
+	if !cmp.Equal(virtualKey.Models, req.Models, cmpopts.EquateEmpty()) {
 		log.Info("Models changed")
 		return true
 	}
-	if !cmp.Equal(virtualKey.Permissions, req.Permissions, cmp.Option(cmpopts.EquateEmpty())) {
+	if !cmp.Equal(virtualKey.Permissions, req.Permissions, cmpopts.EquateEmpty()) {
 		log.Info("Permissions changed")
 		return true
 	}
@@ -268,7 +268,7 @@ func (l *LitellmClient) IsVirtualKeyUpdateNeeded(ctx context.Context, virtualKey
 		log.Info("RPMLimit changed")
 		return true
 	}
-	if !cmp.Equal(virtualKey.Tags, req.Tags, cmp.Option(cmpopts.EquateEmpty())) {
+	if !cmp.Equal(virtualKey.Tags, req.Tags, cmpopts.EquateEmpty()) {
 		log.Info("Tags changed")
 		return true
 	}

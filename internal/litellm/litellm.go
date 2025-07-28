@@ -36,7 +36,11 @@ func (l *LitellmClient) makeRequest(ctx context.Context, method, path string, bo
 	httpReq.Header.Set("Content-Type", "application/json")
 	httpReq.Header.Set("Authorization", "Bearer "+l.masterKey)
 
-	defer httpReq.Body.Close()
+	defer func() {
+		if closeErr := httpReq.Body.Close(); closeErr != nil {
+			log.Error(closeErr, "Failed to close request body")
+		}
+	}()
 
 	httpResp, err := http.DefaultClient.Do(httpReq)
 	if err != nil {

@@ -84,13 +84,15 @@ func (r *TeamReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 	teamID, err := r.GetTeamID(ctx, team.Spec.TeamAlias)
 	if err != nil {
 		log.Error(err, "Failed to check if Team exists")
-		r.updateConditions(ctx, team, metav1.Condition{
+		if _, updateErr := r.updateConditions(ctx, team, metav1.Condition{
 			Type:               "Ready",
 			Status:             metav1.ConditionFalse,
 			LastTransitionTime: metav1.Now(),
 			Reason:             "UnableToCheckTeamExists",
 			Message:            err.Error(),
-		})
+		}); updateErr != nil {
+			log.Error(updateErr, "Failed to update conditions")
+		}
 		return ctrl.Result{}, err
 	}
 
