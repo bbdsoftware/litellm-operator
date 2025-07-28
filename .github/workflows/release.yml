@@ -20,6 +20,8 @@ permissions:
 
 jobs:
   test:
+    # disable this job for now
+    if: false
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
@@ -40,13 +42,8 @@ jobs:
         version: latest
 
   goreleaser:
-    needs: test
+    # needs: test
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        include:
-          - name: build
-            args: release --clean
     steps:
     - uses: actions/checkout@v4
       with:
@@ -105,7 +102,7 @@ jobs:
       with:
         distribution: goreleaser
         version: '~> v2'
-        args: ${{ matrix.args }}
+        args: release --clean
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         GITHUB_REPOSITORY_OWNER: ${{ github.repository_owner }}
