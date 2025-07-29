@@ -2,7 +2,7 @@
 # See https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
 
 # Global ownership - replace with actual GitHub usernames/teams
-* @itellm-operator-maintainers
+* @litellm-operator-maintainers
 
 # API definitions and CRDs
 /api/ @litellm-io/maintainers @api-reviewers
@@ -11,26 +11,26 @@
 /config/crd/ @litellm-operator-maintainers @api-reviewers
 
 # Controllers
-/internal/controller/ @itellm-operator-maintainers 
+/internal/controller/ @litellm-operator-maintainers 
 
 # LiteLLM integration
-/internal/litellm/ @itellm-operator-maintainers 
+/internal/litellm/ @litellm-operator-maintainers 
 
 # Configuration and deployment
-/config/ @itellm-operator-maintainers 
-/Dockerfile @itellm-operator-maintainers 
-/Makefile @itellm-operator-maintainers
+/config/ @litellm-operator-maintainers 
+/Dockerfile @litellm-operator-maintainers 
+/Makefile @litellm-operator-maintainers
 
 # Documentation
-/README.md @itellm-operator-maintainers @docs-team
+/README.md @litellm-operator-maintainers @docs-team
 *.md @docs-team
 
 # CI/CD and GitHub workflows
-/.github/ @itellm-operator-maintainers @platform-team
+/.github/ @litellm-operator-maintainers @platform-team
 
 # Go modules and dependencies
-/go.mod @itellm-operator-maintainers
-/go.sum @itellm-operator-maintainers
+/go.mod @litellm-operator-maintainers
+/go.sum @litellm-operator-maintainers
 
 # Tests
-/test/ @itellm-operator-maintainers 
+/test/ @litellm-operator-maintainers 
