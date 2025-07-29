@@ -15,7 +15,7 @@ sources:
   - https://github.com/bbd/litellm-operator
 maintainers:
   - name: LiteLLM Operator Maintainers
-    email: maintainers@litellm.ai
+    email: lightllm-operator@bbdsoftware.com
 annotations:
   category: Infrastructure
-  licenses: Apache-2.0 
+  licenses: Apache-2.0

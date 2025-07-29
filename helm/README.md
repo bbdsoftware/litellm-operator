@@ -38,8 +38,8 @@ See the [values.yaml](values.yaml) file for all available configuration options.
 After installation, the LiteLLM Operator will be available in your cluster and you can create custom resources like:
 
 - Teams
-- Users  
+- Users
 - Virtual Keys
 - Team Member Associations
 
-For more information, see the [LiteLLM Operator documentation](https://github.com/bbd/litellm-operator). 
+For more information, see the [LiteLLM Operator documentation](https://github.com/bbd/litellm-operator).
