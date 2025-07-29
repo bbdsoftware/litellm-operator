@@ -1,4 +1,4 @@
-name: CI
+name: Continuous Integration
 
 on:
   pull_request:
@@ -28,7 +28,7 @@ permissions:
   security-events: write
 
 jobs:
-  test:
+  unit-tests-and-linting:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
@@ -61,7 +61,7 @@ jobs:
         make generate manifests
         git diff --exit-code || (echo "Generated code is out of date. Run 'make generate manifests' and commit the changes." && exit 1)
 
-  build:
+  build-operator:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
@@ -76,7 +76,7 @@ jobs:
     - name: Build Docker image
       run: make docker-build IMG=test:latest
 
-  e2e:
+  e2e-tests:
     runs-on: ubuntu-latest
     if: false  # Temporarily disabled e2e tests
     steps:
@@ -110,7 +110,7 @@ jobs:
     - name: Run e2e tests
       run: make test-e2e
 
-  security:
+  security-scan:
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request'
     steps:

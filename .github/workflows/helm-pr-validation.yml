@@ -1,4 +1,4 @@
-name: Validate Helm Chart PR
+name: Helm Chart PR Validation
 
 on:
   pull_request:
@@ -12,7 +12,7 @@ permissions:
   contents: read
 
 jobs:
-  validate-helm-changes:
+  validate-helm-chart:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4

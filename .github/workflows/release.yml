@@ -1,4 +1,4 @@
-name: Release
+name: Release and Publish
 
 on:
   push:
@@ -20,7 +20,7 @@ permissions:
   pull-requests: write
 
 jobs:
-  test:
+  run-tests:
     # disable this job for now
     if: false
     runs-on: ubuntu-latest
@@ -42,8 +42,8 @@ jobs:
       with:
         version: latest
 
-  goreleaser:
-    # needs: test
+  build-and-release:
+    # needs: run-tests
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
@@ -141,7 +141,7 @@ jobs:
 
     
   update-manifests:
-    needs: goreleaser
+    needs: build-and-release
     runs-on: ubuntu-latest
     if: ${{ !contains(github.ref, 'rc') && !contains(github.ref, 'beta') && !contains(github.ref, 'alpha') }}
     permissions:

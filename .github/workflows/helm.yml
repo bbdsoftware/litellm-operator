@@ -1,4 +1,4 @@
-name: Build and Publish Helm Chart
+name: Helm Chart
 
 # This workflow handles:
 # 1. Linting and testing Helm charts on PRs
@@ -7,6 +7,8 @@ name: Build and Publish Helm Chart
 
 on:
   push:
+    branches:
+      - main
     paths:
       - "helm/**"
   workflow_dispatch:
@@ -16,7 +18,7 @@ permissions:
   packages: write
 
 jobs:
-  lint:
+  lint-helm-chart:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
@@ -33,9 +35,9 @@ jobs:
         helm lint helm/
         helm template litellm-operator helm/ > /dev/null
 
-  test:
+  test-helm-chart:
     runs-on: ubuntu-latest
-    needs: lint
+    needs: lint-helm-chart
     steps:
     - uses: actions/checkout@v4
       with:
@@ -54,9 +56,9 @@ jobs:
         helm template litellm-operator helm/ --dry-run --set replicaCount=3
         helm template litellm-operator helm/ --dry-run --set image.tag=latest
 
-  publish-oci:
+  publish-helm-chart:
     runs-on: ubuntu-latest
-    needs: [lint, test]
+    needs: [lint-helm-chart, test-helm-chart]
     steps:
     - uses: actions/checkout@v4
       with:
