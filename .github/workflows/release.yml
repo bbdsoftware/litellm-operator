@@ -21,8 +21,6 @@ permissions:
 
 jobs:
   run-tests:
-    # disable this job for now
-    if: false
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
@@ -43,7 +41,7 @@ jobs:
         version: latest
 
   build-and-release:
-    # needs: run-tests
+    needs: run-tests
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
