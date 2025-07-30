@@ -134,33 +134,6 @@ rbac:
   # Cluster role binding name
   clusterRoleBindingName: "litellm-operator"
 
-# CRD configuration
-crd:
-  # Install CRDs
-  install: true
-  # CRD cleanup policy
-  cleanupPolicy: "none" # Options: none, delete
-
-# Webhook configuration (if enabled in the future)
-webhook:
-  enabled: false
-  # Webhook configuration would go here
-
-# Cert-manager configuration (if webhooks are enabled)
-certManager:
-  enabled: false
-  # Cert-manager configuration would go here
-
-# Network policy configuration
-networkPolicy:
-  enabled: false
-  # Network policy configuration would go here
-
-# Prometheus monitoring configuration
-prometheus:
-  enabled: false
-  # Prometheus configuration would go here
-
 # Additional labels to add to all resources
 labels: {}
 # Additional annotations to add to all resources

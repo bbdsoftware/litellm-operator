@@ -1,0 +1,21 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "chart.fullname" . }}-virtualkey-viewer-role
+  labels:
+  {{- include "chart.labels" . | nindent 4 }}
+rules:
+- apiGroups:
+  - auth.litellm.ai
+  resources:
+  - virtualkeys
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - auth.litellm.ai
+  resources:
+  - virtualkeys/status
+  verbs:
+  - get

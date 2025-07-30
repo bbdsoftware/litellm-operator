@@ -4,7 +4,7 @@ kind: Namespace
 metadata:
   name: {{ .Values.namespace.name }}
   labels:
-    {{- include "litellm-operator.labels" . | nindent 4 }}
+    {{- include "chart.labels" . | nindent 4 }}
     {{- with .Values.namespace.labels }}
     {{- toYaml . | nindent 4 }}
     {{- end }}

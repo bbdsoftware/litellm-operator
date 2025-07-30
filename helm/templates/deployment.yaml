@@ -1,15 +1,15 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ include "litellm-operator.fullname" . }}
-  namespace: {{ include "litellm-operator.namespace" . }}
+  name: {{ include "chart.fullname" . }}
+  namespace: {{ include "chart.namespace" . }}
   labels:
-    {{- include "litellm-operator.labels" . | nindent 4 }}
+    {{- include "chart.labels" . | nindent 4 }}
     control-plane: controller-manager
 spec:
   selector:
     matchLabels:
-      {{- include "litellm-operator.selectorLabels" . | nindent 6 }}
+      {{- include "chart.selectorLabels" . | nindent 6 }}
       control-plane: controller-manager
   replicas: {{ .Values.operator.replicas }}
   template:
@@ -20,7 +20,7 @@ spec:
         {{- toYaml . | nindent 8 }}
         {{- end }}
       labels:
-        {{- include "litellm-operator.selectorLabels" . | nindent 8 }}
+        {{- include "chart.selectorLabels" . | nindent 8 }}
         control-plane: controller-manager
     spec:
       {{- with .Values.operator.affinity }}
@@ -37,7 +37,7 @@ spec:
       {{- end }}
       securityContext:
         {{- toYaml .Values.operator.securityContext | nindent 8 }}
-      serviceAccountName: {{ include "litellm-operator.fullname" . }}
+      serviceAccountName: {{ include "chart.fullname" . }}-controller-manager
       terminationGracePeriodSeconds: 10
       containers:
       - command:
@@ -45,12 +45,6 @@ spec:
         args:
           - --leader-elect
           - --health-probe-bind-address=:8081
-          {{- if .Values.operator.leaderElection.enabled }}
-          - --leader-elect-namespace={{ .Values.operator.leaderElection.namespace | default .Values.namespace.name }}
-          - --leader-elect-lease-duration={{ .Values.operator.leaderElection.leaseDuration }}
-          - --leader-elect-renew-deadline={{ .Values.operator.leaderElection.renewDeadline }}
-          - --leader-elect-retry-period={{ .Values.operator.leaderElection.retryPeriod }}
-          {{- end }}
         env:
         - name: LITELLM_BASE_URL
           value: {{ .Values.litellm.baseUrl | quote }}
@@ -78,4 +72,4 @@ spec:
         - containerPort: {{ .Values.operator.metrics.port }}
           name: metrics
           protocol: TCP
-        {{- end }} 
+        {{- end }}
