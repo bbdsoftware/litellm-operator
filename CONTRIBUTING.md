@@ -10,6 +10,10 @@ See our [Code of Conduct](CODE_OF_CONDUCT.md).
 3. Run tests and linters.
 4. Submit a pull request, referencing any relevant issues.
 
+
+### Go code standards
+This project aims to align with idiomatic Go code. Some concrete examples and definitions can be found at [Effective Go](https://go.dev/doc/effective_go)
+
 ## Issue Reporting
 
 - For bugs, use the bug report template.
