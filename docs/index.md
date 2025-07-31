@@ -31,11 +31,14 @@ The operator is designed to work alongside your LiteLLM deployment, providing a 
 Ready to get started? Check out our [installation guide](getting-started/installation.md) to deploy the operator in your cluster.
 
 ```bash
-# Install CRDs
-make install
+# Helm - from OCI registry (recommended)
+helm install --namespace litellm litellm-operator oci://ghcr.io/bbdsoftware/charts/litellm-operator:<version>
 
-# Deploy the operator
-make deploy IMG=<your-registry>/litellm-operator:latest
+# Helm - from local chart
+helm install --namespace litellm litellm-operator ./helm
+
+# Kustomize - from local chart
+kubectl --namespace litellm apply -k config/default
 ```
 
 ## Resources
@@ -48,10 +51,10 @@ make deploy IMG=<your-registry>/litellm-operator:latest
 
 ## Community
 
-- 🐛 [Report Issues](https://github.com/yourusername/litellm-operator/issues)
-- 💬 [Discussions](https://github.com/yourusername/litellm-operator/discussions)
+- 🐛 [Report Issues](https://github.com/bbdsoftware/litellm-operator/issues)
+- 💬 [Discussions](https://github.com/bbdsoftware/litellm-operator/discussions)
 - 🤝 [Contributing](developer-guide/contributing.md)
 
 ## License
 
-This project is licensed under the Apache License 2.0 - see the [LICENSE](https://github.com/litellm-io/litellm-operator/blob/main/LICENSE) file for details. 
+This project is licensed under the Apache License 2.0 - see the [LICENSE](https://github.com/bbdsoftware/litellm-operator/blob/main/LICENSE) file for details. 

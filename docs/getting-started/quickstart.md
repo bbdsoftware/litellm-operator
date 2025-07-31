@@ -12,17 +12,24 @@ This guide will walk you through creating your first LiteLLM resources using the
 
 First, let's create a user resource:
 
+!!! note Creating a user will automatically create a virtual key for the user unless `autoCreateKey` is set to `false`.
+
 ```yaml
 # user-example.yaml
 apiVersion: auth.litellm.ai/v1alpha1
 kind: User
 metadata:
   name: alice
-  namespace: default
 spec:
-  userId: "alice@example.com"
-  userRole: "user"
-  maxBudget: 100.0
+  userEmail: alice@example.com
+  userAlias: alice
+  userRole: customer
+  keyAlias: alice-key
+  autoCreateKey: true
+  models:
+    - gpt-4o
+  maxBudget: "10"
+  budgetDuration: 1h
 ```
 
 Apply the user:
@@ -47,18 +54,22 @@ apiVersion: auth.litellm.ai/v1alpha1
 kind: Team
 metadata:
   name: ai-team
-  namespace: default
 spec:
-  teamId: "ai-team"
-  maxBudget: 500.0
-  tpmLimit: 1000
-  rpmLimit: 100
+  teamAlias: ai-team
+  models:
+    - gpt-4o
 ```
 
 Apply the team:
 
 ```bash
 kubectl apply -f team-example.yaml
+```
+
+Verify the team was created:
+
+```bash
+kubectl get teams
 ```
 
 ## Step 3: Associate User with Team
@@ -71,11 +82,10 @@ apiVersion: auth.litellm.ai/v1alpha1
 kind: TeamMemberAssociation
 metadata:
   name: alice-ai-team
-  namespace: default
 spec:
-  userId: "alice@example.com"
-  teamId: "ai-team"
-  role: "member"
+  role: member
+  teamAlias: ai-team
+  userEmail: alice@example.com
 ```
 
 Apply the association:
@@ -84,30 +94,40 @@ Apply the association:
 kubectl apply -f association-example.yaml
 ```
 
-## Step 4: Create a Virtual Key
+Verify the association was created:
 
-Finally, create a virtual key for API access:
+```bash
+kubectl get teammemberassociations
+```
+
+## Step 4: Create a Virtual Key (optional)
+
+Create a virtual key that is not associated with a user:
 
 ```yaml
 # virtualkey-example.yaml
 apiVersion: auth.litellm.ai/v1alpha1
 kind: VirtualKey
 metadata:
-  name: alice-key
-  namespace: default
+  name: example-service
 spec:
-  userId: "alice@example.com"
-  maxBudget: 50.0
-  models: ["gpt-3.5-turbo", "gpt-4"]
-  aliases: 
-    gpt-3.5-turbo: "azure/gpt-35-turbo"
-  duration: "30d"
+  keyAlias: example-service
+  models:
+    - gpt-4o
+  maxBudget: "10"
+  budgetDuration: 1h
 ```
 
 Apply the virtual key:
 
 ```bash
 kubectl apply -f virtualkey-example.yaml
+```
+
+Verify the virtual key was created:
+
+```bash
+kubectl get virtualkeys
 ```
 
 ## Step 5: Verify Everything
@@ -121,7 +141,7 @@ kubectl get users,teams,teammemberassociations,virtualkeys
 # Get detailed status
 kubectl describe user alice
 kubectl describe team ai-team
-kubectl describe virtualkey alice-key
+kubectl describe virtualkey example-service
 ```
 
 ## Using the Virtual Key
@@ -140,8 +160,17 @@ curl -X POST "http://your-litellm-endpoint/chat/completions" \
   -H "Authorization: Bearer <virtual-key-value>" \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "gpt-3.5-turbo",
-    "messages": [{"role": "user", "content": "Hello!"}]
+    "model": "gpt-4o",
+    "messages": [
+      {
+        "role": "system",
+        "content": "You are a helpful software engineer. Guide the user through the solution step by step."
+      },
+      {
+        "role": "user",
+        "content": "How can I create a Kubernetes operator?"
+      }
+    ]
   }'
 ```
 
@@ -157,7 +186,7 @@ curl -X POST "http://your-litellm-endpoint/chat/completions" \
 To remove the resources created in this guide:
 
 ```bash
-kubectl delete virtualkey alice-key
+kubectl delete virtualkey example-service
 kubectl delete teammemberassociation alice-ai-team  
 kubectl delete team ai-team
 kubectl delete user alice

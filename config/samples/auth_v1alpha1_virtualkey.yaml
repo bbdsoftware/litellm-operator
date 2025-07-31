@@ -1,15 +1,10 @@
 apiVersion: auth.litellm.ai/v1alpha1
 kind: VirtualKey
 metadata:
-  labels:
-    app.kubernetes.io/name: litellm-operator
-    app.kubernetes.io/managed-by: kustomize
-  name: virtualkey-sample
+  name: example-service
 spec:
-  keyAlias: my-key
+  keyAlias: example-service
   models:
     - gpt-4o
-  teamID: my-team
   maxBudget: "10"
   budgetDuration: 1h
-  userID: my-user@example.com

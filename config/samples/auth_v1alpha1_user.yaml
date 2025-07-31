@@ -1,19 +1,14 @@
 apiVersion: auth.litellm.ai/v1alpha1
 kind: User
 metadata:
-  labels:
-    app.kubernetes.io/name: litellm-operator
-    app.kubernetes.io/managed-by: kustomize
-  name: user-sample
+  name: alice
 spec:
-  userEmail: my-user@example.com
-  userAlias: my-user-alias
+  userEmail: alice@example.com
+  userAlias: alice
   userRole: customer
-  keyAlias: my-user-key-alias
+  keyAlias: alice-key
   autoCreateKey: true
   models:
     - gpt-4o
-  teams:
-    - my-team
   maxBudget: "10"
   budgetDuration: 1h

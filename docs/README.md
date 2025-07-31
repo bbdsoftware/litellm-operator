@@ -56,15 +56,22 @@ The chart automatically stays current because:
 
 ### **📦 Installation Methods:**
 
+#### Helm
+
 Users can install your operator using OCI (recommended):
 
 ```bash
 # From OCI registry (recommended)
-helm registry login ghcr.io
-helm install litellm-operator oci://ghcr.io/bbd/charts/litellm-operator
+helm install --namespace litellm litellm-operator oci://ghcr.io/bbdsoftware/charts/litellm-operator:0.0.1
 
 # From local chart
-helm install litellm-operator ./helm
+helm install --namespace litellm litellm-operator ./helm
+```
+
+#### Kustomize
+
+```bash
+kubectl --namespace litellm apply -k config/default
 ```
 
 ### **🎯 Next Steps:**

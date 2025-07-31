@@ -62,13 +62,6 @@ Create the name of the service account to use
 {{- end }}
 
 {{/*
-Create the namespace name to use
-*/}}
-{{- define "chart.namespace" -}}
-{{- .Values.namespace.name }}
-{{- end }}
-
-{{/*
 Create the image name to use
 */}}
 {{- define "chart.image" -}}

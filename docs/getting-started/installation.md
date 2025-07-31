@@ -13,43 +13,26 @@ Before installing the operator, ensure you have:
 
 ## Quick Installation
 
-### 1. Install Custom Resource Definitions (CRDs)
+### 1. Install the operator
 
-First, install the custom resource definitions:
-
-```bash
-kubectl apply -f https://raw.githubusercontent.com/yourusername/litellm-operator/main/config/crd/bases/auth.litellm.ai_virtualkeys.yaml
-kubectl apply -f https://raw.githubusercontent.com/yourusername/litellm-operator/main/config/crd/bases/auth.litellm.ai_users.yaml
-kubectl apply -f https://raw.githubusercontent.com/yourusername/litellm-operator/main/config/crd/bases/auth.litellm.ai_teams.yaml
-kubectl apply -f https://raw.githubusercontent.com/yourusername/litellm-operator/main/config/crd/bases/auth.litellm.ai_teammemberassociations.yaml
-```
-
-Or use the make target:
+#### Helm
 
 ```bash
-make install
+helm install --namespace litellm litellm-operator oci://ghcr.io/bbdsoftware/charts/litellm-operator:<version>
 ```
 
-### 2. Deploy the Operator
-
-Deploy the operator to your cluster:
+#### Kustomize
 
 ```bash
-kubectl apply -f https://raw.githubusercontent.com/yourusername/litellm-operator/main/config/manager/manager.yaml
+kubectl apply -k config/default
 ```
 
-Or build and deploy from source:
-
-```bash
-make deploy IMG=<your-registry>/litellm-operator:latest
-```
-
-### 3. Verify Installation
+### 2. Verify Installation
 
 Check that the operator is running:
 
 ```bash
-kubectl get pods -n litellm-operator-system
+kubectl get pods --namespace litellm
 ```
 
 You should see the operator pod in `Running` status.
@@ -59,7 +42,7 @@ You should see the operator pod in `Running` status.
 ### 1. Clone the Repository
 
 ```bash
-git clone https://github.com/yourusername/litellm-operator.git
+git clone https://github.com/bbdsoftware/litellm-operator.git
 cd litellm-operator
 ```
 
@@ -94,16 +77,6 @@ The operator supports the following environment variables:
 | `METRICS_BIND_ADDRESS` | Address for metrics server | `:8080` |
 | `HEALTH_PROBE_BIND_ADDRESS` | Address for health probes | `:8081` |
 
-### RBAC Configuration
-
-The operator requires appropriate RBAC permissions. If you encounter permission errors:
-
-```bash
-kubectl create clusterrolebinding cluster-admin-binding \
-  --clusterrole=cluster-admin \
-  --user=$(kubectl config current-context)
-```
-
 ## Troubleshooting
 
 ### Common Issues
@@ -123,7 +96,7 @@ kubectl create clusterrolebinding cluster-admin-binding \
 ### Getting Help
 
 - Check the [troubleshooting guide](../reference/troubleshooting.md)
-- View operator logs: `kubectl logs -n litellm-operator-system deployment/litellm-operator-controller-manager`
+- View operator logs: `kubectl logs -n litellm deployment/litellm-operator-controller-manager`
 - Submit an issue on [GitHub](https://github.com/bbdsoftware/litellm-operator/issues/new/choose)
 
 ## Next Steps

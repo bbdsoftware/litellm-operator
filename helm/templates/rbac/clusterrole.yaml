@@ -78,4 +78,4 @@ roleRef:
 subjects:
 - kind: ServiceAccount
   name: {{ include "chart.fullname" . }}
-  namespace: {{ include "chart.namespace" . }}
+  namespace: {{ .Release.Namespace }}

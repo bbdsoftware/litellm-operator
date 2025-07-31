@@ -1,11 +1,8 @@
 apiVersion: auth.litellm.ai/v1alpha1
 kind: TeamMemberAssociation
 metadata:
-  labels:
-    app.kubernetes.io/name: litellm-operator
-    app.kubernetes.io/managed-by: kustomize
-  name: teammemberassociation-sample
+  name: alice-ai-team
 spec:
-  role: user
-  teamAlias: my-team
-  userEmail: my-user@example.com
+  role: member
+  teamAlias: ai-team
+  userEmail: alice@example.com

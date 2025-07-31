@@ -101,19 +101,6 @@ litellm:
     # Master key value (only used if create is true)
     value: ""
 
-# Namespace configuration
-namespace:
-  # Create the namespace
-  create: true
-  # Namespace name
-  name: "litellm"
-  # Namespace labels
-  labels:
-    control-plane: controller-manager
-    app.kubernetes.io/name: litellm-operator
-  # Namespace annotations
-  annotations: {}
-
 # Service account configuration
 serviceAccount:
   # Create service account
