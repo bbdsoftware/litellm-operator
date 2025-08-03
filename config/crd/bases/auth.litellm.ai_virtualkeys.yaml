@@ -68,6 +68,50 @@ spec:
                   type: string
                 description: Config contains additional configuration settings
                 type: object
+              connectionRef:
+                description: ConnectionRef defines how to connect to the LiteLLM instance
+                properties:
+                  instanceRef:
+                    description: InstanceRef references a LiteLLM instance
+                    properties:
+                      name:
+                        description: Name is the name of the LiteLLM instance
+                        type: string
+                      namespace:
+                        description: Namespace is the namespace of the LiteLLM instance
+                          (defaults to the same namespace as the Team)
+                        type: string
+                    required:
+                    - name
+                    type: object
+                  secretRef:
+                    description: SecretRef references a secret containing connection
+                      details
+                    properties:
+                      keys:
+                        description: Keys defines the keys in the secret that contain
+                          connection details
+                        properties:
+                          masterKey:
+                            description: MasterKey is the key in the secret containing
+                              the master key
+                            type: string
+                          url:
+                            description: URL is the key in the secret containing the
+                              LiteLLM URL
+                            type: string
+                        required:
+                        - masterKey
+                        - url
+                        type: object
+                      name:
+                        description: Name is the name of the secret
+                        type: string
+                    required:
+                    - keys
+                    - name
+                    type: object
+                type: object
               duration:
                 description: Duration specifies how long the key is valid
                 type: string
@@ -155,6 +199,7 @@ spec:
                 description: UserID identifies the user associated with the key
                 type: string
             required:
+            - connectionRef
             - keyAlias
             type: object
           status:

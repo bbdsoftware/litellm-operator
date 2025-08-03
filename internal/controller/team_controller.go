@@ -32,6 +32,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	authv1alpha1 "github.com/bbdsoftware/litellm-operator/api/v1alpha1"
+	"github.com/bbdsoftware/litellm-operator/internal/controller/common"
 	"github.com/bbdsoftware/litellm-operator/internal/litellm"
 )
 
@@ -40,6 +41,7 @@ type TeamReconciler struct {
 	client.Client
 	Scheme *runtime.Scheme
 	litellm.LitellmTeam
+	connectionHandler *common.ConnectionHandler
 }
 
 // +kubebuilder:rbac:groups=auth.litellm.ai,resources=teams,verbs=get;list;watch;create;update;patch;delete
@@ -70,6 +72,32 @@ func (r *TeamReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 		// Error reading the object - requeue the request.
 		log.Error(err, "Failed to get Team")
 		return ctrl.Result{}, err
+	}
+
+	// Initialize connection handler if not already done
+	if r.connectionHandler == nil {
+		r.connectionHandler = common.NewConnectionHandler(r.Client)
+	}
+
+	// Get connection details
+	connectionDetails, err := r.connectionHandler.GetConnectionDetails(ctx, team.Spec.ConnectionRef, team.Namespace)
+	if err != nil {
+		log.Error(err, "Failed to get connection details")
+		if _, updateErr := r.updateConditions(ctx, team, metav1.Condition{
+			Type:               "Ready",
+			Status:             metav1.ConditionFalse,
+			LastTransitionTime: metav1.Now(),
+			Reason:             "ConnectionError",
+			Message:            err.Error(),
+		}); updateErr != nil {
+			log.Error(updateErr, "Failed to update conditions")
+		}
+		return ctrl.Result{}, err
+	}
+
+	// Configure the LiteLLM client with connection details only if not already set (for testing)
+	if r.LitellmTeam == nil {
+		r.LitellmTeam = common.ConfigureLitellmClient(connectionDetails)
 	}
 
 	// If the Team is being deleted, delete the team from litellm

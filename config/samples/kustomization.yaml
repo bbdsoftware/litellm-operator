@@ -4,4 +4,5 @@ resources:
 - auth_v1alpha1_user.yaml
 - auth_v1alpha1_team.yaml
 - auth_v1alpha1_teammemberassociation.yaml
+- litellm_v1alpha1_litellminstance.yaml
 # +kubebuilder:scaffold:manifestskustomizesamples

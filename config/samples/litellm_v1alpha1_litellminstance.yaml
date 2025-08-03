@@ -1,0 +1,20 @@
+apiVersion: litellm.litellm.ai/v1alpha1
+kind: LiteLLMInstance
+metadata:
+  name: litellm-example
+  namespace: litellm
+spec:
+  redisSecretRef:
+    nameRef:  cluster-example-ap
+    keys:
+      hostSecret: host
+      portSecret: 5555
+      passwordSecret: password
+  databaseSecretRef:
+    nameRef:  cluster-example-app
+    keys:
+      hostSecret: host
+      passwordSecret: password
+      usernameSecret: username
+      dbnameSecret: dbname
+  

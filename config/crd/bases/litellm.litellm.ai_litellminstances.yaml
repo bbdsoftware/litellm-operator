@@ -4,21 +4,20 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.16.1
-  name: teammemberassociations.auth.litellm.ai
+  name: litellminstances.litellm.litellm.ai
 spec:
-  group: auth.litellm.ai
+  group: litellm.litellm.ai
   names:
-    kind: TeamMemberAssociation
-    listKind: TeamMemberAssociationList
-    plural: teammemberassociations
-    singular: teammemberassociation
+    kind: LiteLLMInstance
+    listKind: LiteLLMInstanceList
+    plural: litellminstances
+    singular: litellminstance
   scope: Namespaced
   versions:
   - name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: TeamMemberAssociation is the Schema for the teammemberassociations
-          API
+        description: LiteLLMInstance is the Schema for the litellminstances API.
         properties:
           apiVersion:
             description: |-
@@ -38,85 +37,87 @@ spec:
           metadata:
             type: object
           spec:
-            description: TeamMemberAssociationSpec defines the desired state of TeamMemberAssociation
+            description: LiteLLMInstanceSpec defines the desired state of LiteLLMInstance.
             properties:
-              connectionRef:
-                description: ConnectionRef defines how to connect to the LiteLLM instance
+              databaseSecretRef:
                 properties:
-                  instanceRef:
-                    description: InstanceRef references a LiteLLM instance
+                  keys:
                     properties:
-                      name:
-                        description: Name is the name of the LiteLLM instance
+                      dbnameSecret:
                         type: string
-                      namespace:
-                        description: Namespace is the namespace of the LiteLLM instance
-                          (defaults to the same namespace as the Team)
+                      hostSecret:
+                        type: string
+                      passwordSecret:
+                        type: string
+                      usernameSecret:
                         type: string
                     required:
-                    - name
+                    - dbnameSecret
+                    - hostSecret
+                    - passwordSecret
+                    - usernameSecret
                     type: object
-                  secretRef:
-                    description: SecretRef references a secret containing connection
-                      details
-                    properties:
-                      keys:
-                        description: Keys defines the keys in the secret that contain
-                          connection details
-                        properties:
-                          masterKey:
-                            description: MasterKey is the key in the secret containing
-                              the master key
-                            type: string
-                          url:
-                            description: URL is the key in the secret containing the
-                              LiteLLM URL
-                            type: string
-                        required:
-                        - masterKey
-                        - url
-                        type: object
-                      name:
-                        description: Name is the name of the secret
-                        type: string
-                    required:
-                    - keys
-                    - name
-                    type: object
+                  nameRef:
+                    type: string
+                required:
+                - keys
+                - nameRef
                 type: object
-              maxBudgetInTeam:
-                description: MaxBudgetInTeam is the maximum budget for the user in
-                  the team
+              gateway:
+                properties:
+                  enabled:
+                    type: boolean
+                  host:
+                    type: string
+                required:
+                - enabled
+                - host
+                type: object
+              image:
+                default: ghcr.io/berriai/litellm-database:main-v1.74.9.rc.1
                 type: string
-              role:
-                description: Role is the role of the user - one of "admin" or "user"
-                enum:
-                - admin
-                - user
+              ingress:
+                properties:
+                  enabled:
+                    type: boolean
+                  host:
+                    type: string
+                required:
+                - enabled
+                - host
+                type: object
+              masterKey:
                 type: string
-              teamAlias:
-                description: TeamID is the ID of the team
-                type: string
-                x-kubernetes-validations:
-                - message: TeamAlias is immutable
-                  rule: self == oldSelf
-              userEmail:
-                description: UserEmail is the email of the user
-                type: string
-                x-kubernetes-validations:
-                - message: UserEmail is immutable
-                  rule: self == oldSelf
+              redisSecretRef:
+                properties:
+                  keys:
+                    properties:
+                      hostSecret:
+                        type: string
+                      passwordSecret:
+                        type: string
+                      portSecret:
+                        type: integer
+                    required:
+                    - hostSecret
+                    - passwordSecret
+                    - portSecret
+                    type: object
+                  nameRef:
+                    type: string
+                required:
+                - keys
+                - nameRef
+                type: object
             required:
-            - connectionRef
-            - role
-            - teamAlias
-            - userEmail
+            - image
             type: object
           status:
-            description: TeamMemberAssociationStatus defines the observed state of
-              TeamMemberAssociation
+            description: LiteLLMInstanceStatus defines the observed state of LiteLLMInstance.
             properties:
               conditions:
+                description: Conditions represent the latest available observations
+                  of a LiteLLM instance's state
                 items:
                   description: Condition contains details for one aspect of the current
                     state of this API Resource.
@@ -172,18 +173,26 @@ spec:
                   - type
                   type: object
                 type: array
-              teamAlias:
-                description: TeamAlias is the alias of the team
+              configMapCreated:
+                description: Resource creation status
+                type: boolean
+              deploymentCreated:
+                type: boolean
+              ingressCreated:
+                type: boolean
+              lastUpdated:
+                description: LastUpdated represents the last time the status was updated
+                format: date-time
                 type: string
-              teamID:
-                description: TeamID is the ID of the team
-                type: string
-              userEmail:
-                description: UserEmail is the email of the user
-                type: string
-              userID:
-                description: UserID is the ID of the user
-                type: string
+              observedGeneration:
+                description: ObservedGeneration represents the .metadata.generation
+                  that the condition was set based upon
+                format: int64
+                type: integer
+              secretCreated:
+                type: boolean
+              serviceCreated:
+                type: boolean
             type: object
         type: object
     served: true

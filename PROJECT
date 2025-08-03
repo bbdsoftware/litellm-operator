@@ -5,6 +5,7 @@
 domain: litellm.ai
 layout:
 - go.kubebuilder.io/v4
+multigroup: true
 plugins:
   manifests.sdk.operatorframework.io/v2: {}
   scorecard.sdk.operatorframework.io/v2: {}
@@ -46,5 +47,14 @@ resources:
   group: auth
   kind: TeamMemberAssociation
   path: github.com/bbdsoftware/litellm-operator/api/v1alpha1
+  version: v1alpha1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: litellm.ai
+  group: litellm
+  kind: LiteLLMInstance
+  path: github.com/bbdsoftware/litellm-operator/api/litellm/v1alpha1
   version: v1alpha1
 version: "3"

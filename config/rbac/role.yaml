@@ -5,6 +5,18 @@ metadata:
   name: manager-role
 rules:
 - apiGroups:
+  - apps
+  resources:
+  - deployments
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
   - auth.litellm.ai
   resources:
   - teammemberassociations
@@ -42,7 +54,47 @@ rules:
 - apiGroups:
   - ""
   resources:
+  - configmaps
   - secrets
+  - services
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - litellm.litellm.ai
+  resources:
+  - litellminstances
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - litellm.litellm.ai
+  resources:
+  - litellminstances/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - litellm.litellm.ai
+  resources:
+  - litellminstances/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - networking.k8s.io
+  resources:
+  - ingresses
   verbs:
   - create
   - delete

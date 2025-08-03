@@ -85,6 +85,19 @@ var _ = Describe("VirtualKey Controller", func() {
 		virtualkey := &authv1alpha1.VirtualKey{}
 
 		BeforeEach(func() {
+			By("creating the test connection secret")
+			connectionSecret := &corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-secret",
+					Namespace: "default",
+				},
+				Data: map[string][]byte{
+					"masterkey": []byte("test-master-key"),
+					"url":       []byte("http://test-url"),
+				},
+			}
+			Expect(k8sClient.Create(ctx, connectionSecret)).To(Succeed())
+
 			By("creating the custom resource for the Kind VirtualKey")
 			err := k8sClient.Get(ctx, typeNamespacedName, virtualkey)
 			if err != nil && errors.IsNotFound(err) {
@@ -95,6 +108,15 @@ var _ = Describe("VirtualKey Controller", func() {
 						Namespace: "default",
 					},
 					Spec: authv1alpha1.VirtualKeySpec{
+						ConnectionRef: authv1alpha1.ConnectionRef{
+							SecretRef: &authv1alpha1.SecretRef{
+								Name: "test-secret",
+								Keys: authv1alpha1.SecretKeys{
+									MasterKey: "masterkey",
+									URL:       "url",
+								},
+							},
+						},
 						KeyAlias: "test-key-alias",
 					},
 					Status: authv1alpha1.VirtualKeyStatus{
@@ -124,6 +146,13 @@ var _ = Describe("VirtualKey Controller", func() {
 
 			By("Cleanup the specific resource instance VirtualKey")
 			Expect(k8sClient.Delete(ctx, resource)).To(Succeed())
+
+			By("Cleanup the test connection secret")
+			connectionSecret := &corev1.Secret{}
+			err = k8sClient.Get(ctx, types.NamespacedName{Name: "test-secret", Namespace: "default"}, connectionSecret)
+			if err == nil {
+				Expect(k8sClient.Delete(ctx, connectionSecret)).To(Succeed())
+			}
 		})
 		It("should successfully reconcile the resource", func() {
 			By("Reconciling the created resource")

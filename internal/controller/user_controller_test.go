@@ -21,6 +21,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -87,6 +88,19 @@ var _ = Describe("User Controller", func() {
 		user := &authv1alpha1.User{}
 
 		BeforeEach(func() {
+			By("creating the test secret")
+			secret := &corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-secret",
+					Namespace: "default",
+				},
+				Data: map[string][]byte{
+					"masterkey": []byte("test-master-key"),
+					"url":       []byte("http://test-url"),
+				},
+			}
+			Expect(k8sClient.Create(ctx, secret)).To(Succeed())
+
 			By("creating the custom resource for the Kind User")
 			err := k8sClient.Get(ctx, typeNamespacedName, user)
 			if err != nil && errors.IsNotFound(err) {
@@ -96,6 +110,15 @@ var _ = Describe("User Controller", func() {
 						Namespace: "default",
 					},
 					Spec: authv1alpha1.UserSpec{
+						ConnectionRef: authv1alpha1.ConnectionRef{
+							SecretRef: &authv1alpha1.SecretRef{
+								Name: "test-secret",
+								Keys: authv1alpha1.SecretKeys{
+									MasterKey: "masterkey",
+									URL:       "url",
+								},
+							},
+						},
 						UserEmail: "test-user-email",
 					},
 				}
@@ -111,6 +134,13 @@ var _ = Describe("User Controller", func() {
 
 			By("Cleanup the specific resource instance User")
 			Expect(k8sClient.Delete(ctx, resource)).To(Succeed())
+
+			By("Cleanup the test secret")
+			secret := &corev1.Secret{}
+			err = k8sClient.Get(ctx, types.NamespacedName{Name: "test-secret", Namespace: "default"}, secret)
+			if err == nil {
+				Expect(k8sClient.Delete(ctx, secret)).To(Succeed())
+			}
 		})
 		It("should successfully reconcile the resource", func() {
 			By("Reconciling the created resource")

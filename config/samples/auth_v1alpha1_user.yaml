@@ -12,3 +12,7 @@ spec:
     - gpt-4o
   maxBudget: "10"
   budgetDuration: 1h
+  connectionRef:
+    instanceRef:
+      name: litellm-example
+      namespace: litellm

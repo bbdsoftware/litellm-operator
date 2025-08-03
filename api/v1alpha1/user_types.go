@@ -25,8 +25,11 @@ import (
 
 // UserSpec defines the desired state of User
 type UserSpec struct {
-	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
+
+	// ConnectionRef defines how to connect to the LiteLLM instance
+	// +kubebuilder:validation:Required
+	ConnectionRef ConnectionRef `json:"connectionRef"`
 
 	// Aliases is the model aliases for the user
 	Aliases map[string]string `json:"aliases,omitempty"`

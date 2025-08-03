@@ -28,6 +28,10 @@ type TeamMemberAssociationSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 
+	// ConnectionRef defines how to connect to the LiteLLM instance
+	// +kubebuilder:validation:Required
+	ConnectionRef ConnectionRef `json:"connectionRef"`
+
 	// MaxBudgetInTeam is the maximum budget for the user in the team
 	MaxBudgetInTeam string `json:"maxBudgetInTeam,omitempty"`
 	// TeamID is the ID of the team

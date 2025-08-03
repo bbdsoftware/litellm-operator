@@ -63,6 +63,50 @@ spec:
                   as seconds ("30s"), minutes ("30m"), hours ("30h"), days ("30d"),
                   months ("1mo").
                 type: string
+              connectionRef:
+                description: ConnectionRef defines how to connect to the LiteLLM instance
+                properties:
+                  instanceRef:
+                    description: InstanceRef references a LiteLLM instance
+                    properties:
+                      name:
+                        description: Name is the name of the LiteLLM instance
+                        type: string
+                      namespace:
+                        description: Namespace is the namespace of the LiteLLM instance
+                          (defaults to the same namespace as the Team)
+                        type: string
+                    required:
+                    - name
+                    type: object
+                  secretRef:
+                    description: SecretRef references a secret containing connection
+                      details
+                    properties:
+                      keys:
+                        description: Keys defines the keys in the secret that contain
+                          connection details
+                        properties:
+                          masterKey:
+                            description: MasterKey is the key in the secret containing
+                              the master key
+                            type: string
+                          url:
+                            description: URL is the key in the secret containing the
+                              LiteLLM URL
+                            type: string
+                        required:
+                        - masterKey
+                        - url
+                        type: object
+                      name:
+                        description: Name is the name of the secret
+                        type: string
+                    required:
+                    - keys
+                    - name
+                    type: object
+                type: object
               duration:
                 description: Duration is the duration for the key auto-created on
                   /user/new
@@ -163,6 +207,7 @@ spec:
                   "customer"
                 type: string
             required:
+            - connectionRef
             - userEmail
             type: object
           status:

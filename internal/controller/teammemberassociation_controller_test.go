@@ -21,6 +21,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -78,6 +79,19 @@ var _ = Describe("TeamMemberAssociation Controller", func() {
 		teammemberassociation := &authv1alpha1.TeamMemberAssociation{}
 
 		BeforeEach(func() {
+			By("creating the test connection secret")
+			connectionSecret := &corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-secret",
+					Namespace: "default",
+				},
+				Data: map[string][]byte{
+					"masterkey": []byte("test-master-key"),
+					"url":       []byte("http://test-url"),
+				},
+			}
+			Expect(k8sClient.Create(ctx, connectionSecret)).To(Succeed())
+
 			By("creating the custom resource for the Kind TeamMemberAssociation")
 			err := k8sClient.Get(ctx, typeNamespacedName, teammemberassociation)
 			if err != nil && errors.IsNotFound(err) {
@@ -87,6 +101,15 @@ var _ = Describe("TeamMemberAssociation Controller", func() {
 						Namespace: "default",
 					},
 					Spec: authv1alpha1.TeamMemberAssociationSpec{
+						ConnectionRef: authv1alpha1.ConnectionRef{
+							SecretRef: &authv1alpha1.SecretRef{
+								Name: "test-secret",
+								Keys: authv1alpha1.SecretKeys{
+									MasterKey: "masterkey",
+									URL:       "url",
+								},
+							},
+						},
 						TeamAlias: "test-team-alias",
 						UserEmail: "test-user-email",
 						Role:      "user",
@@ -104,6 +127,13 @@ var _ = Describe("TeamMemberAssociation Controller", func() {
 
 			By("Cleanup the specific resource instance TeamMemberAssociation")
 			Expect(k8sClient.Delete(ctx, resource)).To(Succeed())
+
+			By("Cleanup the test connection secret")
+			connectionSecret := &corev1.Secret{}
+			err = k8sClient.Get(ctx, types.NamespacedName{Name: "test-secret", Namespace: "default"}, connectionSecret)
+			if err == nil {
+				Expect(k8sClient.Delete(ctx, connectionSecret)).To(Succeed())
+			}
 		})
 		It("should successfully reconcile the resource", func() {
 			By("Reconciling the created resource")

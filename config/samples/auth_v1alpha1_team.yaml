@@ -6,6 +6,8 @@ spec:
   teamAlias: ai-team
   models:
     - gpt-4o
-  membersWithRole:
-    - userEmail: ai-team-admin@example.com
-      role: admin
+  connectionRef:
+    instanceRef:
+      name: litellm-example
+      namespace: litellm
+    

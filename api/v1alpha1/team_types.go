@@ -32,10 +32,50 @@ type TeamMemberWithRole struct {
 	Role string `json:"role,omitempty"`
 }
 
+// ConnectionRef defines how to connect to a LiteLLM instance
+type ConnectionRef struct {
+	// SecretRef references a secret containing connection details
+	SecretRef *SecretRef `json:"secretRef,omitempty"`
+
+	// InstanceRef references a LiteLLM instance
+	InstanceRef *InstanceRef `json:"instanceRef,omitempty"`
+}
+
+// SecretRef references a secret containing connection details
+type SecretRef struct {
+	// Name is the name of the secret
+	Name string `json:"name"`
+
+	// Keys defines the keys in the secret that contain connection details
+	Keys SecretKeys `json:"keys"`
+}
+
+// SecretKeys defines the keys in a secret for connection details
+type SecretKeys struct {
+	// MasterKey is the key in the secret containing the master key
+	MasterKey string `json:"masterKey"`
+
+	// URL is the key in the secret containing the LiteLLM URL
+	URL string `json:"url"`
+}
+
+// InstanceRef references a LiteLLM instance
+type InstanceRef struct {
+	// Name is the name of the LiteLLM instance
+	Name string `json:"name"`
+
+	// Namespace is the namespace of the LiteLLM instance (defaults to the same namespace as the Team)
+	Namespace string `json:"namespace,omitempty"`
+}
+
 // TeamSpec defines the desired state of Team
 type TeamSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
+
+	// ConnectionRef defines how to connect to the LiteLLM instance
+	// +kubebuilder:validation:Required
+	ConnectionRef ConnectionRef `json:"connectionRef"`
 
 	// Blocked is a flag indicating if the team is blocked or not - will stop all calls from keys with this team_id
 	Blocked bool `json:"blocked,omitempty"`

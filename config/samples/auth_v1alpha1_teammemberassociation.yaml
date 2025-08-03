@@ -3,6 +3,10 @@ kind: TeamMemberAssociation
 metadata:
   name: alice-ai-team
 spec:
-  role: member
+  connectionRef:
+    instanceRef:
+      name: litellm-example
+      namespace: litellm
+  role: admin
   teamAlias: ai-team
   userEmail: alice@example.com

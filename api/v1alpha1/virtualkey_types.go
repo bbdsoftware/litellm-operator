@@ -25,6 +25,10 @@ import (
 
 // VirtualKeySpec defines the desired state of VirtualKey
 type VirtualKeySpec struct {
+	// ConnectionRef defines how to connect to the LiteLLM instance
+	// +kubebuilder:validation:Required
+	ConnectionRef ConnectionRef `json:"connectionRef"`
+
 	// Aliases maps additional aliases for the key
 	Aliases map[string]string `json:"aliases,omitempty"`
 	// AllowedCacheControls defines allowed cache control settings

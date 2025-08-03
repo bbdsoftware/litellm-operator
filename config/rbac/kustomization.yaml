@@ -31,3 +31,10 @@ resources:
 - virtualkey_editor_role.yaml
 - virtualkey_viewer_role.yaml
 
+# For each CRD, "Admin", "Editor" and "Viewer" roles are scaffolded by
+# default, aiding admins in cluster management. Those roles are
+# not used by the litellm-operator itself. You can comment the following lines
+# if you do not want those helpers be installed with your Project.
+- litellm_litellminstance_admin_role.yaml
+- litellm_litellminstance_editor_role.yaml
+- litellm_litellminstance_viewer_role.yaml

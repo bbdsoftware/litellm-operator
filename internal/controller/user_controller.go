@@ -33,6 +33,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	authv1alpha1 "github.com/bbdsoftware/litellm-operator/api/v1alpha1"
+	"github.com/bbdsoftware/litellm-operator/internal/controller/common"
 	litellm "github.com/bbdsoftware/litellm-operator/internal/litellm"
 )
 
@@ -41,6 +42,7 @@ type UserReconciler struct {
 	client.Client
 	Scheme *runtime.Scheme
 	litellm.LitellmUser
+	connectionHandler *common.ConnectionHandler
 }
 
 // +kubebuilder:rbac:groups=auth.litellm.ai,resources=users,verbs=get;list;watch;create;update;patch;delete
@@ -59,7 +61,6 @@ type UserReconciler struct {
 func (r *UserReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := log.FromContext(ctx)
 
-	// TODO(user): your logic here
 	user := &authv1alpha1.User{}
 	if err := r.Get(ctx, req.NamespacedName, user); err != nil {
 		// If the custom resource is not found then, it usually means that it was deleted or not created
@@ -71,6 +72,32 @@ func (r *UserReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 		// Error reading the object - requeue the request.
 		log.Error(err, "Failed to get User")
 		return ctrl.Result{}, err
+	}
+
+	// Initialize connection handler if not already done
+	if r.connectionHandler == nil {
+		r.connectionHandler = common.NewConnectionHandler(r.Client)
+	}
+
+	// Get connection details
+	connectionDetails, err := r.connectionHandler.GetConnectionDetails(ctx, user.Spec.ConnectionRef, user.Namespace)
+	if err != nil {
+		log.Error(err, "Failed to get connection details")
+		if _, updateErr := r.updateConditions(ctx, user, metav1.Condition{
+			Type:               "Ready",
+			Status:             metav1.ConditionFalse,
+			LastTransitionTime: metav1.Now(),
+			Reason:             "ConnectionError",
+			Message:            err.Error(),
+		}); updateErr != nil {
+			log.Error(updateErr, "Failed to update conditions")
+		}
+		return ctrl.Result{}, err
+	}
+
+	// Configure the LiteLLM client with connection details only if not already set (for testing)
+	if r.LitellmUser == nil {
+		r.LitellmUser = common.ConfigureLitellmClient(connectionDetails)
 	}
 
 	// If the User is being deleted, delete the user from litellm
