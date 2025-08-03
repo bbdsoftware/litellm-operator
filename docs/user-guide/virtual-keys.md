@@ -8,9 +8,8 @@ Virtual Keys in the LiteLLM Operator provide:
 
 - **Budget Control** - Set spending limits per key
 - **Model Access** - Restrict which models can be used
-- **User Association** - Link keys to specific users
-- **Time Limits** - Set expiration dates
-- **Model Aliases** - Map public model names to your internal deployments
+- **Time Limits** - Set expiration dates and budget durations
+- **Key Management** - Organise keys with aliases for easy identification
 
 ## Creating Virtual Keys
 
@@ -20,12 +19,17 @@ Virtual Keys in the LiteLLM Operator provide:
 apiVersion: auth.litellm.ai/v1alpha1
 kind: VirtualKey
 metadata:
-  name: basic-key
-  namespace: default
+  name: example-service
 spec:
-  userId: "user@example.com"
-  maxBudget: 100.0
-  duration: "30d"
+  keyAlias: example-service
+  models:
+    - gpt-4o
+  maxBudget: "10"
+  budgetDuration: 1h
+  connectionRef:
+    instanceRef:
+      name: litellm-example
+      namespace: litellm
 ```
 
 ### Advanced Virtual Key
@@ -34,39 +38,30 @@ spec:
 apiVersion: auth.litellm.ai/v1alpha1
 kind: VirtualKey
 metadata:
-  name: advanced-key
-  namespace: default
+  name: research-key
 spec:
-  userId: "user@example.com"
-  maxBudget: 250.0
+  keyAlias: research-key
   models:
-    - "gpt-3.5-turbo"
-    - "gpt-4"
-    - "claude-3-sonnet"
-  aliases:
-    gpt-3.5-turbo: "azure/gpt-35-turbo-16k"
-    gpt-4: "azure/gpt-4-32k"
-    claude-3-sonnet: "bedrock/claude-3-sonnet"
-  duration: "90d"
-  tpmLimit: 10000
-  rpmLimit: 100
-  metadata:
-    team: "ai-research"
-    department: "engineering"
+    - gpt-4o
+    - claude-3-sonnet
+    - gemini-pro
+  maxBudget: "250"
+  budgetDuration: 30d
+  connectionRef:
+    instanceRef:
+      name: litellm-example
+      namespace: litellm
 ```
 
 ## Specification Reference
 
 | Field | Type | Description | Required |
 |-------|------|-------------|----------|
-| `userId` | string | User ID this key belongs to | Yes |
-| `maxBudget` | float | Maximum spend limit in dollars | Yes |
+| `keyAlias` | string | Unique identifier for the key | Yes |
 | `models` | []string | Allowed models (empty = all models) | No |
-| `aliases` | map[string]string | Model name mappings | No |
-| `duration` | string | Key lifetime (e.g., "30d", "6h") | No |
-| `tpmLimit` | int | Tokens per minute limit | No |
-| `rpmLimit` | int | Requests per minute limit | No |
-| `metadata` | map[string]string | Custom metadata | No |
+| `maxBudget` | string | Maximum spend limit in dollars | Yes |
+| `budgetDuration` | string | Budget duration (e.g., "1h", "30d") | Yes |
+| `connectionRef` | object | Reference to LiteLLM instance | Yes |
 
 ## Managing Virtual Keys
 
@@ -79,25 +74,25 @@ kubectl get virtualkeys
 ### Get Key Details
 
 ```bash
-kubectl describe virtualkey my-key
+kubectl describe virtualkey example-service
 ```
 
 ### Get Key Value
 
 ```bash
-kubectl get virtualkey my-key -o jsonpath='{.status.keyValue}'
+kubectl get virtualkey example-service -o jsonpath='{.status.keyValue}'
 ```
 
 ### Update a Virtual Key
 
 ```bash
-kubectl patch virtualkey my-key --type='merge' -p='{"spec":{"maxBudget":200.0}}'
+kubectl patch virtualkey example-service --type='merge' -p='{"spec":{"maxBudget":"200"}}'
 ```
 
 ### Delete a Virtual Key
 
 ```bash
-kubectl delete virtualkey my-key
+kubectl delete virtualkey example-service
 ```
 
 ## Usage Examples
@@ -108,14 +103,14 @@ Once created, use the virtual key to authenticate with LiteLLM:
 
 ```bash
 # Get the key value
-KEY=$(kubectl get virtualkey my-key -o jsonpath='{.status.keyValue}')
+KEY=$(kubectl get virtualkey example-service -o jsonpath='{.status.keyValue}')
 
 # Make API call
 curl -X POST "https://your-litellm-proxy.com/chat/completions" \
   -H "Authorization: Bearer $KEY" \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "gpt-3.5-turbo",
+    "model": "gpt-4o",
     "messages": [
       {"role": "user", "content": "Hello, world!"}
     ]
@@ -135,7 +130,7 @@ client = openai.OpenAI(
 
 # Make API call
 response = client.chat.completions.create(
-    model="gpt-3.5-turbo",
+    model="gpt-4o",
     messages=[{"role": "user", "content": "Hello!"}]
 )
 
@@ -147,7 +142,7 @@ print(response.choices[0].message.content)
 ### Check Key Status
 
 ```bash
-kubectl get virtualkey my-key -o yaml
+kubectl get virtualkey example-service -o yaml
 ```
 
 Look for status fields:
@@ -161,37 +156,49 @@ Look for status fields:
 **Key Not Working**
 - Check if key has expired
 - Verify budget hasn't been exceeded
-- Ensure user exists and is active
+- Ensure LiteLLM instance is running and accessible
 
 **Budget Exceeded**
-- Check current spend: `kubectl get virtualkey my-key -o jsonpath='{.status.currentSpend}'`
+- Check current spend: `kubectl get virtualkey example-service -o jsonpath='{.status.currentSpend}'`
 - Increase budget if needed
 - Monitor usage patterns
 
 **Model Access Denied**
 - Verify model is in allowed list
-- Check model aliases are correct
-- Ensure LiteLLM proxy has access to the model
+- Check that the LiteLLM instance has access to the model
+- Ensure model name matches exactly
 
 ## Best Practices
 
 ### Security
-- Rotate keys regularly
-- Use appropriate budget limits
-- Monitor key usage
+- Use descriptive key aliases for easy identification
+- Set appropriate budget limits and durations
+- Monitor key usage regularly
 - Store keys securely in your applications
 
 ### Cost Control
-- Set realistic budget limits
+- Set realistic budget limits based on expected usage
 - Use model restrictions to prevent expensive model usage
 - Monitor spend across all keys
 - Set up alerts for budget thresholds
 
-### Organization
-- Use consistent naming conventions
-- Add metadata for tracking
-- Associate keys with users/teams
-- Document key purposes
+### Organisation
+- Use consistent naming conventions for key aliases
+- Group keys by purpose or team
+- Document key purposes and usage patterns
+- Regularly review and clean up unused keys
+
+## Integration with Users and Teams
+
+Virtual Keys can be created automatically when users are created (using `autoCreateKey: true` in User resources) or created independently for service accounts and applications.
+
+### Auto-Created Keys
+
+When a User resource has `autoCreateKey: true`, a Virtual Key is automatically created with:
+- `keyAlias` matching the user's `keyAlias`
+- Same model access as the user
+- Same budget and duration settings
+- Same LiteLLM instance connection
 
 ## Next Steps
 

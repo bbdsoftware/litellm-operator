@@ -44,7 +44,12 @@ kubectl --namespace litellm apply -k config/default
 ## Resources
 
 - [Getting Started](getting-started/installation.md) - Installation and setup
-- [User Guide](user-guide/virtual-keys.md) - How to use the operator resources
+- [User Guide](user-guide/) - How to use the operator resources
+  - [LiteLLM Instances](user-guide/litellm-instances.md) - Deploy and manage LiteLLM proxy servers
+  - [Users](user-guide/users.md) - User account management and authentication
+  - [Teams](user-guide/teams.md) - Team-based access control and organisation
+  - [Team Member Associations](user-guide/team-member-associations.md) - User-team relationships
+  - [Virtual Keys](user-guide/virtual-keys.md) - API key management for LiteLLM proxy
 - [Developer Guide](developer-guide/architecture.md) - Architecture and development info
 - [Release Process](developer-guide/release-process.md) - How to create and manage releases
 - [API Reference](reference/api.md) - Complete API documentation

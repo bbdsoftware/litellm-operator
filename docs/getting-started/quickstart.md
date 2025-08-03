@@ -1,109 +1,101 @@
 # Quick Start
 
-This guide will walk you through creating your first LiteLLM resources using the operator.
+This guide will walk you through creating your first LiteLLM resources using the operator, focusing on setting up a LiteLLM Instance and creating a standalone virtual key.
 
 ## Prerequisites
 
 - LiteLLM Operator [installed](installation.md) in your cluster
-- LiteLLM service running in your cluster
+- PostgreSQL database accessible from your cluster
+- Redis instance accessible from your cluster
 - `kubectl` access to your cluster
 
-## Step 1: Create a User
+## Step 1: Create Required Secrets
 
-First, let's create a user resource:
+Before creating the LiteLLM Instance, you need to create Kubernetes secrets for database and Redis connections:
 
-!!! note 
-    Creating a user will automatically create a virtual key for the user unless `autoCreateKey` is set to `false`.
-
-```yaml
-# user-example.yaml
-apiVersion: auth.litellm.ai/v1alpha1
-kind: User
-metadata:
-  name: alice
-spec:
-  userEmail: alice@example.com
-  userAlias: alice
-  userRole: customer
-  keyAlias: alice-key
-  autoCreateKey: true
-  models:
-    - gpt-4o
-  maxBudget: "10"
-  budgetDuration: 1h
-```
-
-Apply the user:
-
-```bash
-kubectl apply -f user-example.yaml
-```
-
-Verify the user was created:
-
-```bash
-kubectl get users
-```
-
-## Step 2: Create a Team
-
-Next, create a team:
+### Database Secret
 
 ```yaml
-# team-example.yaml
-apiVersion: auth.litellm.ai/v1alpha1
-kind: Team
+# postgres-secret.yaml
+apiVersion: v1
+kind: Secret
 metadata:
-  name: ai-team
-spec:
-  teamAlias: ai-team
-  models:
-    - gpt-4o
+  name: postgres-secret
+  namespace: litellm
+type: Opaque
+data:
+  host: <base64-encoded-postgres-host>
+  password: <base64-encoded-postgres-password>
+  username: <base64-encoded-postgres-username>
+  dbname: <base64-encoded-postgres-database-name>
 ```
 
-Apply the team:
-
-```bash
-kubectl apply -f team-example.yaml
-```
-
-Verify the team was created:
-
-```bash
-kubectl get teams
-```
-
-## Step 3: Associate User with Team
-
-Create a team member association:
+### Redis Secret
 
 ```yaml
-# association-example.yaml
-apiVersion: auth.litellm.ai/v1alpha1
-kind: TeamMemberAssociation
+# redis-secret.yaml
+apiVersion: v1
+kind: Secret
 metadata:
-  name: alice-ai-team
+  name: redis-secret
+  namespace: litellm
+type: Opaque
+data:
+  host: <base64-encoded-redis-host>
+  port: <base64-encoded-redis-port>
+  password: <base64-encoded-redis-password>
+```
+
+Apply the secrets:
+
+```bash
+kubectl apply -f postgres-secret.yaml
+kubectl apply -f redis-secret.yaml
+```
+
+## Step 2: Create a LiteLLM Instance
+
+Create the core LiteLLM Instance that will manage your proxy server:
+
+```yaml
+# litellm-instance.yaml
+apiVersion: litellm.litellm.ai/v1alpha1
+kind: LiteLLMInstance
+metadata:
+  name: litellm-example
+  namespace: litellm
 spec:
-  role: member
-  teamAlias: ai-team
-  userEmail: alice@example.com
+  redisSecretRef:
+    nameRef: redis-secret
+    keys:
+      hostSecret: host
+      portSecret: 6379
+      passwordSecret: password
+  databaseSecretRef:
+    nameRef: postgres-secret
+    keys:
+      hostSecret: host
+      passwordSecret: password
+      usernameSecret: username
+      dbnameSecret: dbname
 ```
 
-Apply the association:
+Apply the LiteLLM Instance:
 
 ```bash
-kubectl apply -f association-example.yaml
+kubectl apply -f litellm-instance.yaml
 ```
 
-Verify the association was created:
+Verify the instance is created and running:
 
 ```bash
-kubectl get teammemberassociations
+kubectl get litellminstances
+kubectl describe litellminstance litellm-example
 ```
 
-## Step 4: Create a Virtual Key (optional)
+## Step 3: Create a Standalone Virtual Key
 
-Create a virtual key that is not associated with a user:
+Create a virtual key for API access to your LiteLLM proxy:
 
 ```yaml
 # virtualkey-example.yaml
@@ -117,6 +109,10 @@ spec:
     - gpt-4o
   maxBudget: "10"
   budgetDuration: 1h
+  connectionRef:
+    instanceRef:
+      name: litellm-example
+      namespace: litellm
 ```
 
 Apply the virtual key:
@@ -131,17 +127,16 @@ Verify the virtual key was created:
 kubectl get virtualkeys
 ```
 
-## Step 5: Verify Everything
+## Step 4: Verify Everything
 
 Check that all resources are created and ready:
 
 ```bash
 # Check all resources
-kubectl get users,teams,teammemberassociations,virtualkeys
+kubectl get litellminstances,virtualkeys
 
 # Get detailed status
-kubectl describe user alice
-kubectl describe team ai-team
+kubectl describe litellminstance litellm-example
 kubectl describe virtualkey example-service
 ```
 
@@ -149,16 +144,24 @@ kubectl describe virtualkey example-service
 
 Once created, the virtual key can be retrieved from the resource status and used to authenticate with the LiteLLM proxy:
 
+### Get the Virtual Key Value
+
 ```bash
 # Get the virtual key value
-kubectl get virtualkey alice-key -o jsonpath='{.status.keyValue}'
+kubectl get virtualkey example-service -o jsonpath='{.status.keyValue}'
 ```
 
-Use this key in your API calls:
+### Make API Calls
+
+Use the key in your API calls:
 
 ```bash
+# Set the key as a variable
+KEY=$(kubectl get virtualkey example-service -o jsonpath='{.status.keyValue}')
+
+# Make an API call
 curl -X POST "http://your-litellm-endpoint/chat/completions" \
-  -H "Authorization: Bearer <virtual-key-value>" \
+  -H "Authorization: Bearer $KEY" \
   -H "Content-Type: application/json" \
   -d '{
     "model": "gpt-4o",
@@ -175,20 +178,94 @@ curl -X POST "http://your-litellm-endpoint/chat/completions" \
   }'
 ```
 
+
+
+## Complete Example File
+
+You can also create all resources in a single file:
+
+```yaml
+# complete-example.yaml
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: postgres-secret
+  namespace: litellm
+type: Opaque
+data:
+  host: <base64-encoded-postgres-host>
+  password: <base64-encoded-postgres-password>
+  username: <base64-encoded-postgres-username>
+  dbname: <base64-encoded-postgres-database-name>
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: redis-secret
+  namespace: litellm
+type: Opaque
+data:
+  host: <base64-encoded-redis-host>
+  port: <base64-encoded-redis-port>
+  password: <base64-encoded-redis-password>
+---
+apiVersion: litellm.litellm.ai/v1alpha1
+kind: LiteLLMInstance
+metadata:
+  name: litellm-example
+  namespace: litellm
+spec:
+  redisSecretRef:
+    nameRef: redis-secret
+    keys:
+      hostSecret: host
+      portSecret: 6379
+      passwordSecret: password
+  databaseSecretRef:
+    nameRef: postgres-secret
+    keys:
+      hostSecret: host
+      passwordSecret: password
+      usernameSecret: username
+      dbnameSecret: dbname
+---
+apiVersion: auth.litellm.ai/v1alpha1
+kind: VirtualKey
+metadata:
+  name: example-service
+spec:
+  keyAlias: example-service
+  models:
+    - gpt-4o
+  maxBudget: "10"
+  budgetDuration: 1h
+  connectionRef:
+    instanceRef:
+      name: litellm-example
+      namespace: litellm
+```
+
+Apply everything at once:
+
+```bash
+kubectl apply -f complete-example.yaml
+```
+
 ## Next Steps
 
-- Learn more about [Virtual Keys](../user-guide/virtual-keys.md)
-- Explore [Team Management](../user-guide/teams.md)
-- Check out the [User Guide](../user-guide/users.md)
-- View [sample configurations](https://github.com/yourusername/litellm-operator/tree/main/config/samples)
+- Learn more about [LiteLLM Instances](../user-guide/litellm-instances.md)
+- Explore [Virtual Keys](../user-guide/virtual-keys.md)
+- Understand [User Management](../user-guide/users.md) and [Team Management](../user-guide/teams.md)
+- Check out [sample configurations](https://github.com/bbdsoftware/litellm-operator/tree/main/config/samples)
 
 ## Cleanup
 
-To remove the resources created in this guide:
+To remove all resources created in this guide:
 
 ```bash
 kubectl delete virtualkey example-service
-kubectl delete teammemberassociation alice-ai-team  
-kubectl delete team ai-team
-kubectl delete user alice
+kubectl delete litellminstance litellm-example
+kubectl delete secret redis-secret
+kubectl delete secret postgres-secret
 ``` 
