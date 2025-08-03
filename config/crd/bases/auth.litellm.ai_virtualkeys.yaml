@@ -14,7 +14,64 @@ spec:
     singular: virtualkey
   scope: Namespaced
   versions:
-  - name: v1alpha1
+  - additionalPrinterColumns:
+    - description: The unique key identifier
+      jsonPath: .status.keyID
+      name: Key ID
+      type: string
+    - description: The key alias
+      jsonPath: .spec.keyAlias
+      name: Key Alias
+      type: string
+    - description: The associated user ID
+      jsonPath: .spec.userID
+      name: User ID
+      type: string
+    - description: The associated team ID
+      jsonPath: .spec.teamID
+      name: Team ID
+      type: string
+    - description: Whether the key is blocked
+      jsonPath: .spec.blocked
+      name: Blocked
+      type: boolean
+    - description: Maximum budget for the key
+      jsonPath: .spec.maxBudget
+      name: Max Budget
+      type: string
+    - description: Requests per minute limit
+      jsonPath: .spec.rpmLimit
+      name: RPM Limit
+      type: integer
+    - description: Tokens per minute limit
+      jsonPath: .spec.tpmLimit
+      name: TPM Limit
+      type: integer
+    - description: Allowed models for the key
+      jsonPath: .spec.models
+      name: Models
+      type: string
+    - description: Key validity duration
+      jsonPath: .spec.duration
+      name: Duration
+      type: string
+    - description: Current key spend
+      jsonPath: .status.spend
+      name: Spend
+      type: string
+    - description: Key creation date
+      jsonPath: .status.createdAt
+      name: Created
+      type: string
+    - description: Key expiration date
+      jsonPath: .status.expires
+      name: Expires
+      type: string
+    - description: Age of the key
+      jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
     schema:
       openAPIV3Schema:
         description: VirtualKey is the Schema for the virtualkeys API

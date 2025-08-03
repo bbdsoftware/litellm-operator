@@ -164,6 +164,20 @@ type VirtualKeyStatus struct {
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
+// +kubebuilder:printcolumn:name="Key ID",type="string",JSONPath=".status.keyID",description="The unique key identifier"
+// +kubebuilder:printcolumn:name="Key Alias",type="string",JSONPath=".spec.keyAlias",description="The key alias"
+// +kubebuilder:printcolumn:name="User ID",type="string",JSONPath=".spec.userID",description="The associated user ID"
+// +kubebuilder:printcolumn:name="Team ID",type="string",JSONPath=".spec.teamID",description="The associated team ID"
+// +kubebuilder:printcolumn:name="Blocked",type="boolean",JSONPath=".spec.blocked",description="Whether the key is blocked"
+// +kubebuilder:printcolumn:name="Max Budget",type="string",JSONPath=".spec.maxBudget",description="Maximum budget for the key"
+// +kubebuilder:printcolumn:name="RPM Limit",type="integer",JSONPath=".spec.rpmLimit",description="Requests per minute limit"
+// +kubebuilder:printcolumn:name="TPM Limit",type="integer",JSONPath=".spec.tpmLimit",description="Tokens per minute limit"
+// +kubebuilder:printcolumn:name="Models",type="string",JSONPath=".spec.models",description="Allowed models for the key"
+// +kubebuilder:printcolumn:name="Duration",type="string",JSONPath=".spec.duration",description="Key validity duration"
+// +kubebuilder:printcolumn:name="Spend",type="string",JSONPath=".status.spend",description="Current key spend"
+// +kubebuilder:printcolumn:name="Created",type="string",JSONPath=".status.createdAt",description="Key creation date"
+// +kubebuilder:printcolumn:name="Expires",type="string",JSONPath=".status.expires",description="Key expiration date"
+// +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp",description="Age of the key"
 
 // VirtualKey is the Schema for the virtualkeys API
 type VirtualKey struct {

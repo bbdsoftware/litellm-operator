@@ -14,7 +14,56 @@ spec:
     singular: team
   scope: Namespaced
   versions:
-  - name: v1alpha1
+  - additionalPrinterColumns:
+    - description: The unique team identifier
+      jsonPath: .spec.teamID
+      name: Team ID
+      type: string
+    - description: The team alias
+      jsonPath: .spec.teamAlias
+      name: Team Alias
+      type: string
+    - description: The organisation ID
+      jsonPath: .spec.organizationID
+      name: Organization
+      type: string
+    - description: Whether the team is blocked
+      jsonPath: .spec.blocked
+      name: Blocked
+      type: boolean
+    - description: Maximum budget for the team
+      jsonPath: .spec.maxBudget
+      name: Max Budget
+      type: string
+    - description: Requests per minute limit
+      jsonPath: .spec.rpmLimit
+      name: RPM Limit
+      type: integer
+    - description: Tokens per minute limit
+      jsonPath: .spec.tpmLimit
+      name: TPM Limit
+      type: integer
+    - description: Allowed models for the team
+      jsonPath: .spec.models
+      name: Models
+      type: string
+    - description: Number of team members
+      jsonPath: .status.membersWithRole
+      name: Members
+      type: integer
+    - description: Current team spend
+      jsonPath: .status.spend
+      name: Spend
+      type: string
+    - description: Team creation date
+      jsonPath: .status.createdAt
+      name: Created
+      type: string
+    - description: Age of the team
+      jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
     schema:
       openAPIV3Schema:
         description: Team is the Schema for the teams API

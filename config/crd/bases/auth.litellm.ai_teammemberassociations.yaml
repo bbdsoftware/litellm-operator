@@ -14,7 +14,36 @@ spec:
     singular: teammemberassociation
   scope: Namespaced
   versions:
-  - name: v1alpha1
+  - additionalPrinterColumns:
+    - description: The team alias
+      jsonPath: .spec.teamAlias
+      name: Team Alias
+      type: string
+    - description: The team identifier
+      jsonPath: .status.teamID
+      name: Team ID
+      type: string
+    - description: The user's email address
+      jsonPath: .spec.userEmail
+      name: User Email
+      type: string
+    - description: The user identifier
+      jsonPath: .status.userID
+      name: User ID
+      type: string
+    - description: The user's role in the team
+      jsonPath: .spec.role
+      name: Role
+      type: string
+    - description: Maximum budget for user in team
+      jsonPath: .spec.maxBudgetInTeam
+      name: Max Budget
+      type: string
+    - description: Age of the team member association
+      jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
     schema:
       openAPIV3Schema:
         description: TeamMemberAssociation is the Schema for the teammemberassociations
