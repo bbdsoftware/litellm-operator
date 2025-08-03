@@ -144,7 +144,3 @@ var _ = Describe("LiteLLMInstance Controller", func() {
 		})
 	})
 })
-
-func intPtr(val int) *int {
-	return &val
-}

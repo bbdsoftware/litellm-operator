@@ -31,6 +31,11 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
+const (
+	// trueValue is the string representation of true for boolean parsing
+	trueValue = "true"
+)
+
 // OperatorConfig holds the global configuration for the operator
 type OperatorConfig struct {
 	// Default connection settings
@@ -142,13 +147,13 @@ func (c *OperatorConfig) LoadFromFlags() {
 
 	// Feature flags
 	if enableLeaderElection := os.Getenv("ENABLE_LEADER_ELECTION"); enableLeaderElection != "" {
-		c.EnableLeaderElection = strings.ToLower(enableLeaderElection) == "true"
+		c.EnableLeaderElection = strings.ToLower(enableLeaderElection) == trueValue
 	}
 	if enableMetrics := os.Getenv("ENABLE_METRICS"); enableMetrics != "" {
-		c.EnableMetrics = strings.ToLower(enableMetrics) == "true"
+		c.EnableMetrics = strings.ToLower(enableMetrics) == trueValue
 	}
 	if enableHealthChecks := os.Getenv("ENABLE_HEALTH_CHECKS"); enableHealthChecks != "" {
-		c.EnableHealthChecks = strings.ToLower(enableHealthChecks) == "true"
+		c.EnableHealthChecks = strings.ToLower(enableHealthChecks) == trueValue
 	}
 
 	// Advanced settings
@@ -260,11 +265,11 @@ func (c *OperatorConfig) parseConfigData(data string) error {
 				c.HealthProbePort = port
 			}
 		case "ENABLE_LEADER_ELECTION":
-			c.EnableLeaderElection = strings.ToLower(value) == "true"
+			c.EnableLeaderElection = strings.ToLower(value) == trueValue
 		case "ENABLE_METRICS":
-			c.EnableMetrics = strings.ToLower(value) == "true"
+			c.EnableMetrics = strings.ToLower(value) == trueValue
 		case "ENABLE_HEALTH_CHECKS":
-			c.EnableHealthChecks = strings.ToLower(value) == "true"
+			c.EnableHealthChecks = strings.ToLower(value) == trueValue
 		case "LEADER_ELECTION_ID":
 			c.LeaderElectionID = value
 		case "LEADER_ELECTION_NAMESPACE":
