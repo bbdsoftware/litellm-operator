@@ -12,7 +12,8 @@ This guide will walk you through creating your first LiteLLM resources using the
 
 First, let's create a user resource:
 
-!!! note Creating a user will automatically create a virtual key for the user unless `autoCreateKey` is set to `false`.
+!!! note 
+    Creating a user will automatically create a virtual key for the user unless `autoCreateKey` is set to `false`.
 
 ```yaml
 # user-example.yaml

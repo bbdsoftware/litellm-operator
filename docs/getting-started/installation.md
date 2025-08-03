@@ -24,7 +24,7 @@ helm install --namespace litellm litellm-operator oci://ghcr.io/bbdsoftware/char
 #### Kustomize
 
 ```bash
-kubectl apply -k config/default
+kubectl --namespace litellm apply -k config/default
 ```
 
 ### 2. Verify Installation
