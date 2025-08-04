@@ -9,14 +9,133 @@ This guide will walk you through creating your first LiteLLM resources using the
 - Redis instance accessible from your cluster
 - `kubectl` access to your cluster
 
+## Optional: Deploy PostgreSQL using CloudNativePG Operator
+
+If you don't have an existing PostgreSQL database, you can deploy one using the CloudNativePG operator. This provides a cloud-native, production-ready PostgreSQL solution for Kubernetes.
+
+### Install CloudNativePG Operator
+
+```bash
+# Install the CloudNativePG operator
+kubectl apply -f https://raw.githubusercontent.com/cloudnative-pg/cloudnative-pg/release-1.21/releases/cnpg-1.21.0.yaml
+```
+
+### Deploy PostgreSQL Cluster
+
+Create a PostgreSQL cluster for LiteLLM:
+
+```yaml
+# postgres-cluster.yaml
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: litellm-postgres
+  namespace: litellm
+spec:
+  instances: 1
+  
+  postgresql:
+    parameters:
+      max_connections: "200"
+      shared_buffers: "256MB"
+      effective_cache_size: "1GB"
+    
+  bootstrap:
+    initdb:
+      database: litellm
+      owner: litellm
+      secret:
+        name: litellm-postgres-credentials
+  
+  storage:
+    size: 10Gi
+    storageClass: "standard" # Adjust based on your cluster's storage classes
+  
+  resources:
+    requests:
+      memory: "512Mi"
+      cpu: "500m"
+    limits:
+      memory: "1Gi"
+      cpu: "1000m"
+
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: litellm-postgres-credentials
+  namespace: litellm
+type: Opaque
+data:
+  username: bGl0ZWxsbQ== # litellm
+  password: cGFzc3dvcmQxMjM= # password123 - Change this!
+```
+
+Apply the PostgreSQL cluster:
+
+```bash
+# Create the litellm namespace if it doesn't exist
+kubectl create namespace litellm
+
+# Deploy PostgreSQL
+kubectl apply -f postgres-cluster.yaml
+```
+
+Wait for the cluster to be ready:
+
+```bash
+# Check cluster status
+kubectl get cluster -n litellm
+kubectl get pods -n litellm
+
+# Wait for all pods to be ready (this may take a few minutes)
+kubectl wait --for=condition=Ready cluster/litellm-postgres -n litellm --timeout=300s
+```
+
+### Get PostgreSQL Connection Details
+
+Once the cluster is ready, get the connection details:
+
+```bash
+# Get the PostgreSQL service name
+kubectl get svc -n litellm | grep litellm-postgres
+
+# The service will be named: litellm-postgres-rw (for read-write)
+# The connection details will be:
+# Host: litellm-postgres-rw.litellm.svc.cluster.local
+# Port: 5432
+# Database: litellm
+# Username: litellm
+# Password: password123 (or whatever you set in the secret)
+```
+
 ## Step 1: Create Required Secrets
 
 Before creating the LiteLLM Instance, you need to create Kubernetes secrets for database and Redis connections:
 
 ### Database Secret
 
+If you deployed PostgreSQL using the CloudNativePG operator from the previous section, use these values:
+
 ```yaml
 # postgres-secret.yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: postgres-secret
+  namespace: litellm
+type: Opaque
+data:
+  host: bGl0ZWxsbS1wb3N0Z3Jlcy1ydy5saXRlbGxtLnN2Yy5jbHVzdGVyLmxvY2Fs # litellm-postgres-rw.litellm.svc.cluster.local
+  password: cGFzc3dvcmQxMjM= # password123 (should match what you set in postgres-cluster.yaml)
+  username: bGl0ZWxsbQ== # litellm
+  dbname: bGl0ZWxsbQ== # litellm
+```
+
+For an external PostgreSQL database, use your own connection details:
+
+```yaml
+# postgres-secret.yaml (external database example)
 apiVersion: v1
 kind: Secret
 metadata:
