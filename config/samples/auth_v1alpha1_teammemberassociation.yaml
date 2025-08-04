@@ -7,6 +7,6 @@ spec:
     instanceRef:
       name: litellm-example
       namespace: litellm
-  role: admin
+  role: user
   teamAlias: ai-team
   userEmail: alice@example.com
