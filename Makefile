@@ -98,6 +98,10 @@ help: ## Display this help.
 manifests: controller-gen ## Generate WebhookConfiguration, ClusterRole and CustomResourceDefinition objects.
 	$(CONTROLLER_GEN) rbac:roleName=manager-role crd webhook paths="./..." output:crd:artifacts:config=config/crd/bases
 
+.PHONY: manifests-and-sync
+manifests-and-sync: manifests ## Generate manifests and synchronise Helm chart.
+	./scripts/sync-helm-chart.sh --validate
+
 .PHONY: generate
 generate: controller-gen ## Generate code containing DeepCopy, DeepCopyInto, and DeepCopyObject method implementations.
 	$(CONTROLLER_GEN) object:headerFile="hack/boilerplate.go.txt" paths="./..."
@@ -207,6 +211,7 @@ KUSTOMIZE ?= $(LOCALBIN)/kustomize
 CONTROLLER_GEN ?= $(LOCALBIN)/controller-gen
 ENVTEST ?= $(LOCALBIN)/setup-envtest
 GOLANGCI_LINT = $(LOCALBIN)/golangci-lint
+CRD_REF_DOCS ?= $(LOCALBIN)/crd-ref-docs
 
 .PHONY: kustomize
 kustomize: $(KUSTOMIZE) ## Download kustomize locally if necessary.
@@ -228,11 +233,20 @@ golangci-lint: $(GOLANGCI_LINT) ## Download golangci-lint locally if necessary.
 $(GOLANGCI_LINT): $(LOCALBIN)
 	$(call go-install-tool,$(GOLANGCI_LINT),github.com/golangci/golangci-lint/cmd/golangci-lint,$(GOLANGCI_LINT_VERSION))
 
+.PHONY: crd-ref-docs
+crd-ref-docs: $(CRD_REF_DOCS) ## Download crd-ref-docs locally if necessary.
+$(CRD_REF_DOCS): $(LOCALBIN)
+	$(call go-install-tool,$(CRD_REF_DOCS),github.com/elastic/crd-ref-docs,$(CRD_REF_DOCS_VERSION))
+
+
+
 ## Tool Versions
 KUSTOMIZE_VERSION ?= v5.4.3
 CONTROLLER_TOOLS_VERSION ?= v0.16.1
 ENVTEST_VERSION ?= release-0.19
 GOLANGCI_LINT_VERSION ?= v1.59.1
+CRD_REF_DOCS_VERSION ?= v0.2.0
+
 
 # go-install-tool will 'go install' any package with custom target and name of binary, if it doesn't exist
 # $1 - target path with name of binary
@@ -327,6 +341,7 @@ catalog-push: ## Push a catalog image.
 
 ##@ Helm
 
+
 .PHONY: helm-lint
 helm-lint: ## Lint the Helm chart.
 	helm lint helm/
@@ -338,8 +353,7 @@ helm-template: ## Template the Helm chart.
 .PHONY: helm-package
 helm-package: ## Package the Helm chart.
 	helm package helm/
-	mkdir -p dist
-	mv litellm-operator-*.tgz dist/
+	mkdir -p dist && mv litellm-operator-*.tgz dist/
 
 .PHONY: helm-install
 helm-install: ## Install the Helm chart locally.
@@ -362,21 +376,41 @@ helm-docs: ## Generate Helm chart documentation.
 	helm-docs --chart-search-root=helm --output-file-template=helm/README.md.gotmpl
 
 .PHONY: helm-push-oci
-helm-push-oci: ## Push Helm chart to OCI registry.
-	helm package helm/
+helm-push-oci: helm-package ## Push Helm chart to OCI registry.
 	helm push litellm-operator-*.tgz oci://ghcr.io/bbd/charts
 
+HELMIFY ?= $(LOCALBIN)/helmify
+
+.PHONY: helmify
+helmify: $(HELMIFY) ## Download helmify locally if necessary.
+$(HELMIFY): $(LOCALBIN)
+	test -s $(LOCALBIN)/helmify || GOBIN=$(LOCALBIN) go install github.com/arttor/helmify/cmd/helmify@latest
+
+.PHONY: helm-gen
+helm-gen: manifests kustomize helmify ## Generate Helm chart from Kustomize output.
+	$(KUSTOMIZE) build config/default | $(HELMIFY) -crd-dir -cert-manager-as-subchart -add-webhook-option deploy/charts/litellm-operator
+
 ##@ Documentation
+
+.PHONY: api-docs
+api-docs: manifests crd-ref-docs ## Generate API reference documentation from Go types.
+	@echo "Generating API reference documentation..."
+	@mkdir -p docs/reference
+	$(CRD_REF_DOCS) \
+		--source-path=./api \
+		--config=docs/.crd-ref-docs.yaml \
+		--renderer=markdown \
+		--output-path=docs/reference \
+		--output-mode=group
+	@echo "API documentation generated at docs/reference/api-generated.md"
+
+.PHONY: docs
+docs: api-docs ## Generate all documentation including API reference.
+
+.PHONY: docs-serve
+docs-serve: api-docs mkdocs-serve ## Generate API docs and serve documentation locally.
 
 .PHONY: mkdocs-serve
 mkdocs-serve: ## Serve MkDocs documentation locally using Docker.
 	docker run --rm -it -p 8000:8000 -v $(PWD):/docs squidfunk/mkdocs-material:latest serve -a 0.0.0.0:8000
 
-.PHONY: mkdocs-build
-mkdocs-build: ## Build MkDocs documentation using Docker.
-	docker run --rm -v $(PWD):/docs squidfunk/mkdocs-material:latest build
-
-
-.PHONY: mkdocs-clean
-mkdocs-clean: ## Clean MkDocs build artifacts.
-	rm -rf site/

@@ -1,0 +1,134 @@
+renderer: "markdown"
+markdownConfig:
+  hideGlobalResource: false
+  frontMatter:
+    page:
+      title: "API Reference"
+      description: "LiteLLM Operator API Reference Documentation"
+      weight: 10
+    site:
+      name: "LiteLLM Operator"
+      title: "API Reference"
+      description: "Comprehensive API reference for LiteLLM Operator custom resources"
+
+processor:
+  ignoreGroupVersionKinds:
+    # Ignore Kubernetes built-in types that might appear in examples
+    - group: ""
+      version: "v1"
+      kind: "ConfigMap"
+    - group: ""
+      version: "v1"
+      kind: "Secret"
+    - group: ""
+      version: "v1"
+      kind: "Service"
+    - group: "apps"
+      version: "v1"
+      kind: "Deployment"
+    - group: "networking.k8s.io"
+      version: "v1"
+      kind: "Ingress"
+
+  ignoreFields:
+    # Common fields to ignore from status
+    - "metadata.creationTimestamp"
+    - "metadata.generation"
+    - "metadata.resourceVersion"
+    - "metadata.uid"
+    - "metadata.managedFields"
+    - "status.observedGeneration"
+
+  # Configure how to handle different field types
+  typeDisplayMode: "expand_objects"
+  includeDescription: true
+  
+  # Template configuration
+  templates:
+    properties:
+      header: |
+        ### Properties
+        
+        This section describes the properties available for configuring this resource.
+        
+    type:
+      header: |
+        ## {{.GVK.Kind}}
+        
+        {{if .Spec.Description}}{{.Spec.Description}}{{end}}
+        
+        **API Version:** `{{.GVK.Group}}/{{.GVK.Version}}`  
+        **Kind:** `{{.GVK.Kind}}`
+        
+        ### Usage Example
+        
+        ```yaml
+        apiVersion: {{.GVK.Group}}/{{.GVK.Version}}
+        kind: {{.GVK.Kind}}
+        metadata:
+          name: example-{{.GVK.Kind | lower}}
+          namespace: default
+        spec:
+          # Configure the {{.GVK.Kind}} according to your needs
+        ```
+        
+    group:
+      header: |
+        ## API Group: `{{.Group}}`
+        
+        This section documents the custom resources provided by the `{{.Group}}` API group.
+        
+        {{if eq .Group "litellm.litellm.ai"}}
+        The `litellm.litellm.ai` group contains resources for managing LiteLLM proxy instances and their configuration.
+        {{else if eq .Group "auth.litellm.ai"}}
+        The `auth.litellm.ai` group contains resources for managing authentication, authorisation, and access control within LiteLLM.
+        {{end}}
+        
+  # Configuration for different sections
+  sections:
+    # Show a table of contents
+    toc: true
+    # Include examples in the documentation
+    examples: true
+    # Show required/optional status for fields
+    required: true
+    # Include validation information
+    validation: true
+
+# Output formatting options
+format:
+  # Whether to include anchors for linking
+  anchors: true
+  # Code block language for YAML examples
+  codeBlockLanguage: "yaml"
+  # Whether to include a header with generation time
+  includeHeader: true
+  # Custom header text
+  headerText: |
+    ---
+    title: API Reference
+    description: Auto-generated API reference documentation for LiteLLM Operator
+    ---
+    
+    # API Reference
+    
+    This page contains auto-generated API reference documentation for the LiteLLM Operator.
+    
+    !!! info "Auto-generated Documentation"
+        This documentation is automatically generated from the Custom Resource Definitions (CRDs).
+        For usage examples and guides, see the [User Guide](../user-guide/index.md).
+    
+    !!! tip "Quick Navigation"
+        - [LiteLLM Resources](#api-group-litellmlitellmai) - Core LiteLLM proxy configuration
+        - [Authentication Resources](#api-group-authlitellmai) - User management and access control
+    
+# Processing options
+processing:
+  # Whether to sort resources alphabetically
+  sort: true
+  # Whether to include deprecated fields
+  includeDeprecated: false
+  # Whether to process only specific groups
+  onlyGroups:
+    - "litellm.litellm.ai"
+    - "auth.litellm.ai" 

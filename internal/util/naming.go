@@ -21,11 +21,14 @@ import "fmt"
 
 const (
 	// Resource name suffixes used for creating child resources
-	ConfigMapSuffix  = "-config"     // Suffix for ConfigMap resources
-	SecretSuffix     = "-secrets"    // Suffix for Secret resources
-	DeploymentSuffix = "-deployment" // Suffix for Deployment resources
-	ServiceSuffix    = "-service"    // Suffix for Service resources
-	IngressSuffix    = "-ingress"    // Suffix for Ingress resources
+	ConfigMapSuffix      = "-config"      // Suffix for ConfigMap resources
+	SecretSuffix         = "-secrets"     // Suffix for Secret resources
+	DeploymentSuffix     = "-deployment"  // Suffix for Deployment resources
+	ServiceSuffix        = "-service"     // Suffix for Service resources
+	IngressSuffix        = "-ingress"     // Suffix for Ingress resources
+	ServiceAccountSuffix = "-sa"          // Suffix for ServiceAccount resources
+	RoleSuffix           = "-role"        // Suffix for Role resources
+	RoleBindingSuffix    = "-rolebinding" // Suffix for RoleBinding resources
 )
 
 // GetConfigMapName generates the name for a ConfigMap resource based on the LiteLLM instance name.
@@ -51,6 +54,21 @@ func GetServiceName(llmName string) string {
 // GetIngressName generates the name for an Ingress resource based on the LiteLLM instance name.
 func GetIngressName(llmName string) string {
 	return llmName + IngressSuffix
+}
+
+// GetServiceAccountName generates the name for a ServiceAccount resource based on the LiteLLM instance name.
+func GetServiceAccountName(llmName string) string {
+	return llmName + ServiceAccountSuffix
+}
+
+// GetRoleName generates the name for a Role resource based on the LiteLLM instance name.
+func GetRoleName(llmName string) string {
+	return llmName + RoleSuffix
+}
+
+// GetRoleBindingName generates the name for a RoleBinding resource based on the LiteLLM instance name.
+func GetRoleBindingName(llmName string) string {
+	return llmName + RoleBindingSuffix
 }
 
 // GetAppLabels generates the standard application labels for LiteLLM resources.

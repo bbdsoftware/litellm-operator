@@ -10,6 +10,7 @@ nav:
     - Installation: getting-started/installation.md
     - Quick Start: getting-started/quickstart.md
   - User Guide:
+    - LiteLLM Instances: user-guide/litellm-instances.md
     - Virtual Keys: user-guide/virtual-keys.md
     - Users: user-guide/users.md
     - Teams: user-guide/teams.md
@@ -19,8 +20,9 @@ nav:
     - Development: developer-guide/development.md
     - Contributing: developer-guide/contributing.md
   - Reference:
-    - API Reference: reference/api.md
-    - CRD Specifications: reference/crds.md
+    - Auth: reference/auth.litellm.ai.md
+    - LiteLLM: reference/litellm.litellm.ai.md
+    
   - Community:
     - Code of Conduct: community/code-of-conduct.md
     - Security Policy: community/security.md
