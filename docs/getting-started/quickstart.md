@@ -69,7 +69,7 @@ spec:
     nameRef: redis-secret
     keys:
       hostSecret: host
-      portSecret: 6379
+      portSecret: port
       passwordSecret: password
   databaseSecretRef:
     nameRef: postgres-secret
@@ -148,7 +148,9 @@ Once created, the virtual key can be retrieved from the resource status and used
 
 ```bash
 # Get the virtual key value
-kubectl get virtualkey example-service -o jsonpath='{.status.keyValue}'
+KEY_SECRET=$(kubectl get virtualkey example-service -o jsonpath='{.status.keySecretRef}')
+
+KEY=$(kubectl get secret $KEY_S
 ```
 
 ### Make API Calls
@@ -157,7 +159,9 @@ Use the key in your API calls:
 
 ```bash
 # Set the key as a variable
-KEY=$(kubectl get virtualkey example-service -o jsonpath='{.status.keyValue}')
+KEY_SECRET=$(kubectl get virtualkey example-service -o jsonpath='{.status.keySecretRef}')
+
+KEY=$(kubectl get secret $KEY_SECRET -o jsonpath='{.data.key}' | base64 -d)
 
 # Make an API call
 curl -X POST "http://your-litellm-endpoint/chat/completions" \
@@ -220,7 +224,7 @@ spec:
     nameRef: redis-secret
     keys:
       hostSecret: host
-      portSecret: 6379
+      portSecret: port
       passwordSecret: password
   databaseSecretRef:
     nameRef: postgres-secret

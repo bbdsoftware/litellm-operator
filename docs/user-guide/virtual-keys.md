@@ -80,7 +80,9 @@ kubectl describe virtualkey example-service
 ### Get Key Value
 
 ```bash
-kubectl get virtualkey example-service -o jsonpath='{.status.keyValue}'
+KEY_SECRET=$(kubectl get virtualkey example-service -o jsonpath='{.status.keySecretRef}')
+
+KEY=$(kubectl get secret $KEY_S
 ```
 
 ### Update a Virtual Key
@@ -103,7 +105,9 @@ Once created, use the virtual key to authenticate with LiteLLM:
 
 ```bash
 # Get the key value
-KEY=$(kubectl get virtualkey example-service -o jsonpath='{.status.keyValue}')
+KEY_SECRET=$(kubectl get virtualkey example-service -o jsonpath='{.status.keySecretRef}')
+
+KEY=$(kubectl get secret $KEY_S
 
 # Make API call
 curl -X POST "https://your-litellm-proxy.com/chat/completions" \

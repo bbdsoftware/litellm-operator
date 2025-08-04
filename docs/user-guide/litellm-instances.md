@@ -24,13 +24,13 @@ metadata:
   namespace: litellm
 spec:
   redisSecretRef:
-    nameRef: cluster-example-ap
+    nameRef: redis-secret
     keys:
       hostSecret: host
-      portSecret: 5555
+      portSecret: port
       passwordSecret: password
   databaseSecretRef:
-    nameRef: cluster-example-app
+    nameRef: postgres-secret
     keys:
       hostSecret: host
       passwordSecret: password
@@ -53,7 +53,7 @@ spec:
     nameRef: redis-production
     keys:
       hostSecret: host
-      portSecret: 6379
+      portSecret: port
       passwordSecret: password
   databaseSecretRef:
     nameRef: postgres-production
@@ -294,7 +294,7 @@ spec:
     nameRef: redis-secret
     keys:
       hostSecret: host
-      portSecret: 6379
+      portSecret: port
       passwordSecret: password
   databaseSecretRef:
     nameRef: postgres-secret
