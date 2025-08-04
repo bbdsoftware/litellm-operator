@@ -1,0 +1,122 @@
+version: 2
+
+project_name: litellm-operator
+
+before:
+  hooks:
+    - go mod tidy
+    - go mod download
+
+builds:
+  - id: manager
+    main: ./cmd/main.go
+    binary: manager
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w
+      - -X main.version={{.Version}}
+      - -X main.commit={{.Commit}}
+      - -X main.date={{.Date}}
+      - -X main.buildType=snapshot
+    flags:
+      - -trimpath
+    ignore:
+      - goos: windows
+      - goos: darwin
+
+archives:
+  - id: binaries
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    files:
+      - README.md
+      - LICENSE
+      - CHANGELOG.md
+    ids:
+      - manager
+
+dockers:
+  - image_templates:
+      - "ghcr.io/{{ .Env.GITHUB_REPOSITORY_OWNER }}/{{ .ProjectName }}:main-amd64"
+      - "ghcr.io/{{ .Env.GITHUB_REPOSITORY_OWNER }}/{{ .ProjectName }}:main-{{ .ShortCommit }}-amd64"
+    dockerfile: Dockerfile
+    goos: linux
+    goarch: amd64
+    use: buildx
+    build_flag_templates:
+      - "--label=org.opencontainers.image.created={{.Date}}"
+      - "--label=org.opencontainers.image.title={{.ProjectName}}"
+      - "--label=org.opencontainers.image.revision={{.FullCommit}}"
+      - "--label=org.opencontainers.image.version={{.Version}}"
+      - "--label=org.opencontainers.image.source={{.GitURL}}"
+      - "--label=org.opencontainers.image.description=Snapshot build from main branch"
+    extra_files:
+      - go.mod
+      - go.sum
+      - api/
+      - internal/
+      - cmd/
+  - image_templates:
+      - "ghcr.io/{{ .Env.GITHUB_REPOSITORY_OWNER }}/{{ .ProjectName }}:main-arm64"
+      - "ghcr.io/{{ .Env.GITHUB_REPOSITORY_OWNER }}/{{ .ProjectName }}:main-{{ .ShortCommit }}-arm64"
+    dockerfile: Dockerfile
+    goos: linux
+    goarch: arm64
+    use: buildx
+    build_flag_templates:
+      - "--label=org.opencontainers.image.created={{.Date}}"
+      - "--label=org.opencontainers.image.title={{.ProjectName}}"
+      - "--label=org.opencontainers.image.revision={{.FullCommit}}"
+      - "--label=org.opencontainers.image.version={{.Version}}"
+      - "--label=org.opencontainers.image.source={{.GitURL}}"
+      - "--label=org.opencontainers.image.description=Snapshot build from main branch"
+    extra_files:
+      - go.mod
+      - go.sum
+      - api/
+      - internal/
+      - cmd/
+
+docker_manifests:
+  - name_template: "ghcr.io/{{ .Env.GITHUB_REPOSITORY_OWNER }}/{{ .ProjectName }}:main"
+    image_templates:
+      - "ghcr.io/{{ .Env.GITHUB_REPOSITORY_OWNER }}/{{ .ProjectName }}:main-amd64"
+      - "ghcr.io/{{ .Env.GITHUB_REPOSITORY_OWNER }}/{{ .ProjectName }}:main-arm64"
+  - name_template: "ghcr.io/{{ .Env.GITHUB_REPOSITORY_OWNER }}/{{ .ProjectName }}:main-{{ .ShortCommit }}"
+    image_templates:
+      - "ghcr.io/{{ .Env.GITHUB_REPOSITORY_OWNER }}/{{ .ProjectName }}:main-{{ .ShortCommit }}-amd64"
+      - "ghcr.io/{{ .Env.GITHUB_REPOSITORY_OWNER }}/{{ .ProjectName }}:main-{{ .ShortCommit }}-arm64"
+
+checksum:
+  name_template: 'checksums.txt'
+
+changelog:
+  disable: true
+
+# Disable GitHub releases for snapshots (only build and push images)
+release:
+  disable: true
+
+# Sign container images for snapshot builds
+signs:
+  - cmd: cosign
+    env:
+      - COSIGN_EXPERIMENTAL=1
+    certificate: '${artifact}.pem'
+    args:
+      - sign-blob
+      - --oidc-issuer=https://token.actions.githubusercontent.com
+      - --output-certificate=${certificate}
+      - --output-signature=${signature}
+      - ${artifact}
+      - --yes
+    artifacts: checksum
+
+# Use snapshot versioning
+snapshot:
+  name_template: "{{ incpatch .Version }}-snapshot-{{ .ShortCommit }}" 

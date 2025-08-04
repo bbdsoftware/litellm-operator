@@ -43,6 +43,9 @@ jobs:
   build-and-release:
     needs: run-tests
     runs-on: ubuntu-latest
+    outputs:
+      is_prerelease: ${{ steps.release_type.outputs.is_prerelease }}
+      release_type: ${{ steps.release_type.outputs.release_type }}
     steps:
     - uses: actions/checkout@v4
       with:
@@ -54,18 +57,35 @@ jobs:
       with:
         version: ${{ github.ref }}
 
-    - name: Display version info
+    - name: Determine release type and configuration
+      id: release_type
       run: |
         echo "✅ Valid semver tag: ${{ steps.semver.outputs.version }}"
         echo "📊 Version breakdown:"
         echo "   Major: ${{ steps.semver.outputs.major }}"
         echo "   Minor: ${{ steps.semver.outputs.minor }}"
         echo "   Patch: ${{ steps.semver.outputs.patch }}"
+        
+        # Determine release type and GoReleaser config
         if [ -n "${{ steps.semver.outputs.prerelease }}" ]; then
-          echo "   Pre-release: ${{ steps.semver.outputs.prerelease }}"
-        fi
-        if [ -n "${{ steps.semver.outputs.build }}" ]; then
-          echo "   Build: ${{ steps.semver.outputs.build }}"
+          PRERELEASE="${{ steps.semver.outputs.prerelease }}"
+          echo "   Pre-release: $PRERELEASE"
+          echo "ℹ️  Pre-release version detected: ${{ steps.semver.outputs.version }}"
+          
+          if [[ "$PRERELEASE" =~ ^(alpha|beta|rc) ]]; then
+            echo "config_file=.goreleaser.prerelease.yml" >> $GITHUB_OUTPUT
+            echo "is_prerelease=true" >> $GITHUB_OUTPUT
+            echo "release_type=prerelease" >> $GITHUB_OUTPUT
+          else
+            echo "config_file=.goreleaser.yml" >> $GITHUB_OUTPUT
+            echo "is_prerelease=true" >> $GITHUB_OUTPUT
+            echo "release_type=other_prerelease" >> $GITHUB_OUTPUT
+          fi
+        else
+          echo "config_file=.goreleaser.yml" >> $GITHUB_OUTPUT
+          echo "is_prerelease=false" >> $GITHUB_OUTPUT
+          echo "release_type=stable" >> $GITHUB_OUTPUT
+          echo "✅ Stable release version: ${{ steps.semver.outputs.version }}"
         fi
         
         # Additional validation for common issues
@@ -73,8 +93,8 @@ jobs:
           echo "⚠️  Warning: Version ${{ steps.semver.outputs.version }} starts with 0.0. This is typically used for initial development."
         fi
         
-        if [ -n "${{ steps.semver.outputs.prerelease }}" ]; then
-          echo "ℹ️  Pre-release version detected: ${{ steps.semver.outputs.version }}"
+        if [ -n "${{ steps.semver.outputs.build }}" ]; then
+          echo "   Build: ${{ steps.semver.outputs.build }}"
         fi
 
     - uses: actions/setup-go@v5
@@ -131,7 +151,7 @@ jobs:
       with:
         distribution: goreleaser
         version: '~> v2'
-        args: release --clean
+        args: release --clean --config ${{ steps.release_type.outputs.config_file }}
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         GITHUB_REPOSITORY_OWNER: ${{ github.repository_owner }}
@@ -141,7 +161,7 @@ jobs:
   update-manifests:
     needs: build-and-release
     runs-on: ubuntu-latest
-    if: ${{ !contains(github.ref, 'rc') && !contains(github.ref, 'beta') && !contains(github.ref, 'alpha') }}
+    if: ${{ needs.build-and-release.outputs.is_prerelease == 'false' }}
     permissions:
       contents: write
       pull-requests: write

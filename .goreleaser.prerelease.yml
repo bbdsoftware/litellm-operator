@@ -1,0 +1,210 @@
+version: 2
+
+project_name: litellm-operator
+
+before:
+  hooks:
+    - go mod tidy
+    - go mod download
+
+builds:
+  - id: manager
+    main: ./cmd/main.go
+    binary: manager
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w
+      - -X main.version={{.Version}}
+      - -X main.commit={{.Commit}}
+      - -X main.date={{.Date}}
+      - -X main.buildType=prerelease
+    flags:
+      - -trimpath
+    ignore:
+      - goos: windows
+      - goos: darwin
+
+archives:
+  - id: binaries
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    files:
+      - README.md
+      - LICENSE
+      - CHANGELOG.md
+    ids:
+      - manager
+  - id: source
+    name_template: "{{ .ProjectName }}_{{ .Version }}_source"
+    meta: true
+    files:
+      - .gitignore
+      - go.mod
+      - go.sum
+      - cmd/
+      - api/
+      - internal/
+      - config/
+      - helm/
+      - docs/
+      - test/
+      - Makefile
+      - Dockerfile
+      - README.md
+      - LICENSE
+      - CHANGELOG.md
+      - CONTRIBUTING.md
+      - SECURITY.md
+      - MAINTAINERS.md
+      - PROJECT
+      - ROADMAP.md
+      - .goreleaser.yml
+      - .goreleaser.prerelease.yml
+
+dockers:
+  - image_templates:
+      - "ghcr.io/{{ .Env.GITHUB_REPOSITORY_OWNER }}/{{ .ProjectName }}:{{ .Version }}-amd64"
+      - "ghcr.io/{{ .Env.GITHUB_REPOSITORY_OWNER }}/{{ .ProjectName }}:{{ .Major }}.{{ .Minor }}-prerelease-amd64"
+    dockerfile: Dockerfile
+    goos: linux
+    goarch: amd64
+    use: buildx
+    build_flag_templates:
+      - "--label=org.opencontainers.image.created={{.Date}}"
+      - "--label=org.opencontainers.image.title={{.ProjectName}}"
+      - "--label=org.opencontainers.image.revision={{.FullCommit}}"
+      - "--label=org.opencontainers.image.version={{.Version}}"
+      - "--label=org.opencontainers.image.source={{.GitURL}}"
+      - "--label=org.opencontainers.image.description=Pre-release build"
+    extra_files:
+      - go.mod
+      - go.sum
+      - api/
+      - internal/
+      - cmd/
+  - image_templates:
+      - "ghcr.io/{{ .Env.GITHUB_REPOSITORY_OWNER }}/{{ .ProjectName }}:{{ .Version }}-arm64"
+      - "ghcr.io/{{ .Env.GITHUB_REPOSITORY_OWNER }}/{{ .ProjectName }}:{{ .Major }}.{{ .Minor }}-prerelease-arm64"
+    dockerfile: Dockerfile
+    goos: linux
+    goarch: arm64
+    use: buildx
+    build_flag_templates:
+      - "--label=org.opencontainers.image.created={{.Date}}"
+      - "--label=org.opencontainers.image.title={{.ProjectName}}"
+      - "--label=org.opencontainers.image.revision={{.FullCommit}}"
+      - "--label=org.opencontainers.image.version={{.Version}}"
+      - "--label=org.opencontainers.image.source={{.GitURL}}"
+      - "--label=org.opencontainers.image.description=Pre-release build"
+    extra_files:
+      - go.mod
+      - go.sum
+      - api/
+      - internal/
+      - cmd/
+
+docker_manifests:
+  - name_template: "ghcr.io/{{ .Env.GITHUB_REPOSITORY_OWNER }}/{{ .ProjectName }}:{{ .Version }}"
+    image_templates:
+      - "ghcr.io/{{ .Env.GITHUB_REPOSITORY_OWNER }}/{{ .ProjectName }}:{{ .Version }}-amd64"
+      - "ghcr.io/{{ .Env.GITHUB_REPOSITORY_OWNER }}/{{ .ProjectName }}:{{ .Version }}-arm64"
+  - name_template: "ghcr.io/{{ .Env.GITHUB_REPOSITORY_OWNER }}/{{ .ProjectName }}:{{ .Major }}.{{ .Minor }}-prerelease"
+    image_templates:
+      - "ghcr.io/{{ .Env.GITHUB_REPOSITORY_OWNER }}/{{ .ProjectName }}:{{ .Major }}.{{ .Minor }}-prerelease-amd64"
+      - "ghcr.io/{{ .Env.GITHUB_REPOSITORY_OWNER }}/{{ .ProjectName }}:{{ .Major }}.{{ .Minor }}-prerelease-arm64"
+
+checksum:
+  name_template: 'checksums.txt'
+
+changelog:
+  sort: asc
+  use: github
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore:"
+      - "^ci:"
+  groups:
+    - title: Features
+      regexp: '^.*?feat(\([[:word:]]+\))??!?:.+$'
+      order: 0
+    - title: 'Bug fixes'
+      regexp: '^.*?fix(\([[:word:]]+\))??!?:.+$'
+      order: 1
+    - title: 'Performance improvements'
+      regexp: '^.*?perf(\([[:word:]]+\))??!?:.+$'
+      order: 2
+    - title: Others
+      order: 999
+
+release:
+  github:
+    owner: "{{ .Env.GITHUB_REPOSITORY_OWNER }}"
+    name: "{{ .ProjectName }}"
+  draft: false
+  prerelease: true
+  name_template: "{{.ProjectName}} {{.Version}}"
+  header: |
+    ## 🧪 {{.ProjectName}} {{.Version}} (Pre-release)
+    
+    **⚠️ This is a pre-release version and may contain unstable features.**
+    
+    This pre-release version is intended for testing and feedback collection.
+    Please report any issues you encounter to help us improve the final release.
+    
+    ### Container Images
+    
+    - `ghcr.io/{{ .Env.GITHUB_REPOSITORY_OWNER }}/{{ .ProjectName }}:{{ .Version }}`
+    - `ghcr.io/{{ .Env.GITHUB_REPOSITORY_OWNER }}/{{ .ProjectName }}:{{ .Major }}.{{ .Minor }}-prerelease`
+    
+    ### Installation
+    
+    #### Using Helm (Recommended)
+    
+    ```bash
+    # Authenticate with GitHub Container Registry
+    helm registry login ghcr.io -u YOUR_GITHUB_USERNAME -p YOUR_GITHUB_TOKEN
+    
+    # Install the pre-release operator from OCI registry
+    helm install litellm-operator oci://ghcr.io/{{ .Env.GITHUB_REPOSITORY_OWNER }}/charts/{{ .ProjectName }} --version {{ .Version }}
+    ```
+    
+    #### Using kubectl
+    
+    ```bash
+    # Install CRDs using kustomize
+    kubectl apply -k https://github.com/{{ .Env.GITHUB_REPOSITORY_OWNER }}/{{ .ProjectName }}/config/crd?ref={{ .Tag }}
+    
+    # Install the operator using kustomize  
+    kubectl apply -k https://github.com/{{ .Env.GITHUB_REPOSITORY_OWNER }}/{{ .ProjectName }}/config/default?ref={{ .Tag }}
+    ```
+    
+    ### What's New in this Pre-release:
+  footer: |
+    ---
+    📋 **Testing**: Please test this pre-release in non-production environments  
+    🐛 **Feedback**: Report issues at https://github.com/{{ .Env.GITHUB_REPOSITORY_OWNER }}/{{ .ProjectName }}/issues  
+    📖 **Documentation**: https://{{ .Env.GITHUB_REPOSITORY_OWNER }}.github.io/{{ .ProjectName }}
+    
+    For stable releases, please see the [releases page](https://github.com/{{ .Env.GITHUB_REPOSITORY_OWNER }}/{{ .ProjectName }}/releases?q=tag%3Av).
+
+# # Sign container images for pre-releases
+# signs:
+#   - cmd: cosign
+#     env:
+#       - COSIGN_EXPERIMENTAL=1
+#     certificate: '${artifact}.pem'
+#     args:
+#       - sign-blob
+#       - --oidc-issuer=https://token.actions.githubusercontent.com
+#       - --output-certificate=${certificate}
+#       - --output-signature=${signature}
+#       - ${artifact}
+#       - --yes
+#     artifacts: checksum 

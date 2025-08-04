@@ -14,6 +14,9 @@ jobs:
     name: Deploy docs
     runs-on: ubuntu-latest
     steps:
+      - name: Generate API docs
+        run: |
+          make api-docs
       - name: Checkout main
         uses: actions/checkout@v4
 
@@ -21,10 +24,5 @@ jobs:
         uses: mhausenblas/mkdocs-deploy-gh-pages@master
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # Uncomment and set if you have a custom domain
-          # CUSTOM_DOMAIN: yourdomain.com
-          # Uncomment if your mkdocs.yml is not in the root directory
           CONFIG_FILE: mkdocs.yml
-          # Uncomment if you need extra packages for dependencies
-          # EXTRA_PACKAGES: build-base
           REQUIREMENTS: requirements.txt 
