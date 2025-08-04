@@ -2,8 +2,8 @@ apiVersion: v2
 name: litellm-operator
 description: A Helm chart for the LiteLLM Operator - A Kubernetes operator for managing LiteLLM resources
 type: application
-version: 0.0.2
-appVersion: "0.0.2"
+version: 0.1.0-prerelease
+appVersion: "0.1.0-prerelease"
 keywords:
   - kubernetes
   - operator
