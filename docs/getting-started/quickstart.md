@@ -269,7 +269,7 @@ Once created, the virtual key can be retrieved from the resource status and used
 # Get the virtual key value
 KEY_SECRET=$(kubectl get virtualkey example-service -o jsonpath='{.status.keySecretRef}')
 
-KEY=$(kubectl get secret $KEY_S
+KEY=$(kubectl get secret $KEY_SECRET -o jsonpath='{.data.key}' | base64 -d)
 ```
 
 ### Make API Calls
