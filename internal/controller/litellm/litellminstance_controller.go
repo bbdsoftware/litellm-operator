@@ -152,7 +152,7 @@ func (r *LiteLLMInstanceReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	}
 
 	log.Info("Successfully reconciled LiteLLMInstance", "name", llm.Name, "namespace", llm.Namespace)
-	return RequeueAfter(300 * time.Second)
+	return DoNotRequeue()
 }
 
 // handleDeletion removes the finalizer to allow the resource to be fully deleted.
@@ -570,6 +570,12 @@ func (r *LiteLLMInstanceReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&litellmv1alpha1.LiteLLMInstance{}).
 		Named("litellm-litellminstance").
+		Owns(&corev1.ConfigMap{}).
+		Owns(&corev1.Secret{}).
+		Owns(&appsv1.Deployment{}).
+		Owns(&corev1.Service{}).
+		Owns(&networkingv1.Ingress{}).
+		Owns(&corev1.ServiceAccount{}).
 		Complete(r)
 }
 
