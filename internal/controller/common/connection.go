@@ -136,8 +136,7 @@ func (h *ConnectionHandler) getConnectionDetailsFromInstance(ctx context.Context
 	}
 
 	// Construct the URL
-	//url := fmt.Sprintf("http://%s:%d", service.Name, service.Spec.Ports[0].Port)
-	url := "http://localhost:4000"
+	url := fmt.Sprintf("http://%s:%d", service.Name, service.Spec.Ports[0].Port)
 	return &ConnectionDetails{
 		MasterKey: strings.TrimSpace(string(masterKeyBytes)),
 		URL:       strings.TrimSpace(url),

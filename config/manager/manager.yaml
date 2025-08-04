@@ -63,14 +63,6 @@ spec:
         args:
           - --leader-elect
           - --health-probe-bind-address=:8081
-        env:
-        - name: LITELLM_BASE_URL
-          value: http://litellm:4000 # the internal litellm kube service endpoint
-        - name: LITELLM_MASTER_KEY
-          valueFrom:
-            secretKeyRef:
-              name: litellm-masterkey
-              key: masterkey
         image: controller:latest
         name: manager
         securityContext:

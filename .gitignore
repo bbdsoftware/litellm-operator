@@ -27,3 +27,6 @@ go.work
 *~
 
 dist/
+.cursor/
+cmd/__debug_bin*
+temp/
