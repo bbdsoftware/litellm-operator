@@ -54,8 +54,8 @@ const (
 	ConfigPath    = "/etc/litellm/proxy_server_config.yaml" // Path to config file in container
 
 	// Health check paths for container probes
-	LivenessPath  = "/health/liveliness" // Path for liveness probe
-	ReadinessPath = "/health/readiness"  // Path for readiness probe
+	LivenessPath  = "/health/liveness"  // Path for liveness probe
+	ReadinessPath = "/health/readiness" // Path for readiness probe
 )
 
 // Helper functions for descriptive return values
@@ -163,9 +163,16 @@ func (r *LiteLLMInstanceReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	}
 
 	// Update status to reflect successful reconciliation
-	if err := r.updateStatus(ctx, llm, deployment, service); err != nil {
+	allReady, err := r.updateStatus(ctx, llm, deployment, service)
+	if err != nil {
 		log.Error(err, "Failed to update LiteLLMInstance status")
 		return RequeueWithError(err)
+	}
+
+	// Check if all resources are ready, if not, requeue after a short delay
+	if !allReady {
+		log.Info("Resources not ready yet, requeuing", "name", llm.Name)
+		return RequeueAfter(10 * time.Second)
 	}
 
 	log.Info("Successfully reconciled LiteLLMInstance", "name", llm.Name, "namespace", llm.Namespace)
@@ -278,7 +285,8 @@ func buildSecretData(masterKey string, existingSecret *corev1.Secret) map[string
 
 // updateStatus updates the LiteLLM instance status with current information.
 // It updates observed generation, last updated timestamp, resource creation status, and conditions.
-func (r *LiteLLMInstanceReconciler) updateStatus(ctx context.Context, llm *litellmv1alpha1.LiteLLMInstance, deployment *appsv1.Deployment, service *corev1.Service) error {
+// Returns a combined status indicating whether all resources are ready.
+func (r *LiteLLMInstanceReconciler) updateStatus(ctx context.Context, llm *litellmv1alpha1.LiteLLMInstance, deployment *appsv1.Deployment, service *corev1.Service) (bool, error) {
 	// Update observed generation
 	llm.Status.ObservedGeneration = llm.Generation
 
@@ -293,10 +301,51 @@ func (r *LiteLLMInstanceReconciler) updateStatus(ctx context.Context, llm *litel
 	llm.Status.ServiceCreated = service != nil
 	llm.Status.IngressCreated = llm.Spec.Ingress.Enabled
 
-	// Update conditions
-	r.updateConditions(llm, deployment, service)
+	// Fetch the latest deployment status to ensure we have current information
+	var latestDeployment *appsv1.Deployment
+	if deployment != nil {
+		latestDeployment = &appsv1.Deployment{}
+		if err := r.Get(ctx, client.ObjectKey{Name: deployment.Name, Namespace: deployment.Namespace}, latestDeployment); err != nil {
+			// If we can't fetch the latest deployment, use the one we have
+			latestDeployment = deployment
+		}
+	}
 
-	return r.Status().Update(ctx, llm)
+	// Update conditions with the latest deployment status
+	r.updateConditions(llm, latestDeployment, service)
+
+	if err := r.Status().Update(ctx, llm); err != nil {
+		return false, err
+	}
+
+	// Determine if all resources are ready
+	allReady := true
+
+	// Check deployment readiness
+	if latestDeployment != nil {
+		expectedReplicas := int32(1)
+		if latestDeployment.Spec.Replicas != nil {
+			expectedReplicas = *latestDeployment.Spec.Replicas
+		}
+
+		if latestDeployment.Status.ReadyReplicas < expectedReplicas {
+			allReady = false
+		}
+	} else {
+		allReady = false
+	}
+
+	// Check service readiness
+	if service == nil || service.Spec.ClusterIP == "" {
+		allReady = false
+	}
+
+	// Check ingress readiness (if enabled)
+	if llm.Spec.Ingress.Enabled && !llm.Status.IngressCreated {
+		allReady = false
+	}
+
+	return allReady, nil
 }
 
 // updateConditions updates the conditions for the LiteLLM instance.
@@ -347,12 +396,30 @@ func (r *LiteLLMInstanceReconciler) updateConditions(llm *litellmv1alpha1.LiteLL
 	}
 
 	// Check if deployment is actually ready
-	if deployment != nil && deployment.Status.ReadyReplicas > 0 {
-		deploymentReady.Status = metav1.ConditionTrue
-		deploymentReady.Message = fmt.Sprintf("Deployment has %d ready replicas", deployment.Status.ReadyReplicas)
+	if deployment != nil {
+		expectedReplicas := int32(1) // Default to 1 replica as per createDeployment
+		if deployment.Spec.Replicas != nil {
+			expectedReplicas = *deployment.Spec.Replicas
+		}
+
+		if deployment.Status.ReadyReplicas >= expectedReplicas &&
+			deployment.Status.AvailableReplicas >= expectedReplicas &&
+			deployment.Status.UpdatedReplicas >= expectedReplicas {
+			deploymentReady.Status = metav1.ConditionTrue
+			deploymentReady.Reason = "DeploymentReady"
+			deploymentReady.Message = fmt.Sprintf("Deployment has %d/%d ready replicas", deployment.Status.ReadyReplicas, expectedReplicas)
+		} else {
+			deploymentReady.Status = metav1.ConditionFalse
+			deploymentReady.Reason = "DeploymentNotReady"
+			deploymentReady.Message = fmt.Sprintf("Deployment has %d/%d ready replicas, %d/%d available, %d/%d updated",
+				deployment.Status.ReadyReplicas, expectedReplicas,
+				deployment.Status.AvailableReplicas, expectedReplicas,
+				deployment.Status.UpdatedReplicas, expectedReplicas)
+		}
 	} else {
 		deploymentReady.Status = metav1.ConditionFalse
-		deploymentReady.Message = "Deployment is not ready"
+		deploymentReady.Reason = "DeploymentNotReady"
+		deploymentReady.Message = "Deployment object is nil"
 	}
 
 	// Service ready condition
@@ -771,8 +838,10 @@ func buildLivenessProbe() *corev1.Probe {
 				Port: util.FromInt(ContainerPort),
 			},
 		},
-		InitialDelaySeconds: 30,
-		PeriodSeconds:       10,
+		InitialDelaySeconds: 60,
+		PeriodSeconds:       30,
+		TimeoutSeconds:      10,
+		FailureThreshold:    3,
 	}
 }
 
@@ -786,8 +855,10 @@ func buildReadinessProbe() *corev1.Probe {
 				Port: util.FromInt(ContainerPort),
 			},
 		},
-		InitialDelaySeconds: 5,
-		PeriodSeconds:       5,
+		InitialDelaySeconds: 10,
+		PeriodSeconds:       10,
+		TimeoutSeconds:      5,
+		FailureThreshold:    3,
 	}
 }
 
@@ -801,7 +872,9 @@ func buildStartupProbe() *corev1.Probe {
 				Port: util.FromInt(ContainerPort),
 			},
 		},
-		InitialDelaySeconds: 10,
-		PeriodSeconds:       5,
+		InitialDelaySeconds: 30,
+		PeriodSeconds:       10,
+		TimeoutSeconds:      5,
+		FailureThreshold:    30,
 	}
 }
