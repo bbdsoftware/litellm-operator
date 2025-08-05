@@ -120,7 +120,7 @@ jobs:
         password: ${{ secrets.GITHUB_TOKEN }}
 
     - name: Install Helm
-      uses: azure/setup-helm@v3
+      uses: azure/setup-helm@v4
       with:
         version: v3.12.0
 
