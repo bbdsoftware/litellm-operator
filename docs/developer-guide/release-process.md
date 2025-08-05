@@ -6,10 +6,12 @@ This document describes the release process for the LiteLLM Operator, including 
 
 The LiteLLM Operator uses a fully automated release process that:
 
-1. **Builds and publishes** the operator image and artifacts
-2. **Creates a GitHub release** with release notes
-3. **Automatically updates** manifests and Helm charts
-4. **Creates a pull request** for review and merging
+1. **Runs tests and validation** to ensure code quality
+2. **Builds and publishes** the operator image and artifacts using GoReleaser
+3. **Creates a GitHub release** with release notes and assets
+4. **Automatically updates** manifests and Helm charts (for stable releases only)
+5. **Creates and auto-merges a pull request** for the updates
+6. **Publishes Helm charts** to the OCI registry
 
 ## Prerequisites
 
@@ -45,16 +47,20 @@ git push origin v1.0.0
 - `v1.0.1` - Patch release  
 - `v1.1.0` - Minor release
 - `v1.0.0-rc.1` - Release candidate (will skip manifest updates)
+- `v1.0.0-alpha.1` - Alpha release (will skip manifest updates)
+- `v1.0.0-beta.1` - Beta release (will skip manifest updates)
 
 ### Step 3: Monitor the Release Workflow
 
 The release workflow will automatically:
 
-1. **Validate the semantic version** tag
-2. **Build and publish** the operator image to GitHub Container Registry
-3. **Create a GitHub release** with assets
-4. **Update manifests and Helm charts** (for stable releases only)
-5. **Create a pull request** with the updates
+1. **Run tests and linting** to validate code quality
+2. **Validate the semantic version** tag
+3. **Build and publish** the operator image to GitHub Container Registry
+4. **Create a GitHub release** with assets and release notes
+5. **Update manifests and Helm charts** (for stable releases only)
+6. **Create and auto-merge a pull request** with the updates
+7. **Publish Helm chart** to OCI registry
 
 ## Release Workflow Details
 
@@ -62,80 +68,117 @@ The release workflow will automatically:
 
 The release workflow creates and publishes:
 
-- **Docker Image**: `ghcr.io/bbdsoftware/litellm-operator:{version}`
-- **Helm Chart**: Updated with new version and appVersion
-- **CRDs**: Generated and included in the release
-- **Binary Assets**: For multiple platforms (Linux, macOS, Windows)
+- **Docker Images**: 
+  - `ghcr.io/bbdsoftware/litellm-operator:{version}` (multi-arch: amd64, arm64)
+  - `ghcr.io/bbdsoftware/litellm-operator:latest` (multi-arch: amd64, arm64)
+  - For pre-releases: additional `{major}.{minor}-prerelease` tags
+- **Binary Assets**: For Linux amd64 and arm64 platforms
+- **Source Archives**: Complete source code archives
+- **Helm Chart**: Published to `ghcr.io/bbdsoftware/charts/litellm-operator`
 
 ### Automated Manifest Updates
 
 For stable releases (not pre-releases), the workflow automatically updates:
 
 1. **Operator Image Tag**: `config/manager/kustomization.yaml`
-2. **Helm Chart Version**: `helm/Chart.yaml`
-3. **Helm Chart AppVersion**: `helm/Chart.yaml`
-4. **Default Image Tag**: `helm/values.yaml`
+2. **Helm Chart Version**: `deploy/charts/litellm-operator/Chart.yaml`
+3. **Helm Chart AppVersion**: `deploy/charts/litellm-operator/Chart.yaml`
+4. **Default Image Tag**: `deploy/charts/litellm-operator/values.yaml`
 
-### Pull Request Creation
+### Pull Request Creation and Auto-Merge
 
 The workflow creates a pull request with:
 
 - **Branch**: `update-manifests-{version}`
 - **Title**: `chore: update operator image and helm chart to {version}`
 - **Description**: Detailed list of changes made
-- **Labels**: `automated`, `release`
-
-## Handling the Release Pull Request
-
-### Step 1: Review the Changes
-
-When the release workflow completes, you'll see a new pull request. Review the changes to ensure:
-
-- [ ] Image tags are correctly updated
-- [ ] Helm chart versions are appropriate
-- [ ] No unintended changes were made
-
-### Step 2: Merge the Pull Request
-
-Once reviewed, merge the pull request:
-
-```bash
-# Option 1: Merge via GitHub UI
-# Click "Merge pull request" in the GitHub interface
-
-# Option 2: Merge via command line
-git fetch origin
-git checkout main
-git merge origin/update-manifests-v1.0.0
-git push origin main
-```
-
-### Step 3: Verify the Release
-
-After merging, verify the release:
-
-1. **Check the GitHub release** page for all assets
-2. **Verify the Docker image** is available in the registry
-3. **Test the Helm chart** installation
-4. **Confirm manifests** are updated in main branch
+- **Auto-approval**: The PR is automatically approved
+- **Auto-merge**: The PR is automatically merged using squash strategy
 
 ## Release Types
 
 ### Stable Releases
 
 Stable releases (e.g., `v1.0.0`) trigger the full workflow including:
+- ✅ Tests and validation
 - ✅ Image building and publishing
 - ✅ GitHub release creation
 - ✅ Manifest updates
-- ✅ Pull request creation
+- ✅ Pull request creation and auto-merge
+- ✅ Helm chart publication
 
 ### Pre-releases
 
 Pre-releases (e.g., `v1.0.0-rc.1`, `v1.0.0-beta.1`, `v1.0.0-alpha.1`) skip manifest updates:
+- ✅ Tests and validation
 - ✅ Image building and publishing
-- ✅ GitHub release creation
+- ✅ GitHub release creation (marked as pre-release)
 - ❌ Manifest updates (skipped)
 - ❌ Pull request creation (skipped)
+- ✅ Helm chart publication
+
+## Release Workflow Jobs
+
+### 1. Run Tests (`run-tests`)
+- Runs unit tests with `make test`
+- Performs linting with golangci-lint
+- Ensures code quality before release
+
+### 2. Build and Release (`build-and-release`)
+- Validates semantic versioning
+- Determines release type (stable vs pre-release)
+- Builds multi-architecture Docker images
+- Generates CRDs and combines them
+- Runs GoReleaser to create GitHub release
+- Outputs release type information for downstream jobs
+
+### 3. Update Manifests (`update-manifests`)
+- **Only runs for stable releases**
+- Runs `make helm-gen` to regenerate Helm chart from Kustomize
+- Updates operator image tags in kustomization files
+- Updates Helm chart version and appVersion
+- Updates default image tag in values.yaml
+- Creates and auto-merges pull request
+
+### 4. Helm Publish (`helm-publish`)
+- Lints and validates Helm chart
+- Publishes Helm chart to OCI registry (`ghcr.io/bbdsoftware/charts/`)
+- Runs on main branch pushes and manual triggers
+
+## GoReleaser Configuration
+
+The project uses different GoReleaser configurations:
+
+- **`.goreleaser.yml`**: For stable releases
+- **`.goreleaser.prerelease.yml`**: For pre-releases (alpha, beta, rc)
+
+Key differences in pre-release configuration:
+- Additional pre-release specific Docker tags
+- Pre-release flag set to true
+- Different release notes template
+- Additional build labels
+
+## Installation Instructions
+
+### Using Helm (Recommended)
+
+```bash
+# Authenticate with GitHub Container Registry
+helm registry login ghcr.io -u YOUR_GITHUB_USERNAME -p YOUR_GITHUB_TOKEN
+
+# Install the operator from OCI registry
+helm install litellm-operator oci://ghcr.io/bbdsoftware/charts/litellm-operator --version v1.0.0
+```
+
+### Using kubectl
+
+```bash
+# Install CRDs using kustomize
+kubectl apply -k https://github.com/bbdsoftware/litellm-operator/config/crd
+
+# Install the operator using kustomize
+kubectl apply -k https://github.com/bbdsoftware/litellm-operator/config/default
+```
 
 ## Troubleshooting
 
@@ -149,6 +192,7 @@ Pre-releases (e.g., `v1.0.0-rc.1`, `v1.0.0-beta.1`, `v1.0.0-alpha.1`) skip manif
 1. Check that the tag follows semantic versioning: `v1.0.0`
 2. Ensure the tag doesn't already exist
 3. Verify GitHub Actions are enabled for the repository
+4. Check that the tag doesn't match path-ignore patterns (docs, README, etc.)
 
 #### Pull Request Not Created
 
@@ -157,7 +201,16 @@ Pre-releases (e.g., `v1.0.0-rc.1`, `v1.0.0-beta.1`, `v1.0.0-alpha.1`) skip manif
 **Solutions**:
 1. Check if it's a pre-release (rc, beta, alpha tags skip PR creation)
 2. Verify the workflow has proper permissions
-3. Check workflow logs for errors
+3. Check workflow logs for errors in the update-manifests job
+
+#### Helm Chart Not Published
+
+**Problem**: Release completes but Helm chart is not available in OCI registry.
+
+**Solutions**:
+1. Check the helm-publish workflow logs
+2. Verify GitHub Container Registry permissions
+3. Ensure the chart version is correctly extracted
 
 #### Manifest Updates Fail
 
@@ -167,6 +220,7 @@ Pre-releases (e.g., `v1.0.0-rc.1`, `v1.0.0-beta.1`, `v1.0.0-alpha.1`) skip manif
 1. Review the workflow logs for sed/kustomize errors
 2. Check that the version extraction is working correctly
 3. Verify the file paths in the workflow
+4. Check that `make helm-gen` completed successfully
 
 ### Rollback Process
 
@@ -196,6 +250,7 @@ If a release needs to be rolled back:
 - Increment patch for bug fixes
 - Increment minor for new features
 - Increment major for breaking changes
+- Use pre-release suffixes for testing: `-alpha.1`, `-beta.1`, `-rc.1`
 
 ### Release Notes
 
@@ -203,6 +258,7 @@ If a release needs to be rolled back:
 - Include all significant changes
 - Reference issues and pull requests
 - Provide migration notes for breaking changes
+- GoReleaser will automatically generate release notes from commits
 
 ### Testing
 
@@ -210,12 +266,14 @@ If a release needs to be rolled back:
 - Verify the operator works with the new image
 - Test Helm chart installation and upgrades
 - Validate CRD compatibility
+- Test pre-release versions before stable releases
 
 ### Communication
 
 - Announce releases in your team communication channels
 - Update documentation if needed
 - Notify users of breaking changes well in advance
+- Use pre-releases for major changes to gather feedback
 
 ## Configuration
 
@@ -223,10 +281,17 @@ If a release needs to be rolled back:
 
 The release workflow is configured in `.github/workflows/release.yml` and includes:
 
-- **GoReleaser configuration**: `.goreleaser.yml`
-- **Docker build settings**: Multi-platform builds
-- **Helm chart updates**: Automatic version bumping
-- **Pull request creation**: Automated manifest updates
+- **GoReleaser configuration**: `.goreleaser.yml` and `.goreleaser.prerelease.yml`
+- **Docker build settings**: Multi-platform builds (amd64, arm64)
+- **Helm chart updates**: Automatic version bumping and regeneration
+- **Pull request creation**: Automated manifest updates with auto-merge
+
+### Helm Chart Generation
+
+The Helm chart is automatically generated from Kustomize output using:
+- `make helm-gen`: Regenerates the Helm chart from Kustomize manifests
+- `helmify`: Converts Kustomize output to Helm chart format
+- Chart is published to OCI registry automatically
 
 ### Customization
 
@@ -234,8 +299,9 @@ To customize the release process:
 
 1. **Modify `.goreleaser.yml`** for build configuration
 2. **Update the workflow** for different release steps
-3. **Adjust Helm chart settings** in `helm/Chart.yaml`
+3. **Adjust Helm chart settings** in `deploy/charts/litellm-operator/Chart.yaml`
 4. **Modify manifest paths** in the workflow
+5. **Update Helm chart generation** in the Makefile
 
 ## Support
 
@@ -244,4 +310,5 @@ If you encounter issues with the release process:
 1. Check the [GitHub Actions logs](https://github.com/bbdsoftware/litellm-operator/actions)
 2. Review the [GoReleaser documentation](https://goreleaser.com/)
 3. Consult the [GitHub Actions documentation](https://docs.github.com/en/actions)
-4. Open an issue in the repository for persistent problems 
+4. Check the [Helm OCI documentation](https://helm.sh/docs/topics/registries/)
+5. Open an issue in the repository for persistent problems 

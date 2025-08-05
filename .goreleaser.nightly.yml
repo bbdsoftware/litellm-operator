@@ -132,16 +132,16 @@ release:
     For stable releases, please see the [releases page](https://github.com/{{ .Env.GITHUB_REPOSITORY_OWNER }}/{{ .ProjectName }}/releases?q=tag%3Av).
 
 # Sign container images for nightly builds
-signs:
-  - cmd: cosign
-    env:
-      - COSIGN_EXPERIMENTAL=1
-    certificate: '${artifact}.pem'
-    args:
-      - sign-blob
-      - --oidc-issuer=https://token.actions.githubusercontent.com
-      - --output-certificate=${certificate}
-      - --output-signature=${signature}
-      - ${artifact}
-      - --yes
-    artifacts: checksum 
+# signs:
+#   - cmd: cosign
+#     env:
+#       - COSIGN_EXPERIMENTAL=1
+#     certificate: '${artifact}.pem'
+#     args:
+#       - sign-blob
+#       - --oidc-issuer=https://token.actions.githubusercontent.com
+#       - --output-certificate=${certificate}
+#       - --output-signature=${signature}
+#       - ${artifact}
+#       - --yes
+#     artifacts: checksum 

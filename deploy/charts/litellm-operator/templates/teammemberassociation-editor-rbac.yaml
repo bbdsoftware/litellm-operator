@@ -1,0 +1,25 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "litellm-operator.fullname" . }}-teammemberassociation-editor-role
+  labels:
+  {{- include "litellm-operator.labels" . | nindent 4 }}
+rules:
+- apiGroups:
+  - auth.litellm.ai
+  resources:
+  - teammemberassociations
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - auth.litellm.ai
+  resources:
+  - teammemberassociations/status
+  verbs:
+  - get

@@ -73,9 +73,6 @@ jobs:
     - name: Build operator
       run: make build
 
-    - name: Build Docker image
-      run: make docker-build IMG=test:latest
-
   e2e:
     runs-on: ubuntu-latest
     if: false  # Temporarily disabled e2e tests
@@ -162,9 +159,6 @@ jobs:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
 
-    - name: Install Cosign
-      uses: sigstore/cosign-installer@v3
-
     - name: Generate CRDs for snapshot
       run: |
         make generate manifests
@@ -181,13 +175,3 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         GITHUB_REPOSITORY_OWNER: ${{ github.repository_owner }}
         DOCKER_BUILDKIT: 1
-
-    - name: Upload snapshot artifacts
-      uses: actions/upload-artifact@v4
-      with:
-        name: snapshot-artifacts
-        path: |
-          dist/*.tar.gz
-          dist/*.zip
-          dist/checksums.txt
-        retention-days: 30 

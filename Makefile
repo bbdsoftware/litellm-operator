@@ -98,9 +98,6 @@ help: ## Display this help.
 manifests: controller-gen ## Generate WebhookConfiguration, ClusterRole and CustomResourceDefinition objects.
 	$(CONTROLLER_GEN) rbac:roleName=manager-role crd webhook paths="./..." output:crd:artifacts:config=config/crd/bases
 
-.PHONY: manifests-and-sync
-manifests-and-sync: manifests ## Generate manifests and synchronise Helm chart.
-	./scripts/sync-helm-chart.sh --validate
 
 .PHONY: generate
 generate: controller-gen ## Generate code containing DeepCopy, DeepCopyInto, and DeepCopyObject method implementations.
@@ -152,6 +149,12 @@ docker-build: ## Build docker image with the manager.
 docker-push: ## Push docker image with the manager.
 	$(CONTAINER_TOOL) push ${IMG}
 
+.PHONY: docker-load
+docker-load: ## Load docker image with the manager.
+	kind load docker-image ${IMG}
+
+
+
 # PLATFORMS defines the target platforms for the manager image be built to provide support to multiple
 # architectures. (i.e. make docker-buildx IMG=myregistry/mypoperator:0.0.1). To use this option you need to:
 # - be able to use docker buildx. More info: https://docs.docker.com/build/buildx/
@@ -198,6 +201,13 @@ deploy: manifests kustomize ## Deploy controller to the K8s cluster specified in
 undeploy: kustomize ## Undeploy controller from the K8s cluster specified in ~/.kube/config. Call with ignore-not-found=true to ignore resource not found errors during deletion.
 	$(KUSTOMIZE) build config/default | $(KUBECTL) delete --ignore-not-found=$(ignore-not-found) -f -
 
+.PHONY: install-samples
+install-samples: ## Install samples into the K8s cluster specified in ~/.kube/config.
+	$(KUBECTL) apply -k config/samples
+
+.PHONY: uninstall-samples
+uninstall-samples: ## Uninstall samples from the K8s cluster specified in ~/.kube/config.
+	$(KUBECTL) delete -k config/samples	
 ##@ Dependencies
 
 ## Location to install dependencies to
@@ -357,7 +367,8 @@ helm-package: ## Package the Helm chart.
 
 .PHONY: helm-install
 helm-install: ## Install the Helm chart locally.
-	helm install litellm-operator ./helm
+	helm dependency update ./deploy/charts/litellm-operator
+	helm install litellm-operator ./deploy/charts/litellm-operator
 
 .PHONY: helm-uninstall
 helm-uninstall: ## Uninstall the Helm chart locally.
@@ -365,7 +376,7 @@ helm-uninstall: ## Uninstall the Helm chart locally.
 
 .PHONY: helm-upgrade
 helm-upgrade: ## Upgrade the Helm chart locally.
-	helm upgrade litellm-operator ./helm
+	helm upgrade litellm-operator ./deploy/charts/litellm-operator
 
 .PHONY: helm-test
 helm-test: ## Test the Helm chart.
@@ -381,13 +392,22 @@ helm-push-oci: helm-package ## Push Helm chart to OCI registry.
 
 HELMIFY ?= $(LOCALBIN)/helmify
 
+
+.PHONY: reorganise-helm-chart
+reorganise-helm-chart: ## Reorganise the Helm chart.
+	./scripts/sync-helm-chart.sh 
+
+.PHONY: run-helmify
+run-helmify: ## Run helmify.
+	$(KUSTOMIZE) build config/default | $(HELMIFY) -crd-dir -cert-manager-as-subchart -add-webhook-option deploy/charts/litellm-operator
+
 .PHONY: helmify
 helmify: $(HELMIFY) ## Download helmify locally if necessary.
 $(HELMIFY): $(LOCALBIN)
 	test -s $(LOCALBIN)/helmify || GOBIN=$(LOCALBIN) go install github.com/arttor/helmify/cmd/helmify@latest
 
 .PHONY: helm-gen
-helm-gen: manifests kustomize helmify ## Generate Helm chart from Kustomize output.
+helm-gen: manifests kustomize helmify run-helmify  ## Generate Helm chart from Kustomize output.
 	$(KUSTOMIZE) build config/default | $(HELMIFY) -crd-dir -cert-manager-as-subchart -add-webhook-option deploy/charts/litellm-operator
 
 ##@ Documentation

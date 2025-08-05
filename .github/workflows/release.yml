@@ -12,6 +12,8 @@ on:
       - "CONTRIBUTING.md"
       - "SECURITY.md"
       - "LICENSE"
+      - "deploy/charts/litellm-operator/**"
+      - "helm/**"
 
 permissions:
   contents: write
@@ -46,6 +48,7 @@ jobs:
     outputs:
       is_prerelease: ${{ steps.release_type.outputs.is_prerelease }}
       release_type: ${{ steps.release_type.outputs.release_type }}
+      validated_version: ${{ steps.semver.outputs.version }}
     steps:
     - uses: actions/checkout@v4
       with:
@@ -118,21 +121,11 @@ jobs:
 
 
 
-    - name: Install Cosign
-      uses: sigstore/cosign-installer@v3
-
+    
     - name: Install Helm
       uses: azure/setup-helm@v3
       with:
         version: v3.12.0
-
-    - name: Cache Helm charts
-      uses: actions/cache@v4
-      with:
-        path: ~/.cache/helm
-        key: ${{ runner.os }}-helm-${{ hashFiles('helm/Chart.yaml') }}
-        restore-keys: |
-          ${{ runner.os }}-helm-
 
     - name: Generate CRDs
       run: |
@@ -161,15 +154,33 @@ jobs:
   update-manifests:
     needs: build-and-release
     runs-on: ubuntu-latest
-    if: ${{ needs.build-and-release.outputs.is_prerelease == 'false' }}
     permissions:
       contents: write
-      pull-requests: write
+      pull-requests: write 
+      checks: write
+      statuses: write
     steps:
+    - name: Authenticate GitHub App
+      id: github-app
+      uses: actions/create-github-app-token@v1
+      with:
+        app-id: ${{ secrets.LITELLM_OPERATOR_BOT_APP_ID }}
+        private-key: ${{ secrets.LITELLM_OPERATOR_BOT_PRIVATE_KEY }}
+    - name: Install Helm
+      uses: azure/setup-helm@v4
+      with:
+        version: v3.12.0
+ 
+    - name: Login to GitHub Container Registry
+      uses: docker/login-action@v3
+      with:
+        registry: ghcr.io
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+  
     - uses: actions/checkout@v4
       with:
-        token: ${{ secrets.GITHUB_TOKEN }}
-        ref: main
+        token: ${{ steps.github-app.outputs.token }}
 
     - name: Configure Git
       run: |
@@ -178,52 +189,60 @@ jobs:
 
     - name: Update manifests
       run: |
-        # Extract version from tag (remove 'v' prefix)
-        VERSION=${GITHUB_REF#refs/tags/v}
+        # Use validated semver version from previous step
+        VERSION=${{ needs.build-and-release.outputs.validated_version }}
         echo "Updating manifests for version: $VERSION"
         
         # Update the default kustomization to use the new image
         cd config/manager
-        kustomize edit set image controller=ghcr.io/${{ github.repository_owner }}/litellm-operator:${{ github.ref_name }}
+        kustomize edit set image controller=ghcr.io/${{ github.repository_owner }}/litellm-operator:$VERSION
         cd ../..
         
+        
+    - name: run helm generate
+      run: |
+        make helm-gen
         # Update Helm chart version and appVersion
         sed -i "s/^version: .*/version: $VERSION/" helm/Chart.yaml
         sed -i "s/^appVersion: .*/appVersion: \"$VERSION\"/" helm/Chart.yaml
-        
-        # Update default image tag in values.yaml
-        sed -i "s/^    tag: .*/    tag: \"$VERSION\"/" helm/values.yaml
-        
+
         # Show the changes for debugging
         echo "Changes made:"
         git diff --stat
-      env:
-        GITHUB_REF: ${{ github.ref }}
 
-    - name: Create Pull Request
-      uses: peter-evans/create-pull-request@v5
+        
+    - name: Commit changes
+      run: |
+        git add . 
+        git commit -m "Automated update to $VERSION [skip ci]"
+        git push origin main
+
+      env:
+        GITHUB_TOKEN: ${{ steps.github-app.outputs.token }}
+
+
+    - name: Push changes
+      uses: ad-m/github-push-action@master
       with:
-        token: ${{ secrets.GITHUB_TOKEN }}
-        branch: update-manifests-${{ github.ref_name }}
-        title: "chore: update operator image and helm chart to ${{ github.ref_name }}"
-        body: |
-          This PR updates the operator manifests and Helm chart to version ${{ github.ref_name }}.
-          
-          Changes made:
-          - Updated operator image tag in kustomization
-          - Updated Helm chart version and appVersion
-          - Updated default image tag in values.yaml
-          
-          This PR was automatically created by the release workflow.
-          
-          **Note:** The Helm Chart Validation workflow will automatically run on this PR to ensure the chart is properly configured before merging.
-        base: main
-        delete-branch: true
-        commit-message: "chore: update operator image and helm chart to ${{ github.ref_name }}"
-        committer: github-actions[bot] <github-actions[bot]@users.noreply.github.com>
-        author: github-actions[bot] <github-actions[bot]@users.noreply.github.com>
-        # labels: |
-        #   automated
-        #   release
-        assignees: ${{ github.actor }}
- 
+        github_token: ${{ steps.github-app.outputs.token }}
+        branch: main
+  
+    
+    - name: Extract version from Chart.yaml
+      id: version
+      run: |
+        VERSION=$(grep '^version:' deploy/charts/litellm-operator/Chart.yaml | awk '{print $2}')
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
+        echo "Publishing chart version $VERSION to GitHub Packages"
+
+    - name: Chart | Push
+      uses: appany/helm-oci-chart-releaser@v0.5.0
+      with:
+        name: litellm-operator
+        repository: bbdsoftware/charts/
+        tag: ${{ steps.version.outputs.version }}
+        path: deploy/charts/litellm-operator
+        registry: ghcr.io
+        registry_username: ${{ github.actor }}
+        registry_password: ${{ secrets.GITHUB_TOKEN }}
+        update_dependencies: 'false'

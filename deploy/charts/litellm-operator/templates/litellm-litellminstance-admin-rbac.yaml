@@ -1,0 +1,19 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "litellm-operator.fullname" . }}-litellm-litellminstance-admin-role
+  labels:
+  {{- include "litellm-operator.labels" . | nindent 4 }}
+rules:
+- apiGroups:
+  - litellm.litellm.ai
+  resources:
+  - litellminstances
+  verbs:
+  - '*'
+- apiGroups:
+  - litellm.litellm.ai
+  resources:
+  - litellminstances/status
+  verbs:
+  - get

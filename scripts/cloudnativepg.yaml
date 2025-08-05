@@ -1,0 +1,10 @@
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: cluster-example
+  namespace: litellm
+spec:
+  instances: 1
+  storage:
+    size: 1Gi
+
