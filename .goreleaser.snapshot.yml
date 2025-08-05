@@ -44,7 +44,7 @@ dockers:
   - image_templates:
       - "ghcr.io/{{ .Env.GITHUB_REPOSITORY_OWNER }}/{{ .ProjectName }}:main-amd64"
       - "ghcr.io/{{ .Env.GITHUB_REPOSITORY_OWNER }}/{{ .ProjectName }}:main-{{ .ShortCommit }}-amd64"
-    dockerfile: Dockerfile
+    dockerfile: Dockerfile.goreleaser
     goos: linux
     goarch: amd64
     use: buildx
@@ -61,7 +61,7 @@ dockers:
   - image_templates:
       - "ghcr.io/{{ .Env.GITHUB_REPOSITORY_OWNER }}/{{ .ProjectName }}:main-arm64"
       - "ghcr.io/{{ .Env.GITHUB_REPOSITORY_OWNER }}/{{ .ProjectName }}:main-{{ .ShortCommit }}-arm64"
-    dockerfile: Dockerfile
+    dockerfile: Dockerfile.goreleaser
     goos: linux
     goarch: arm64
     use: buildx

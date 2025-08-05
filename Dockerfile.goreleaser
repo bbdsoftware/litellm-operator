@@ -1,0 +1,12 @@
+# Use distroless as minimal base image for the manager binary
+# Refer to https://github.com/GoogleContainerTools/distroless for more details
+FROM gcr.io/distroless/static:nonroot
+
+WORKDIR /
+
+# Copy the pre-built binary from GoReleaser build context
+COPY manager .
+
+USER 65532:65532
+
+ENTRYPOINT ["/manager"] 
