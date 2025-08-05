@@ -50,7 +50,6 @@ archives:
       - api/
       - internal/
       - config/
-      - helm/
       - docs/
       - test/
       - Makefile
@@ -63,9 +62,7 @@ archives:
       - MAINTAINERS.md
       - PROJECT
       - ROADMAP.md
-      - .goreleaser.yml
-      - .goreleaser.prerelease.yml
-
+      
 dockers:
   - image_templates:
       - "ghcr.io/{{ .Env.GITHUB_REPOSITORY_OWNER }}/{{ .ProjectName }}:{{ .Version }}-amd64"
@@ -194,17 +191,3 @@ release:
     
     For stable releases, please see the [releases page](https://github.com/{{ .Env.GITHUB_REPOSITORY_OWNER }}/{{ .ProjectName }}/releases?q=tag%3Av).
 
-# # Sign container images for pre-releases
-# signs:
-#   - cmd: cosign
-#     env:
-#       - COSIGN_EXPERIMENTAL=1
-#     certificate: '${artifact}.pem'
-#     args:
-#       - sign-blob
-#       - --oidc-issuer=https://token.actions.githubusercontent.com
-#       - --output-certificate=${certificate}
-#       - --output-signature=${signature}
-#       - ${artifact}
-#       - --yes
-#     artifacts: checksum 

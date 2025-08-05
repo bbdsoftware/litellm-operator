@@ -102,20 +102,6 @@ changelog:
 release:
   disable: true
 
-# Sign container images for snapshot builds
-signs:
-  - cmd: cosign
-    env:
-      - COSIGN_EXPERIMENTAL=1
-    certificate: '${artifact}.pem'
-    args:
-      - sign-blob
-      - --oidc-issuer=https://token.actions.githubusercontent.com
-      - --output-certificate=${certificate}
-      - --output-signature=${signature}
-      - ${artifact}
-      - --yes
-    artifacts: checksum
 
 # Use snapshot versioning
 snapshot:

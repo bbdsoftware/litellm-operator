@@ -43,14 +43,10 @@ archives:
     name_template: "{{ .ProjectName }}_{{ .Version }}_source"
     meta: true
     files:
-      - .gitignore
-      - go.mod
-      - go.sum
       - cmd/
       - api/
       - internal/
       - config/
-      - helm/
       - docs/
       - test/
       - Makefile
