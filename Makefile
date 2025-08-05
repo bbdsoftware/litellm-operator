@@ -368,19 +368,19 @@ helm-package: ## Package the Helm chart.
 .PHONY: helm-install
 helm-install: ## Install the Helm chart locally.
 	helm dependency update ./deploy/charts/litellm-operator
-	helm install litellm-operator ./deploy/charts/litellm-operator
+	helm install -n litellm-operator-system --create-namespace litellm-operator ./deploy/charts/litellm-operator
 
 .PHONY: helm-uninstall
 helm-uninstall: ## Uninstall the Helm chart locally.
-	helm uninstall litellm-operator
+	helm uninstall -n litellm-operator-system litellm-operator
 
 .PHONY: helm-upgrade
 helm-upgrade: ## Upgrade the Helm chart locally.
-	helm upgrade litellm-operator ./deploy/charts/litellm-operator
+	helm upgrade -n litellm-operator-system litellm-operator ./deploy/charts/litellm-operator
 
 .PHONY: helm-test
 helm-test: ## Test the Helm chart.
-	helm test litellm-operator
+	helm test -n litellm-operator-system litellm-operator
 
 .PHONY: helm-docs
 helm-docs: ## Generate Helm chart documentation.
