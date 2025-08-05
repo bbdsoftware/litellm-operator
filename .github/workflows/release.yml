@@ -159,6 +159,7 @@ jobs:
       pull-requests: write 
       checks: write
       statuses: write
+      id-token: write
     steps:
     - name: Authenticate GitHub App
       id: github-app
@@ -203,8 +204,8 @@ jobs:
       run: |
         make helm-gen
         # Update Helm chart version and appVersion
-        sed -i "s/^version: .*/version: $VERSION/" helm/Chart.yaml
-        sed -i "s/^appVersion: .*/appVersion: \"$VERSION\"/" helm/Chart.yaml
+        sed -i "s/^version: .*/version: $VERSION/" deploy/charts/litellm-operator/Chart.yaml
+        sed -i "s/^appVersion: .*/appVersion: \"$VERSION\"/" deploy/charts/litellm-operator/Chart.yaml
 
         # Show the changes for debugging
         echo "Changes made:"
