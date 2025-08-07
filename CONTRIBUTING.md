@@ -10,6 +10,8 @@ See our [Code of Conduct](CODE_OF_CONDUCT.md).
 3. Run tests and linters.
 4. Submit a pull request, referencing any relevant issues.
 
+See our [CONTRIBUTING.md](docs/contributing.md) for more details.
+
 ## Issue Reporting
 
 - For bugs, use the bug report template.
