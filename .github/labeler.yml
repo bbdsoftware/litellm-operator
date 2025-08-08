@@ -1,0 +1,126 @@
+# Documentation changes
+documentation:
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'docs/**/*'
+      - '*.md'
+      - 'README.md'
+      - 'CHANGELOG.md'
+      - 'CONTRIBUTING.md'
+      - 'CODE_OF_CONDUCT.md'
+
+# Go source code changes
+go:
+  - changed-files:
+    - any-glob-to-any-file:
+      - '**/*.go'
+      - 'go.mod'
+      - 'go.sum'
+
+# Docker changes
+docker:
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'Dockerfile*'
+      - '**/Dockerfile*'
+      - '.dockerignore'
+
+# GitHub Actions changes
+github_actions:
+  - changed-files:
+    - any-glob-to-any-file:
+      - '.github/workflows/**/*'
+      - '.github/actions/**/*'
+
+# Dependencies
+dependencies:
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'go.mod'
+      - 'go.sum'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'yarn.lock'
+      - 'requirements.txt'
+      - 'Pipfile'
+      - 'poetry.lock'
+
+# Bug fixes
+bug:
+  - head-branch: ['^fix', '^bugfix', 'fix', 'bugfix']
+  - title: ['fix', 'bug', 'bugfix']
+
+# Enhancements (new features)
+enhancement:
+  - head-branch: ['^feature', 'feature']
+  - title: ['feat', 'feature', 'enhancement']
+
+# Housekeeping (maintenance tasks)
+housekeeping:
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'Makefile'
+      - 'scripts/**/*'
+      - 'hack/**/*'
+  - title: ['chore', 'refactor', 'cleanup', 'housekeeping']
+
+# Kubernetes/CRD changes
+kubernetes:
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'config/crd/**/*'
+      - 'deploy/**/*'
+      - '**/*.yaml'
+      - '**/*.yml'
+
+# API changes
+api:
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'api/**/*'
+      - 'internal/controller/**/*'
+
+# Testing changes
+testing:
+  - changed-files:
+    - any-glob-to-any-file:
+      - '**/*_test.go'
+      - 'test/**/*'
+      - '**/suite_test.go'
+
+# Security changes
+security:
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'SECURITY.md'
+      - '**/security/**/*'
+      - '**/rbac/**/*'
+
+# Configuration changes
+configuration:
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'config/**/*'
+      - '**/config.yaml'
+      - '**/config.yml'
+      - '.env*'
+      - '**/values.yaml'
+
+# Breaking changes
+breaking:
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'api/**/*'
+      - 'CHANGELOG.md'
+  - title: ['breaking', 'BREAKING', 'major']
+
+# Hotfixes
+hotfix:
+  - head-branch: ['^hotfix', 'hotfix']
+  - title: ['hotfix', 'urgent']
+
+# Release branches
+release:
+  - base-branch: 'main'
+  - head-branch: ['^release', 'release']
+  - title: ['release', 'version'] 
