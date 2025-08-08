@@ -1,0 +1,6 @@
+## Append samples of your project ##
+resources:
+- https://raw.githubusercontent.com/cloudnative-pg/cloudnative-pg/release-1.21/releases/cnpg-1.21.0.yaml
+- postgres-cluster.yaml
+- namespace.yaml
+

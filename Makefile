@@ -73,7 +73,7 @@ SHELL = /usr/bin/env bash -o pipefail
 .SHELLFLAGS = -ec
 
 .PHONY: all
-all: build
+all: help
 
 ##@ General
 
@@ -208,6 +208,7 @@ install-samples: ## Install samples into the K8s cluster specified in ~/.kube/co
 .PHONY: uninstall-samples
 uninstall-samples: ## Uninstall samples from the K8s cluster specified in ~/.kube/config.
 	$(KUBECTL) delete -k config/samples	
+
 ##@ Dependencies
 
 ## Location to install dependencies to
@@ -222,6 +223,8 @@ CONTROLLER_GEN ?= $(LOCALBIN)/controller-gen
 ENVTEST ?= $(LOCALBIN)/setup-envtest
 GOLANGCI_LINT = $(LOCALBIN)/golangci-lint
 CRD_REF_DOCS ?= $(LOCALBIN)/crd-ref-docs
+OPENAPI_GENERATOR ?= $(LOCALBIN)/openapi-generator
+
 
 .PHONY: kustomize
 kustomize: $(KUSTOMIZE) ## Download kustomize locally if necessary.
@@ -247,6 +250,20 @@ $(GOLANGCI_LINT): $(LOCALBIN)
 crd-ref-docs: $(CRD_REF_DOCS) ## Download crd-ref-docs locally if necessary.
 $(CRD_REF_DOCS): $(LOCALBIN)
 	$(call go-install-tool,$(CRD_REF_DOCS),github.com/elastic/crd-ref-docs,$(CRD_REF_DOCS_VERSION))
+
+.PHONY: openapi-generator
+openapi-generator: $(OPENAPI_GENERATOR) ## Download openapi-generator-cli locally if necessary.
+$(OPENAPI_GENERATOR): $(LOCALBIN)
+	@echo "Downloading OpenAPI Generator..."
+	@if [ ! -f $(LOCALBIN)/openapi-generator-cli.jar ]; then \
+		curl -sSLo $(LOCALBIN)/openapi-generator-cli.jar https://repo1.maven.org/maven2/org/openapitools/openapi-generator-cli/7.2.0/openapi-generator-cli-7.2.0.jar; \
+	fi
+	@if [ ! -f $(OPENAPI_GENERATOR) ]; then \
+		echo '#!/bin/bash' > $(OPENAPI_GENERATOR); \
+		echo 'java -jar $(LOCALBIN)/openapi-generator-cli.jar "$$@"' >> $(OPENAPI_GENERATOR); \
+		chmod +x $(OPENAPI_GENERATOR); \
+	fi
+
 
 
 
@@ -349,88 +366,15 @@ catalog-build: opm ## Build a catalog image.
 catalog-push: ## Push a catalog image.
 	$(MAKE) docker-push IMG=$(CATALOG_IMG)
 
-##@ Helm
 
 
-.PHONY: helm-lint
-helm-lint: ## Lint the Helm chart.
-	helm lint helm/
-
-.PHONY: helm-template
-helm-template: ## Template the Helm chart.
-	helm template litellm-operator helm/
-
-.PHONY: helm-package
-helm-package: ## Package the Helm chart.
-	helm package helm/
-	mkdir -p dist && mv litellm-operator-*.tgz dist/
-
-.PHONY: helm-install
-helm-install: ## Install the Helm chart locally.
-	helm dependency update ./deploy/charts/litellm-operator
-	helm install -n litellm-operator-system --create-namespace litellm-operator ./deploy/charts/litellm-operator
-
-.PHONY: helm-uninstall
-helm-uninstall: ## Uninstall the Helm chart locally.
-	helm uninstall -n litellm-operator-system litellm-operator
-
-.PHONY: helm-upgrade
-helm-upgrade: ## Upgrade the Helm chart locally.
-	helm upgrade -n litellm-operator-system litellm-operator ./deploy/charts/litellm-operator
-
-.PHONY: helm-test
-helm-test: ## Test the Helm chart.
-	helm test -n litellm-operator-system litellm-operator
-
-.PHONY: helm-docs
-helm-docs: ## Generate Helm chart documentation.
-	helm-docs --chart-search-root=helm --output-file-template=helm/README.md.gotmpl
-
-.PHONY: helm-push-oci
-helm-push-oci: helm-package ## Push Helm chart to OCI registry.
-	helm push litellm-operator-*.tgz oci://ghcr.io/bbd/charts
-
-HELMIFY ?= $(LOCALBIN)/helmify
+# Include Helm-specific Makefile
+include ./deploy/Makefile
 
 
-.PHONY: reorganise-helm-chart
-reorganise-helm-chart: ## Reorganise the Helm chart.
-	./scripts/sync-helm-chart.sh 
+include ./scripts/local-dev/Makefile
 
-.PHONY: run-helmify
-run-helmify: ## Run helmify.
-	$(KUSTOMIZE) build config/default | $(HELMIFY) -crd-dir -cert-manager-as-subchart -add-webhook-option deploy/charts/litellm-operator
+include ./docs/Makefile
 
-.PHONY: helmify
-helmify: $(HELMIFY) ## Download helmify locally if necessary.
-$(HELMIFY): $(LOCALBIN)
-	test -s $(LOCALBIN)/helmify || GOBIN=$(LOCALBIN) go install github.com/arttor/helmify/cmd/helmify@latest
 
-.PHONY: helm-gen
-helm-gen: manifests kustomize helmify run-helmify  ## Generate Helm chart from Kustomize output.
-	$(KUSTOMIZE) build config/default | $(HELMIFY) -crd-dir -cert-manager-as-subchart -add-webhook-option deploy/charts/litellm-operator
-
-##@ Documentation
-
-.PHONY: api-docs
-api-docs: manifests crd-ref-docs ## Generate API reference documentation from Go types.
-	@echo "Generating API reference documentation..."
-	@mkdir -p docs/reference
-	$(CRD_REF_DOCS) \
-		--source-path=./api \
-		--config=docs/.crd-ref-docs.yaml \
-		--renderer=markdown \
-		--output-path=docs/reference \
-		--output-mode=group
-	@echo "API documentation generated at docs/reference/api-generated.md"
-
-.PHONY: docs
-docs: api-docs ## Generate all documentation including API reference.
-
-.PHONY: docs-serve
-docs-serve: api-docs mkdocs-serve ## Generate API docs and serve documentation locally.
-
-.PHONY: mkdocs-serve
-mkdocs-serve: ## Serve MkDocs documentation locally using Docker.
-	docker run --rm -it -p 8000:8000 -v $(PWD):/docs squidfunk/mkdocs-material:latest serve -a 0.0.0.0:8000
 

@@ -10,8 +10,7 @@ The LiteLLM Operator uses a fully automated release process that:
 2. **Builds and publishes** the operator image and artifacts using GoReleaser
 3. **Creates a GitHub release** with release notes and assets
 4. **Automatically updates** manifests and Helm charts (for stable releases only)
-5. **Creates and auto-merges a pull request** for the updates
-6. **Publishes Helm charts** to the OCI registry
+5. **Publishes Helm charts** to the OCI registry
 
 ## Prerequisites
 
@@ -50,6 +49,10 @@ git push origin v1.0.0
 - `v1.0.0-alpha.1` - Alpha release (will skip manifest updates)
 - `v1.0.0-beta.1` - Beta release (will skip manifest updates)
 
+**Important**: The workflow is configured to ignore pushes to certain paths, so ensure your changes are not in:
+- Documentation files (`**/*.md`, `docs/**`, `README.md`, etc.)
+- Helm chart files (`deploy/charts/litellm-operator/**`, `helm/**`)
+
 ### Step 3: Monitor the Release Workflow
 
 The release workflow will automatically:
@@ -59,8 +62,7 @@ The release workflow will automatically:
 3. **Build and publish** the operator image to GitHub Container Registry
 4. **Create a GitHub release** with assets and release notes
 5. **Update manifests and Helm charts** (for stable releases only)
-6. **Create and auto-merge a pull request** with the updates
-7. **Publish Helm chart** to OCI registry
+6. **Publish Helm chart** to OCI registry
 
 ## Release Workflow Details
 
@@ -83,17 +85,8 @@ For stable releases (not pre-releases), the workflow automatically updates:
 1. **Operator Image Tag**: `config/manager/kustomization.yaml`
 2. **Helm Chart Version**: `deploy/charts/litellm-operator/Chart.yaml`
 3. **Helm Chart AppVersion**: `deploy/charts/litellm-operator/Chart.yaml`
-4. **Default Image Tag**: `deploy/charts/litellm-operator/values.yaml`
 
-### Pull Request Creation and Auto-Merge
-
-The workflow creates a pull request with:
-
-- **Branch**: `update-manifests-{version}`
-- **Title**: `chore: update operator image and helm chart to {version}`
-- **Description**: Detailed list of changes made
-- **Auto-approval**: The PR is automatically approved
-- **Auto-merge**: The PR is automatically merged using squash strategy
+The workflow uses a GitHub App for authentication to commit changes directly to the main branch.
 
 ## Release Types
 
@@ -104,7 +97,6 @@ Stable releases (e.g., `v1.0.0`) trigger the full workflow including:
 - ✅ Image building and publishing
 - ✅ GitHub release creation
 - ✅ Manifest updates
-- ✅ Pull request creation and auto-merge
 - ✅ Helm chart publication
 
 ### Pre-releases
@@ -114,7 +106,6 @@ Pre-releases (e.g., `v1.0.0-rc.1`, `v1.0.0-beta.1`, `v1.0.0-alpha.1`) skip manif
 - ✅ Image building and publishing
 - ✅ GitHub release creation (marked as pre-release)
 - ❌ Manifest updates (skipped)
-- ❌ Pull request creation (skipped)
 - ✅ Helm chart publication
 
 ## Release Workflow Jobs
@@ -123,27 +114,25 @@ Pre-releases (e.g., `v1.0.0-rc.1`, `v1.0.0-beta.1`, `v1.0.0-alpha.1`) skip manif
 - Runs unit tests with `make test`
 - Performs linting with golangci-lint
 - Ensures code quality before release
+- Uses Ubuntu latest runner
 
 ### 2. Build and Release (`build-and-release`)
-- Validates semantic versioning
+- Validates semantic versioning using `matt-usurp/validate-semver@v2`
 - Determines release type (stable vs pre-release)
-- Builds multi-architecture Docker images
-- Generates CRDs and combines them
+- Builds multi-architecture Docker images using Docker Buildx
+- Generates CRDs and combines them into `dist/crds.yaml`
 - Runs GoReleaser to create GitHub release
 - Outputs release type information for downstream jobs
+- Uses different GoReleaser configs for stable vs pre-releases
 
 ### 3. Update Manifests (`update-manifests`)
 - **Only runs for stable releases**
-- Runs `make helm-gen` to regenerate Helm chart from Kustomize
+- Uses GitHub App authentication for secure access
 - Updates operator image tags in kustomization files
+- Runs `make helm-gen` to regenerate Helm chart from Kustomize
 - Updates Helm chart version and appVersion
-- Updates default image tag in values.yaml
-- Creates and auto-merges pull request
-
-### 4. Helm Publish (`helm-publish`)
-- Lints and validates Helm chart
-- Publishes Helm chart to OCI registry (`ghcr.io/bbdsoftware/charts/`)
-- Runs on main branch pushes and manual triggers
+- Commits changes directly to main branch using `EndBug/add-and-commit@v9`
+- Publishes Helm chart to OCI registry using `appany/helm-oci-chart-releaser@v0.5.0`
 
 ## GoReleaser Configuration
 
@@ -193,15 +182,19 @@ kubectl apply -k https://github.com/bbdsoftware/litellm-operator/config/default
 2. Ensure the tag doesn't already exist
 3. Verify GitHub Actions are enabled for the repository
 4. Check that the tag doesn't match path-ignore patterns (docs, README, etc.)
+5. Verify the workflow has proper permissions (contents, packages, id-token, pull-requests)
 
-#### Pull Request Not Created
+#### Manifest Updates Fail
 
-**Problem**: Release completes but no pull request is created.
+**Problem**: Release completes but manifest updates are incorrect.
 
 **Solutions**:
-1. Check if it's a pre-release (rc, beta, alpha tags skip PR creation)
-2. Verify the workflow has proper permissions
-3. Check workflow logs for errors in the update-manifests job
+1. Check GitHub App authentication is properly configured
+2. Verify the workflow has proper permissions for the GitHub App
+3. Review the workflow logs for sed/kustomize errors
+4. Check that the version extraction is working correctly
+5. Verify the file paths in the workflow
+6. Check that `make helm-gen` completed successfully
 
 #### Helm Chart Not Published
 
@@ -210,17 +203,18 @@ kubectl apply -k https://github.com/bbdsoftware/litellm-operator/config/default
 **Solutions**:
 1. Check the helm-publish workflow logs
 2. Verify GitHub Container Registry permissions
-3. Ensure the chart version is correctly extracted
+3. Ensure the chart version is correctly extracted from Chart.yaml
+4. Check that the OCI registry path is correct (`ghcr.io/bbdsoftware/charts/`)
 
-#### Manifest Updates Fail
+#### Tests Fail
 
-**Problem**: Pull request is created but manifest updates are incorrect.
+**Problem**: Release workflow fails during the test phase.
 
 **Solutions**:
-1. Review the workflow logs for sed/kustomize errors
-2. Check that the version extraction is working correctly
-3. Verify the file paths in the workflow
-4. Check that `make helm-gen` completed successfully
+1. Run `make test` locally to reproduce the issue
+2. Check for linting errors with golangci-lint
+3. Ensure all dependencies are properly installed
+4. Verify Go version compatibility (workflow uses Go 1.21)
 
 ### Rollback Process
 
@@ -234,7 +228,7 @@ If a release needs to be rolled back:
 
 2. **Delete the GitHub release** (via GitHub UI)
 
-3. **Revert the manifest changes** if the PR was merged:
+3. **Revert the manifest changes** if they were committed:
    ```bash
    git revert <commit-hash>
    git push origin main
@@ -281,17 +275,24 @@ If a release needs to be rolled back:
 
 The release workflow is configured in `.github/workflows/release.yml` and includes:
 
+- **Permissions**: `contents: write`, `packages: write`, `id-token: write`, `pull-requests: write`
 - **GoReleaser configuration**: `.goreleaser.yml` and `.goreleaser.prerelease.yml`
-- **Docker build settings**: Multi-platform builds (amd64, arm64)
+- **Docker build settings**: Multi-platform builds (amd64, arm64) using Docker Buildx
 - **Helm chart updates**: Automatic version bumping and regeneration
-- **Pull request creation**: Automated manifest updates with auto-merge
+- **GitHub App authentication**: For secure manifest updates
 
 ### Helm Chart Generation
 
 The Helm chart is automatically generated from Kustomize output using:
 - `make helm-gen`: Regenerates the Helm chart from Kustomize manifests
-- `helmify`: Converts Kustomize output to Helm chart format
-- Chart is published to OCI registry automatically
+- Chart is published to OCI registry automatically using `appany/helm-oci-chart-releaser@v0.5.0`
+
+### GitHub App Setup
+
+The workflow uses a GitHub App for authentication to commit changes. Ensure the following secrets are configured:
+
+- `LITELLM_OPERATOR_BOT_APP_ID`: The GitHub App ID
+- `LITELLM_OPERATOR_BOT_PRIVATE_KEY`: The GitHub App private key
 
 ### Customization
 
