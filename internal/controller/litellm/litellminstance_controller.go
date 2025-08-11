@@ -197,17 +197,27 @@ func (r *LiteLLMInstanceReconciler) handleDeletion(ctx context.Context, llm *lit
 
 // renderProxyConfig generates the YAML configuration for the LiteLLM proxy server.
 // It creates a configuration structure with model list, router settings, and general settings.
-func renderProxyConfig(llm *litellmv1alpha1.LiteLLMInstance) string {
+func renderProxyConfig(llm *litellmv1alpha1.LiteLLMInstance, ctx context.Context) string {
+	log := logf.FromContext(ctx)
 	// Create a custom struct for YAML output that handles API key references
+
+	type LiteLLMParamsYAML struct {
+			ApiBase 	string `yaml:"apiBase,omitempty"`
+			ApiKey 		string `yaml:"apiKey,omitempty"`
+			Model 		string `yaml:"model,omitempty"`
+			MaxBudget   string `yaml:"maxBudget,omitempty"`
+			MaxRetries  int    `yaml:"maxRetries,omitempty"`
+			TPM		    int    `yaml:"tpm,omitempty"`
+			RPM		    int    `yaml:"rpm,omitempty"`
+			RegionName 	string `yaml:"regionName,omitempty"`
+	}
 	type ModelEntryYAML struct {
 		ModelName     string `yaml:"model_name"`
-		LitellmParams struct {
-			Model   string `yaml:"model"`
-			APIBase string `yaml:"api_base"`
-			APIKey  string `yaml:"api_key"`
-			RPM     *int   `yaml:"rpm,omitempty"`
-		} `yaml:"litellm_params"`
+		LitellmParams LiteLLMParamsYAML `yaml:"litellm_params"`
+		ModelInfo     map[string]string `yaml:"model_info,omitempty"` // Optional field for additional model info
 	}
+
+	
 
 	type RouterSettingsYAML struct {
 		Host     string `yaml:"host"`
@@ -224,23 +234,43 @@ func renderProxyConfig(llm *litellmv1alpha1.LiteLLMInstance) string {
 	}
 
 	var modelListYAML []ModelEntryYAML
-	// if llm.Spec.ModelList != nil {
-	// 	for _, model := range llm.Spec.ModelList {
-	// 		modelYAML := ModelEntryYAML{
-	// 			ModelName: model.ModelName,
-	// 		}
-	// 		modelYAML.LitellmParams.Model = model.LitellmParams.Model
-	// 		modelYAML.LitellmParams.APIBase = model.LitellmParams.APIBase
-	// 		modelYAML.LitellmParams.RPM = model.LitellmParams.RPM
+	if llm.Spec.ModelList != nil {
+		for _, model := range llm.Spec.ModelList {
 
-	// 		// Reference API key from environment variable
-	// 		if model.LitellmParams.APIKey != "" {
-	// 			modelYAML.LitellmParams.APIKey = fmt.Sprintf("os.environ/%s_API_KEY", model.ModelName)
-	// 		}
+			if model.LiteLLMParams.Model == "" {
+				err := fmt.Errorf("model name is required for each model in the list")
+				log.Error(err, "Failed to render proxy config")
+				continue
+			} else {
+				litellmParams := LiteLLMParamsYAML{
+					Model:   	model.LiteLLMParams.Model,
+					ApiBase: 	model.LiteLLMParams.ApiBase,
+					RPM:    	model.LiteLLMParams.RPM,
+					ApiKey: 	model.LiteLLMParams.ApiKey.Keys.ApiKey,
+					MaxBudget:  model.LiteLLMParams.MaxBudget,
+					MaxRetries: model.LiteLLMParams.MaxRetries,
+					TPM:        model.LiteLLMParams.TPM,
+					RegionName: model.LiteLLMParams.RegionName,
+				}	
 
-	// 		modelListYAML = append(modelListYAML, modelYAML)
-	// 	}
-	// }
+				// If model info is provided, add it to the model entry
+				var modelInfoCopy map[string]string
+				if model.ModelInfo != nil {
+					modelInfoCopy = make(map[string]string, len(model.ModelInfo))
+					for k, v := range model.ModelInfo {
+						modelInfoCopy[k] = v
+					}
+				}
+
+				modelYAML := ModelEntryYAML{
+					ModelName:     model.ModelName,
+					LitellmParams: litellmParams,
+					ModelInfo:     modelInfoCopy,
+				}
+				modelListYAML = append(modelListYAML, modelYAML)
+			}			
+		}
+	}
 
 	var routerSettings RouterSettingsYAML
 	if llm.Spec.RedisSecretRef.NameRef != "" {
@@ -508,7 +538,7 @@ func (r *LiteLLMInstanceReconciler) setCondition(llm *litellmv1alpha1.LiteLLMIns
 // createConfigMap creates or updates the ConfigMap for the LiteLLM instance.
 // It generates the LiteLLM proxy configuration and creates a ConfigMap containing the configuration file.
 func (r *LiteLLMInstanceReconciler) createConfigMap(ctx context.Context, llm *litellmv1alpha1.LiteLLMInstance) (*corev1.ConfigMap, error) {
-	configYAML := renderProxyConfig(llm)
+	configYAML := renderProxyConfig(llm, ctx)
 
 	configMap := &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{

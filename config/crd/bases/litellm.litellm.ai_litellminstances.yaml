@@ -125,6 +125,49 @@ spec:
                 type: object
               masterKey:
                 type: string
+              modelList:
+                items:
+                  properties:
+                    liteLLMParams:
+                      properties:
+                        apiBase:
+                          type: string
+                        apiKey:
+                          properties:
+                            keys:
+                              properties:
+                                apiKey:
+                                  type: string
+                              required:
+                              - apiKey
+                              type: object
+                            nameRef:
+                              type: string
+                          required:
+                          - keys
+                          - nameRef
+                          type: object
+                        maxBudget:
+                          type: string
+                        maxRetries:
+                          type: integer
+                        model:
+                          type: string
+                        regionName:
+                          type: string
+                        rpm:
+                          type: integer
+                        tpm:
+                          type: integer
+                      type: object
+                    modelInfo:
+                      additionalProperties:
+                        type: string
+                      type: object
+                    modelName:
+                      type: string
+                  type: object
+                type: array
               redisSecretRef:
                 properties:
                   keys:

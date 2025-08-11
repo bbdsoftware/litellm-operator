@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: Secret
+metadata:
+  name: api-key-secret
+  namespace: litellm
+type: Opaque
+data:
+  api-key: bGl0ZWxsbQ== # base64 encoded value of "litellm"

@@ -29,6 +29,33 @@ type LiteLLMInstanceSpec struct {
 	RedisSecretRef    RedisSecretRef    `json:"redisSecretRef,omitempty"`
 	Ingress           Ingress           `json:"ingress,omitempty"`
 	Gateway           Gateway           `json:"gateway,omitempty"`
+	ModelList         []ModelList       `json:"modelList,omitempty"`
+}
+
+type ModelList struct {
+	ModelName     string            `json:"modelName,omitempty"`
+	LiteLLMParams LiteLLMParams     `json:"liteLLMParams,omitempty"`
+	ModelInfo     map[string]string `json:"modelInfo,omitempty"`
+}
+
+type LiteLLMParams struct {
+	ApiKey 		ApiKeySecretRef `json:"apiKey,omitempty"`
+	ApiBase 	string `json:"apiBase,omitempty"`
+	Model 		string `json:"model,omitempty"`
+	MaxBudget   string `json:"maxBudget,omitempty"`
+	MaxRetries  int    `json:"maxRetries,omitempty"`
+	TPM		    int    `json:"tpm,omitempty"`
+	RPM		    int    `json:"rpm,omitempty"`
+	RegionName 	string `json:"regionName,omitempty"`
+}
+
+type ApiKeySecretRef struct {
+	NameRef string `json:"nameRef"`
+	Keys    ApiKeySecretKeys `json:"keys"`
+}
+
+type ApiKeySecretKeys struct {
+	ApiKey string `json:"apiKey"`
 }
 
 type DatabaseSecretRef struct {
