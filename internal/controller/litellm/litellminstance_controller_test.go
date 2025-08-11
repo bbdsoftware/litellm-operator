@@ -100,6 +100,20 @@ var _ = Describe("LiteLLMInstance Controller", func() {
 								PasswordSecret: "password",
 							},
 						},
+						ModelList: []litellmv1alpha1.ModelList{
+							{
+								ModelName: "gpt-3.5-turbo",
+
+								LiteLLMParams: litellmv1alpha1.LiteLLMParams{
+									ApiBase:   "https://api.litellm.ai/v1",
+									Model:     "gpt-3.5-turbo",
+									MaxBudget: "1000",
+								},
+								ModelInfo: map[string]string{
+									"provider": "litellm",
+								},
+							},
+						},
 					},
 				}
 				Expect(k8sClient.Create(ctx, resource)).To(Succeed())
@@ -128,6 +142,7 @@ var _ = Describe("LiteLLMInstance Controller", func() {
 				Expect(k8sClient.Delete(ctx, redisSecret)).To(Succeed())
 			}
 		})
+
 		It("should successfully reconcile the resource", func() {
 			By("Reconciling the created resource")
 			controllerReconciler := &LiteLLMInstanceReconciler{
@@ -141,6 +156,19 @@ var _ = Describe("LiteLLMInstance Controller", func() {
 			Expect(err).NotTo(HaveOccurred())
 			// TODO(user): Add more specific assertions depending on your controller's reconciliation logic.
 			// Example: If you expect a certain status condition after reconciliation, verify it here.
+
+			//verify the configmap exists
+			configMap := &corev1.ConfigMap{}
+			err = k8sClient.Get(ctx, types.NamespacedName{Name: resourceName + "-config", Namespace: "default"}, configMap)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(configMap.Data).To(HaveKey("proxy_server_config.yaml"))
+			yamlData := configMap.Data["proxy_server_config.yaml"]
+			Expect(yamlData).To(ContainSubstring("router_settings"))
+			Expect(yamlData).To(ContainSubstring("general_settings"))
+			Expect(yamlData).To(ContainSubstring("model_list:"))
+			// Verify the model_list is not empty
+			Expect(yamlData).To(MatchRegexp(`model_list:\s*\n\s*-\s*`))
 		})
+
 	})
 })
