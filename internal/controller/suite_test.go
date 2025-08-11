@@ -33,7 +33,7 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
-	authv1alpha1 "github.com/bbdsoftware/litellm-operator/api/v1alpha1"
+	authv1alpha1 "github.com/bbdsoftware/litellm-operator/api/auth/v1alpha1"
 	// +kubebuilder:scaffold:imports
 )
 
