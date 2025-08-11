@@ -35,8 +35,8 @@ import (
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
+	authv1alpha1 "github.com/bbdsoftware/litellm-operator/api/auth/v1alpha1"
 	litellmv1alpha1 "github.com/bbdsoftware/litellm-operator/api/litellm/v1alpha1"
-	authv1alpha1 "github.com/bbdsoftware/litellm-operator/api/v1alpha1"
 	"github.com/bbdsoftware/litellm-operator/internal/controller"
 	litellmcontroller "github.com/bbdsoftware/litellm-operator/internal/controller/litellm"
 	// +kubebuilder:scaffold:imports
