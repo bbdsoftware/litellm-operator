@@ -588,7 +588,7 @@ func (r *LiteLLMInstanceReconciler) createSecret(ctx context.Context, llm *litel
 
 	secret.Data = buildSecretData(llm.Spec.MasterKey, existingSecret)
 
-	if err := util.CreateOrUpdateWithRetry(ctx, r.Client, r.Scheme, secret, llm); err != nil {
+	if _, err := util.CreateOrUpdateWithRetry(ctx, r.Client, r.Scheme, secret, llm); err != nil {
 		return nil, err
 	}
 
@@ -635,7 +635,7 @@ func (r *LiteLLMInstanceReconciler) createDeployment(ctx context.Context, llm *l
 		},
 	}
 
-	if err := util.CreateOrUpdateWithRetry(ctx, r.Client, r.Scheme, deployment, llm); err != nil {
+	if _, err := util.CreateOrUpdateWithRetry(ctx, r.Client, r.Scheme, deployment, llm); err != nil {
 		return nil, err
 	}
 
@@ -665,7 +665,7 @@ func (r *LiteLLMInstanceReconciler) createService(ctx context.Context, llm *lite
 		},
 	}
 
-	if err := util.CreateOrUpdateWithRetry(ctx, r.Client, r.Scheme, service, llm); err != nil {
+	if _, err := util.CreateOrUpdateWithRetry(ctx, r.Client, r.Scheme, service, llm); err != nil {
 		return nil, err
 	}
 
@@ -683,7 +683,7 @@ func (r *LiteLLMInstanceReconciler) createServiceAccount(ctx context.Context, ll
 		},
 	}
 
-	if err := util.CreateOrUpdateWithRetry(ctx, r.Client, r.Scheme, serviceAccount, llm); err != nil {
+	if _, err := util.CreateOrUpdateWithRetry(ctx, r.Client, r.Scheme, serviceAccount, llm); err != nil {
 		return nil, err
 	}
 
@@ -709,7 +709,7 @@ func (r *LiteLLMInstanceReconciler) createRBAC(ctx context.Context, llm *litellm
 		},
 	}
 
-	if err := util.CreateOrUpdateWithRetry(ctx, r.Client, r.Scheme, role, llm); err != nil {
+	if _, err := util.CreateOrUpdateWithRetry(ctx, r.Client, r.Scheme, role, llm); err != nil {
 		return err
 	}
 
@@ -734,7 +734,11 @@ func (r *LiteLLMInstanceReconciler) createRBAC(ctx context.Context, llm *litellm
 		},
 	}
 
-	return util.CreateOrUpdateWithRetry(ctx, r.Client, r.Scheme, roleBinding, llm)
+	if _, err := util.CreateOrUpdateWithRetry(ctx, r.Client, r.Scheme, roleBinding, llm); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // createIngress creates or updates the Ingress for the LiteLLM instance.
@@ -754,7 +758,11 @@ func (r *LiteLLMInstanceReconciler) createIngress(ctx context.Context, llm *lite
 		},
 	}
 
-	return util.CreateOrUpdateWithRetry(ctx, r.Client, r.Scheme, ingress, llm)
+	if _, err := util.CreateOrUpdateWithRetry(ctx, r.Client, r.Scheme, ingress, llm); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // SetupWithManager sets up the controller with the Manager.
