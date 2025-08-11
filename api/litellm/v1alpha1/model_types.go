@@ -1,0 +1,322 @@
+/*
+Copyright 2025.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package v1alpha1
+
+import (
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+)
+
+// EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
+// NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
+
+// LiteLLMParams defines the LiteLLM parameters for a model.
+type LiteLLMParams struct {
+	// InputCostPerToken is the cost per input token
+	InputCostPerToken string `json:"input_cost_per_token,omitempty"`
+
+	// OutputCostPerToken is the cost per output token
+	OutputCostPerToken string `json:"output_cost_per_token,omitempty"`
+
+	// InputCostPerSecond is the cost per second for input
+	InputCostPerSecond string `json:"input_cost_per_second,omitempty"`
+
+	// OutputCostPerSecond is the cost per second for output
+	OutputCostPerSecond string `json:"output_cost_per_second,omitempty"`
+
+	// InputCostPerPixel is the cost per pixel for input
+	InputCostPerPixel string `json:"input_cost_per_pixel,omitempty"`
+
+	// OutputCostPerPixel is the cost per pixel for output
+	OutputCostPerPixel string `json:"output_cost_per_pixel,omitempty"`
+
+	// APIKey is the API key for the model
+	APIKey string `json:"api_key,omitempty"`
+
+	// APIBase is the base URL for the API
+	APIBase string `json:"api_base,omitempty"`
+
+	// APIVersion is the version of the API
+	APIVersion string `json:"api_version,omitempty"`
+
+	// VertexProject is the Google Cloud project for Vertex AI
+	VertexProject string `json:"vertex_project,omitempty"`
+
+	// VertexLocation is the location for Vertex AI
+	VertexLocation string `json:"vertex_location,omitempty"`
+
+	// VertexCredentials is the credentials for Vertex AI
+	VertexCredentials string `json:"vertex_credentials,omitempty"`
+
+	// RegionName is the region name for the service
+	RegionName string `json:"region_name,omitempty"`
+
+	// AWSAccessKeyID is the AWS access key ID
+	AWSAccessKeyID string `json:"aws_access_key_id,omitempty"`
+
+	// AWSSecretAccessKey is the AWS secret access key
+	AWSSecretAccessKey string `json:"aws_secret_access_key,omitempty"`
+
+	// AWSRegionName is the AWS region name
+	AWSRegionName string `json:"aws_region_name,omitempty"`
+
+	// WatsonXRegionName is the WatsonX region name
+	WatsonXRegionName string `json:"watsonx_region_name,omitempty"`
+
+	// CustomLLMProvider is the custom LLM provider
+	CustomLLMProvider string `json:"custom_llm_provider,omitempty"`
+
+	// TPM is tokens per minute
+	TPM int64 `json:"tpm,omitempty"`
+
+	// RPM is requests per minute
+	RPM int64 `json:"rpm,omitempty"`
+
+	// Timeout is the timeout in seconds
+	Timeout int64 `json:"timeout,omitempty"`
+
+	// StreamTimeout is the stream timeout in seconds
+	StreamTimeout int64 `json:"stream_timeout,omitempty"`
+
+	// MaxRetries is the maximum number of retries
+	MaxRetries int64 `json:"max_retries,omitempty"`
+
+	// Organisation is the organisation name
+	Organisation string `json:"organization,omitempty"`
+
+	// ConfigurableClientsideAuthParams are configurable client-side auth parameters
+	ConfigurableClientsideAuthParams []runtime.RawExtension `json:"configurable_clientside_auth_params,omitempty"`
+
+	// LiteLLMCredentialName is the LiteLLM credential name
+	LiteLLMCredentialName string `json:"litellm_credential_name,omitempty"`
+
+	// LiteLLMTraceID is the LiteLLM trace ID
+	LiteLLMTraceID string `json:"litellm_trace_id,omitempty"`
+
+	// MaxFileSizeMB is the maximum file size in MB
+	MaxFileSizeMB int64 `json:"max_file_size_mb,omitempty"`
+
+	// MaxBudget is the maximum budget
+	MaxBudget string `json:"max_budget,omitempty"`
+
+	// BudgetDuration is the budget duration
+	BudgetDuration string `json:"budget_duration,omitempty"`
+
+	// UseInPassThrough indicates if to use in pass through
+	UseInPassThrough bool `json:"use_in_pass_through,omitempty"`
+
+	// UseLiteLLMProxy indicates if to use LiteLLM proxy
+	UseLiteLLMProxy bool `json:"use_litellm_proxy,omitempty"`
+
+	// MergeReasoningContentInChoices indicates if to merge reasoning content in choices
+	MergeReasoningContentInChoices bool `json:"merge_reasoning_content_in_choices,omitempty"`
+
+	// ModelInfo contains additional model information
+	ModelInfo runtime.RawExtension `json:"model_info,omitempty"`
+
+	// MockResponse is the mock response
+	MockResponse string `json:"mock_response,omitempty"`
+
+	// AutoRouterConfigPath is the auto router config path
+	AutoRouterConfigPath string `json:"auto_router_config_path,omitempty"`
+
+	// AutoRouterConfig is the auto router config
+	AutoRouterConfig string `json:"auto_router_config,omitempty"`
+
+	// AutoRouterDefaultModel is the auto router default model
+	AutoRouterDefaultModel string `json:"auto_router_default_model,omitempty"`
+
+	// AutoRouterEmbeddingModel is the auto router embedding model
+	AutoRouterEmbeddingModel string `json:"auto_router_embedding_model,omitempty"`
+
+	// Model is the model name
+	Model string `json:"model,omitempty"`
+
+	// AdditionalProps contains additional properties
+	AdditionalProps runtime.RawExtension `json:"additionalProp1,omitempty"`
+}
+
+// ModelInfo defines the model information.
+type ModelInfo struct {
+	// ID is the model ID
+	ID string `json:"id,omitempty"`
+
+	// DBModel indicates if this is a database model
+	DBModel bool `json:"db_model,omitempty"`
+
+	// UpdatedAt is the last update timestamp
+	UpdatedAt metav1.Time `json:"updated_at,omitempty"`
+
+	// UpdatedBy is who updated the model
+	UpdatedBy string `json:"updated_by,omitempty"`
+
+	// CreatedAt is the creation timestamp
+	CreatedAt metav1.Time `json:"created_at,omitempty"`
+
+	// CreatedBy is who created the model
+	CreatedBy string `json:"created_by,omitempty"`
+
+	// BaseModel is the base model name
+	BaseModel string `json:"base_model,omitempty"`
+
+	// Tier is the model tier (e.g., "free")
+	Tier string `json:"tier,omitempty"`
+
+	// TeamID is the team ID
+	TeamID string `json:"team_id,omitempty"`
+
+	// TeamPublicModelName is the team public model name
+	TeamPublicModelName string `json:"team_public_model_name,omitempty"`
+
+	// AdditionalProps contains additional properties
+	AdditionalProps runtime.RawExtension `json:"additionalProp1,omitempty"`
+}
+
+// ModelSpec defines the desired state of Model.
+type ModelSpec struct {
+	// ConnectionRef is the connection reference
+	ConnectionRef ConnectionRef `json:"connectionRef,omitempty"`
+
+	// ModelName is the name of the model
+	ModelName string `json:"model_name,omitempty"`
+
+	// LiteLLMParams contains the LiteLLM parameters
+	LiteLLMParams LiteLLMParams `json:"litellm_params,omitempty"`
+
+	// ModelInfo contains the model information
+	ModelInfo ModelInfo `json:"model_info,omitempty"`
+
+	// AdditionalProps contains additional properties
+	AdditionalProps runtime.RawExtension `json:"additionalProp1,omitempty"`
+}
+
+// ModelStatus defines the observed state of Model.
+type ModelStatus struct {
+	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
+	// Important: Run "make" to regenerate code after modifying this file
+}
+
+// +kubebuilder:object:root=true
+// +kubebuilder:subresource:status
+
+// Model is the Schema for the models API.
+type Model struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+
+	Spec   ModelSpec   `json:"spec,omitempty"`
+	Status ModelStatus `json:"status,omitempty"`
+}
+
+type ConnectionRef struct {
+	SecretRef   SecretRef   `json:"secretRef,omitempty"`
+	InstanceRef InstanceRef `json:"instanceRef,omitempty"`
+}
+
+type SecretRef struct {
+	Namespace  string `json:"namespace,omitempty"`
+	SecretName string `json:"secretName,omitempty"`
+}
+
+type InstanceRef struct {
+	Namespace string `json:"namespace,omitempty"`
+	Name      string `json:"name,omitempty"`
+}
+
+// NilKeys implements KeysInterface for types that don't have keys
+type NilKeys struct{}
+
+// GetMasterKey returns empty string for nil keys
+func (n NilKeys) GetMasterKey() string {
+	return ""
+}
+
+// GetURL returns empty string for nil keys
+func (n NilKeys) GetURL() string {
+	return ""
+}
+
+// GetSecretRef returns the SecretRef if it exists
+func (c ConnectionRef) GetSecretRef() interface{} {
+	// Check if SecretRef is not empty (has either Namespace or SecretName)
+	if c.SecretRef.Namespace != "" || c.SecretRef.SecretName != "" {
+		return c.SecretRef
+	}
+	return nil
+}
+
+// GetInstanceRef returns the LitellmInstanceRef if it exists
+func (c ConnectionRef) GetInstanceRef() interface{} {
+	// Check if LitellmInstanceRef is not empty (has either Namespace or LitellmInstanceName)
+	if c.InstanceRef.Namespace != "" || c.InstanceRef.Name != "" {
+		return c.InstanceRef
+	}
+	return nil
+}
+
+// HasSecretRef checks if SecretRef is specified
+func (c ConnectionRef) HasSecretRef() bool {
+	return c.SecretRef.Namespace != "" || c.SecretRef.SecretName != ""
+}
+
+// HasInstanceRef checks if LitellmInstanceRef is specified
+func (c ConnectionRef) HasInstanceRef() bool {
+	return c.InstanceRef.Namespace != "" || c.InstanceRef.Name != ""
+}
+
+// GetSecretName returns the secret name
+func (s SecretRef) GetSecretName() string {
+	return s.SecretName
+}
+
+// GetNamespace returns the namespace
+func (s SecretRef) GetNamespace() string {
+	return s.Namespace
+}
+
+// GetKeys returns NilKeys since litellm SecretRef doesn't have keys structure
+func (s SecretRef) GetKeys() interface{} {
+	return NilKeys{}
+}
+
+// HasKeys returns false since litellm SecretRef doesn't have keys structure
+func (s SecretRef) HasKeys() bool {
+	return false
+}
+
+// GetInstanceName returns the instance name
+func (i InstanceRef) GetInstanceName() string {
+	return i.Name
+}
+
+// GetNamespace returns the namespace
+func (i InstanceRef) GetNamespace() string {
+	return i.Namespace
+}
+
+// +kubebuilder:object:root=true
+
+// ModelList contains a list of Model.
+type ModelList struct {
+	metav1.TypeMeta `json:",inline"`
+	metav1.ListMeta `json:"metadata,omitempty"`
+	Items           []Model `json:"items"`
+}
+
+func init() {
+	SchemeBuilder.Register(&Model{}, &ModelList{})
+}

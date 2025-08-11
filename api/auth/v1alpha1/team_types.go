@@ -59,6 +59,16 @@ type SecretKeys struct {
 	URL string `json:"url"`
 }
 
+// GetMasterKey returns the master key field name
+func (s SecretKeys) GetMasterKey() string {
+	return s.MasterKey
+}
+
+// GetURL returns the URL field name
+func (s SecretKeys) GetURL() string {
+	return s.URL
+}
+
 // InstanceRef references a LiteLLM instance
 type InstanceRef struct {
 	// Name is the name of the LiteLLM instance
@@ -66,6 +76,56 @@ type InstanceRef struct {
 
 	// Namespace is the namespace of the LiteLLM instance (defaults to the same namespace as the Team)
 	Namespace string `json:"namespace,omitempty"`
+}
+
+// GetSecretRef returns the SecretRef if it exists
+func (c ConnectionRef) GetSecretRef() interface{} {
+	return c.SecretRef
+}
+
+// GetInstanceRef returns the InstanceRef if it exists
+func (c ConnectionRef) GetInstanceRef() interface{} {
+	return c.InstanceRef
+}
+
+// HasSecretRef checks if SecretRef is specified
+func (c ConnectionRef) HasSecretRef() bool {
+	return c.SecretRef != nil
+}
+
+// HasInstanceRef checks if InstanceRef is specified
+func (c ConnectionRef) HasInstanceRef() bool {
+	return c.InstanceRef != nil
+}
+
+// GetSecretName returns the secret name
+func (s *SecretRef) GetSecretName() string {
+	return s.Name
+}
+
+// GetNamespace returns the namespace (empty for auth SecretRef)
+func (s *SecretRef) GetNamespace() string {
+	return ""
+}
+
+// GetKeys returns the keys structure
+func (s *SecretRef) GetKeys() interface{} {
+	return s.Keys
+}
+
+// HasKeys returns true since auth SecretRef always has keys
+func (s *SecretRef) HasKeys() bool {
+	return true
+}
+
+// GetInstanceName returns the instance name
+func (i *InstanceRef) GetInstanceName() string {
+	return i.Name
+}
+
+// GetNamespace returns the namespace
+func (i *InstanceRef) GetNamespace() string {
+	return i.Namespace
 }
 
 // TeamSpec defines the desired state of Team

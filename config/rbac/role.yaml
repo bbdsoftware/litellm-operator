@@ -70,6 +70,7 @@ rules:
   - litellm.litellm.ai
   resources:
   - litellminstances
+  - models
   verbs:
   - create
   - delete
@@ -82,12 +83,14 @@ rules:
   - litellm.litellm.ai
   resources:
   - litellminstances/finalizers
+  - models/finalizers
   verbs:
   - update
 - apiGroups:
   - litellm.litellm.ai
   resources:
   - litellminstances/status
+  - models/status
   verbs:
   - get
   - patch

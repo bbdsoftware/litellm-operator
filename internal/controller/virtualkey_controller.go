@@ -89,7 +89,7 @@ func (r *VirtualKeyReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	}
 
 	// Get connection details
-	connectionDetails, err := r.connectionHandler.GetConnectionDetails(ctx, virtualKey.Spec.ConnectionRef, virtualKey.Namespace)
+	connectionDetails, err := r.connectionHandler.GetConnectionDetailsFromAuthRef(ctx, virtualKey.Spec.ConnectionRef, virtualKey.Namespace)
 	if err != nil {
 		log.Error(err, "Failed to get connection details")
 		if _, updateErr := r.updateConditions(ctx, virtualKey, metav1.Condition{

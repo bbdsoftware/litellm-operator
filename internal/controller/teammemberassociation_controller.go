@@ -80,7 +80,7 @@ func (r *TeamMemberAssociationReconciler) Reconcile(ctx context.Context, req ctr
 	}
 
 	// Get connection details
-	connectionDetails, err := r.connectionHandler.GetConnectionDetails(ctx, teamMemberAssociation.Spec.ConnectionRef, teamMemberAssociation.Namespace)
+	connectionDetails, err := r.connectionHandler.GetConnectionDetailsFromAuthRef(ctx, teamMemberAssociation.Spec.ConnectionRef, teamMemberAssociation.Namespace)
 	if err != nil {
 		log.Error(err, "Failed to get connection details")
 		if _, updateErr := r.updateConditions(ctx, teamMemberAssociation, metav1.Condition{
