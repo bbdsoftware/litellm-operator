@@ -28,6 +28,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
 	"gopkg.in/yaml.v2"
@@ -202,22 +203,20 @@ func renderProxyConfig(llm *litellmv1alpha1.LiteLLMInstance, ctx context.Context
 	// Create a custom struct for YAML output that handles API key references
 
 	type LiteLLMParamsYAML struct {
-			ApiBase 	string `yaml:"apiBase,omitempty"`
-			ApiKey 		string `yaml:"apiKey,omitempty"`
-			Model 		string `yaml:"model,omitempty"`
-			MaxBudget   string `yaml:"maxBudget,omitempty"`
-			MaxRetries  int    `yaml:"maxRetries,omitempty"`
-			TPM		    int    `yaml:"tpm,omitempty"`
-			RPM		    int    `yaml:"rpm,omitempty"`
-			RegionName 	string `yaml:"regionName,omitempty"`
+		ApiBase    string `yaml:"apiBase,omitempty"`
+		ApiKey     string `yaml:"apiKey,omitempty"`
+		Model      string `yaml:"model,omitempty"`
+		MaxBudget  string `yaml:"maxBudget,omitempty"`
+		MaxRetries int    `yaml:"maxRetries,omitempty"`
+		TPM        int    `yaml:"tpm,omitempty"`
+		RPM        int    `yaml:"rpm,omitempty"`
+		RegionName string `yaml:"regionName,omitempty"`
 	}
 	type ModelEntryYAML struct {
-		ModelName     string `yaml:"model_name"`
+		ModelName     string            `yaml:"model_name"`
 		LitellmParams LiteLLMParamsYAML `yaml:"litellm_params"`
 		ModelInfo     map[string]string `yaml:"model_info,omitempty"` // Optional field for additional model info
 	}
-
-	
 
 	type RouterSettingsYAML struct {
 		Host     string `yaml:"host"`
@@ -243,15 +242,15 @@ func renderProxyConfig(llm *litellmv1alpha1.LiteLLMInstance, ctx context.Context
 				continue
 			} else {
 				litellmParams := LiteLLMParamsYAML{
-					Model:   	model.LiteLLMParams.Model,
-					ApiBase: 	model.LiteLLMParams.ApiBase,
-					RPM:    	model.LiteLLMParams.RPM,
-					ApiKey: 	model.LiteLLMParams.ApiKey.Keys.ApiKey,
+					Model:      model.LiteLLMParams.Model,
+					ApiBase:    model.LiteLLMParams.ApiBase,
+					RPM:        model.LiteLLMParams.RPM,
+					ApiKey:     model.LiteLLMParams.ApiKey.Keys.ApiKey,
 					MaxBudget:  model.LiteLLMParams.MaxBudget,
 					MaxRetries: model.LiteLLMParams.MaxRetries,
 					TPM:        model.LiteLLMParams.TPM,
 					RegionName: model.LiteLLMParams.RegionName,
-				}	
+				}
 
 				// If model info is provided, add it to the model entry
 				var modelInfoCopy map[string]string
@@ -268,7 +267,7 @@ func renderProxyConfig(llm *litellmv1alpha1.LiteLLMInstance, ctx context.Context
 					ModelInfo:     modelInfoCopy,
 				}
 				modelListYAML = append(modelListYAML, modelYAML)
-			}			
+			}
 		}
 	}
 
@@ -538,6 +537,7 @@ func (r *LiteLLMInstanceReconciler) setCondition(llm *litellmv1alpha1.LiteLLMIns
 // createConfigMap creates or updates the ConfigMap for the LiteLLM instance.
 // It generates the LiteLLM proxy configuration and creates a ConfigMap containing the configuration file.
 func (r *LiteLLMInstanceReconciler) createConfigMap(ctx context.Context, llm *litellmv1alpha1.LiteLLMInstance) (*corev1.ConfigMap, error) {
+	log := log.FromContext(ctx)
 	configYAML := renderProxyConfig(llm, ctx)
 
 	configMap := &corev1.ConfigMap{
@@ -548,8 +548,21 @@ func (r *LiteLLMInstanceReconciler) createConfigMap(ctx context.Context, llm *li
 		Data: map[string]string{"proxy_server_config.yaml": configYAML},
 	}
 
-	if err := util.CreateOrUpdateWithRetry(ctx, r.Client, r.Scheme, configMap, llm); err != nil {
+	if restart, err := util.CreateOrUpdateWithRetry(ctx, r.Client, r.Scheme, configMap, llm); err != nil {
+		log.Error(err, "Failed to create or update config map", "configMap", configMap.Name)
 		return nil, err
+	} else if restart {
+		//get the deployment
+		deployment := &appsv1.Deployment{}
+		err := r.Get(ctx, client.ObjectKey{Name: util.GetDeploymentName(llm.Name), Namespace: llm.Namespace}, deployment)
+		if err != nil {
+			return nil, err
+		}
+		log.Info("Restarting deployment", "deployment", deployment.Name)
+		if err := util.RestartDeployment(ctx, r.Client, deployment.Name, deployment.Namespace); err != nil {
+			log.Error(err, "Failed to restart deployment", "deployment", deployment.Name)
+			return nil, err
+		}
 	}
 
 	return configMap, nil
