@@ -35,6 +35,7 @@ import (
 	authv1alpha1 "github.com/bbdsoftware/litellm-operator/api/v1alpha1"
 	"github.com/bbdsoftware/litellm-operator/internal/controller/common"
 	litellm "github.com/bbdsoftware/litellm-operator/internal/litellm"
+	"github.com/bbdsoftware/litellm-operator/internal/util"
 )
 
 // UserReconciler reconciles a User object
@@ -102,7 +103,7 @@ func (r *UserReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 
 	// If the User is being deleted, delete the user from litellm
 	if user.GetDeletionTimestamp() != nil {
-		if controllerutil.ContainsFinalizer(user, finalizerName) {
+		if controllerutil.ContainsFinalizer(user, util.FinalizerName) {
 			log.Info("Deleting User: " + user.Status.UserAlias + " from litellm")
 			return r.deleteUser(ctx, user)
 		}
@@ -200,7 +201,7 @@ func (r *UserReconciler) deleteUser(ctx context.Context, user *authv1alpha1.User
 		})
 	}
 
-	controllerutil.RemoveFinalizer(user, finalizerName)
+	controllerutil.RemoveFinalizer(user, util.FinalizerName)
 	if err := r.Update(ctx, user); err != nil {
 		log.Error(err, "Failed to remove finalizer")
 		return ctrl.Result{}, err
@@ -236,7 +237,7 @@ func (r *UserReconciler) createUser(ctx context.Context, user *authv1alpha1.User
 		})
 	}
 
-	secretName := getSecretName(userResponse.UserAlias)
+	secretName := util.GetSecretName(userResponse.UserAlias)
 
 	updateUserStatus(user, userResponse, secretName)
 	_, err = r.updateConditions(ctx, user, metav1.Condition{
@@ -249,7 +250,7 @@ func (r *UserReconciler) createUser(ctx context.Context, user *authv1alpha1.User
 		return ctrl.Result{}, err
 	}
 
-	controllerutil.AddFinalizer(user, finalizerName)
+	controllerutil.AddFinalizer(user, util.FinalizerName)
 	if err := r.Update(ctx, user); err != nil {
 		log.Error(err, "Failed to add finalizer")
 		return ctrl.Result{}, err
@@ -339,7 +340,7 @@ func createUserRequest(user *authv1alpha1.User) (litellm.UserRequest, error) {
 		Guardrails:           user.Spec.Guardrails,
 		KeyAlias:             user.Spec.KeyAlias,
 		MaxParallelRequests:  user.Spec.MaxParallelRequests,
-		Metadata:             ensureMetadata(user.Spec.Metadata),
+		Metadata:             util.EnsureMetadata(user.Spec.Metadata),
 		ModelMaxBudget:       user.Spec.ModelMaxBudget,
 		ModelRPMLimit:        user.Spec.ModelRPMLimit,
 		ModelTPMLimit:        user.Spec.ModelTPMLimit,

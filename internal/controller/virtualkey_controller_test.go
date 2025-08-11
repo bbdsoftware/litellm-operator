@@ -30,6 +30,7 @@ import (
 
 	authv1alpha1 "github.com/bbdsoftware/litellm-operator/api/v1alpha1"
 	"github.com/bbdsoftware/litellm-operator/internal/litellm"
+	"github.com/bbdsoftware/litellm-operator/internal/util"
 )
 
 type FakeLitellmVirtualKeyClient struct{}
@@ -120,14 +121,14 @@ var _ = Describe("VirtualKey Controller", func() {
 						KeyAlias: "test-key-alias",
 					},
 					Status: authv1alpha1.VirtualKeyStatus{
-						KeySecretRef: getSecretName("test-key-alias"),
+						KeySecretRef: util.GetSecretName("test-key-alias"),
 					},
 				}
 				Expect(k8sClient.Create(ctx, resource)).To(Succeed())
 				// create Secret
 				secret := &corev1.Secret{
 					ObjectMeta: metav1.ObjectMeta{
-						Name:      getSecretName(resource.Spec.KeyAlias),
+						Name:      util.GetSecretName(resource.Spec.KeyAlias),
 						Namespace: "default",
 					},
 					Data: map[string][]byte{

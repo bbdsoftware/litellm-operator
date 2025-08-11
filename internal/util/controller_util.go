@@ -14,13 +14,13 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package controller
+package util
 
 // finalizerName is the name of the finalizer used by the litellm operator
-const finalizerName = "litellm-operator.litellm.ai/finalizer"
+const FinalizerName = "litellm-operator.litellm.ai/finalizer"
 
 // ensureMetadata ensures that the metadata contains the managed_by metadata
-func ensureMetadata(metadata map[string]string) map[string]string {
+func EnsureMetadata(metadata map[string]string) map[string]string {
 	operatorMetadata := map[string]string{
 		"managed_by": "litellm-operator",
 	}
@@ -28,9 +28,4 @@ func ensureMetadata(metadata map[string]string) map[string]string {
 		operatorMetadata[k] = v
 	}
 	return operatorMetadata
-}
-
-// getSecretName returns the name of the secret for a given alias
-func getSecretName(alias string) string {
-	return "litellm-key-" + alias
 }
