@@ -234,7 +234,7 @@ spec:
                       type: object
                     modelInfo:
                       properties:
-                        additionalProps:
+                        additionalProp1:
                           additionalProperties:
                             type: string
                           type: object

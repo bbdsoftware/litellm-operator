@@ -82,59 +82,59 @@ type LiteLLMInstanceReconciler struct {
 }
 
 type LiteLLMParamsYAML struct {
-	ApiKey                           string              `yaml:"apiKey,omitempty"`
-	ApiBase                          string              `yaml:"apiBase,omitempty"`
-	AwsAccessKeyID                   string              `yaml:"awsAccessKeyId,omitempty"`
-	AwsSecretAccessKey               string              `yaml:"awsSecretAccessKey,omitempty"`
-	AwsRegionName                    string              `yaml:"awsRegionName,omitempty"`
-	AutoRouterConfigPath             string              `yaml:"autoRouterConfigPath,omitempty"`
-	AutoRouterConfig                 string              `yaml:"autoRouterConfig,omitempty"`
-	AutoRouterDefaultModel           string              `yaml:"autoRouterDefaultModel,omitempty"`
-	AutoRouterEmbeddingModel         string              `yaml:"autoRouterEmbeddingModel,omitempty"`
+	ApiKey                           string              `yaml:"api_key,omitempty"`
+	ApiBase                          string              `yaml:"api_base,omitempty"`
+	AwsAccessKeyID                   string              `yaml:"aws_access_key_id,omitempty"`
+	AwsSecretAccessKey               string              `yaml:"aws_secret_access_key,omitempty"`
+	AwsRegionName                    string              `yaml:"aws_region_name,omitempty"`
+	AutoRouterConfigPath             string              `yaml:"auto_router_config_path,omitempty"`
+	AutoRouterConfig                 string              `yaml:"auto_router_config,omitempty"`
+	AutoRouterDefaultModel           string              `yaml:"auto_router_default_model,omitempty"`
+	AutoRouterEmbeddingModel         string              `yaml:"auto_router_embedding_model,omitempty"`
 	AdditionalProps                  map[string]string   `yaml:"additionalProps,omitempty"`
-	ApiVersion                       string              `yaml:"apiVersion,omitempty"`
-	BudgetDuration                   string              `yaml:"budgetDuration,omitempty"`
-	ConfigurableClientsideAuthParams []map[string]string `yaml:"configurableClientsideAuthParams,omitempty"`
-	InputCostPerToken                float64             `yaml:"inputCostPerToken,omitempty"`
-	InputCostPerPixel                float64             `yaml:"inputCostPerPixel,omitempty"`
-	InputCostPerSecond               float64             `yaml:"inputCostPerSecond,omitempty"`
-	LiteLLMTraceID                   string              `yaml:"litellmTraceId,omitempty"`
-	LiteLLMCredentialName            string              `yaml:"litellmCredentialName,omitempty"`
-	MaxFileSizeMB                    float64             `yaml:"maxFileSizeMb,omitempty"`
-	MergeReasoningContentInChoices   bool                `yaml:"mergeReasoningContentInChoices,omitempty"`
-	MockResponse                     string              `yaml:"mockResponse,omitempty"`
+	ApiVersion                       string              `yaml:"api_version,omitempty"`
+	BudgetDuration                   string              `yaml:"budget_furation,omitempty"`
+	ConfigurableClientsideAuthParams []map[string]string `yaml:"configurable_clientside_auth_params,omitempty"`
+	InputCostPerToken                float64             `yaml:"input_cost_per_token,omitempty"`
+	InputCostPerPixel                float64             `yaml:"input_cost_per_pixel,omitempty"`
+	InputCostPerSecond               float64             `yaml:"input_cost_per_second,omitempty"`
+	LiteLLMTraceID                   string              `yaml:"litellm_trace_id,omitempty"`
+	LiteLLMCredentialName            string              `yaml:"litellm_credential_name,omitempty"`
+	MaxFileSizeMB                    float64             `yaml:"max_file_size_mb,omitempty"`
+	MergeReasoningContentInChoices   bool                `yaml:"merge_reasoning_content_in_choices,omitempty"`
+	MockResponse                     string              `yaml:"mock_response,omitempty"`
 	Model                            string              `yaml:"model"`
-	MaxBudget                        float64             `yaml:"maxBudget,omitempty"`
-	MaxRetries                       int                 `yaml:"maxRetries,omitempty"`
+	MaxBudget                        float64             `yaml:"max_budget,omitempty"`
+	MaxRetries                       int                 `yaml:"max_retries,omitempty"`
 	Organization                     string              `yaml:"organization,omitempty"`
-	OutputCostPerToken               float64             `yaml:"outputCostPerToken,omitempty"`
-	OutputCostPerSecond              float64             `yaml:"outputCostPerSecond,omitempty"`
-	OutputCostPerPixel               float64             `yaml:"outputCostPerPixel,omitempty"`
-	RegionName                       string              `yaml:"regionName,omitempty"`
+	OutputCostPerToken               float64             `yaml:"output_cost_per_token,omitempty"`
+	OutputCostPerSecond              float64             `yaml:"output_cost_per_second,omitempty"`
+	OutputCostPerPixel               float64             `yaml:"output_cost_per_pixel,omitempty"`
+	RegionName                       string              `yaml:"region_name,omitempty"`
 	RPM                              int                 `yaml:"rpm,omitempty"`
-	StreamTimeout                    int                 `yaml:"streamTimeout,omitempty"`
+	StreamTimeout                    int                 `yaml:"stream_timeout,omitempty"`
 	TPM                              int                 `yaml:"tpm,omitempty"`
 	Timeout                          int                 `yaml:"timeout,omitempty"`
-	UseInPassThrough                 bool                `yaml:"useInPassThrough,omitempty"`
-	UseLiteLLMProxy                  bool                `yaml:"useLiteLLMProxy,omitempty"`
-	VertexProject                    string              `yaml:"vertexProject,omitempty"`
-	VertexLocation                   string              `yaml:"vertexLocation,omitempty"`
-	VertexCredentials                string              `yaml:"vertexCredentials,omitempty"`
-	WatsonxRegionName                string              `yaml:"watsonxRegionName,omitempty"`
+	UseInPassThrough                 bool                `yaml:"use_in_pass_through,omitempty"`
+	UseLiteLLMProxy                  bool                `yaml:"use_litellm_proxy,omitempty"`
+	VertexProject                    string              `yaml:"vertex_project,omitempty"`
+	VertexLocation                   string              `yaml:"vertex_location,omitempty"`
+	VertexCredentials                string              `yaml:"vertex_credentials,omitempty"`
+	WatsonxRegionName                string              `yaml:"watsonx_region_name,omitempty"`
 }
 
 type ModelInfoYaml struct {
 	ID                  string            `yaml:"id,omitempty"`
-	DbModel             bool              `yaml:"dbModel,omitempty"`
-	UpdatedAt           metav1.Time       `yaml:"updatedAt,omitempty"`
-	UpdatedBy           string            `yaml:"updatedBy,omitempty"`
-	CreatedAt           metav1.Time       `yaml:"createdAt,omitempty"`
-	CreatedBy           string            `yaml:"createdBy,omitempty"`
-	BaseModel           string            `yaml:"baseModel,omitempty"`
+	DbModel             bool              `yaml:"db_model,omitempty"`
+	UpdatedAt           metav1.Time       `yaml:"updated_at,omitempty"`
+	UpdatedBy           string            `yaml:"updated_by,omitempty"`
+	CreatedAt           metav1.Time       `yaml:"created_at,omitempty"`
+	CreatedBy           string            `yaml:"created_by,omitempty"`
+	BaseModel           string            `yaml:"base_model,omitempty"`
 	Tier                string            `yaml:"tier,omitempty"`
-	TeamID              string            `yaml:"teamId,omitempty"`
-	TeamPublicModelName string            `yaml:"teamPublicModelName,omitempty"`
-	AdditionalProps     map[string]string `yaml:"additionalProps,omitempty"`
+	TeamID              string            `yaml:"team_id,omitempty"`
+	TeamPublicModelName string            `yaml:"team_public_model_name,omitempty"`
+	AdditionalProps     map[string]string `yaml:"additionalProp1,omitempty"`
 }
 
 type ModelListItemYAML struct {

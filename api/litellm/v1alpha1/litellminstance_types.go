@@ -92,7 +92,7 @@ type ModelInfo struct {
 	Tier                string            `json:"tier,omitempty"`
 	TeamID              string            `json:"teamId,omitempty"`
 	TeamPublicModelName string            `json:"teamPublicModelName,omitempty"`
-	AdditionalProps     map[string]string `json:"additionalProps,omitempty"`
+	AdditionalProps     map[string]string `json:"additionalProp1,omitempty"`
 }
 
 type ApiKeySecretRef struct {

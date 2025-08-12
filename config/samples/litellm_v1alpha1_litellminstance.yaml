@@ -22,8 +22,10 @@ spec:
       liteLLMParams:
         apiBase: https://api.litellm.ai/v1
         model: gpt-3.5-turbo
-        maxBudget: "1000"
+        maxBudget: 1000.99
         maxRetries: 3
+        input_cost_per_second: 0000.26
+        use_litellm_proxy: true
         tpm: 60
         rpm: 20
         regionName: us-west-2
@@ -32,5 +34,7 @@ spec:
           keys:
             apiKey: api-key
       modelInfo:
-        description: "GPT-3.5 Turbo model for general-purpose tasks"
-        version: "1.0"
+        teamId: 
+        additionalProps:
+          description: "GPT-3.5 Turbo model for general-purpose tasks"
+          version: "1.0"

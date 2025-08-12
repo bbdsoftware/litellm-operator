@@ -110,6 +110,12 @@ var _ = Describe("LiteLLMInstance Controller", func() {
 									Organization:      "test-org",
 									UseLiteLLMProxy:   true,
 									InputCostPerToken: 0.0001,
+									ApiKey: litellmv1alpha1.ApiKeySecretRef{
+										NameRef: "test-api-key-secret",
+										Keys: litellmv1alpha1.ApiKeySecretKeys{
+											ApiKey: "test-api-key",
+										},
+									},
 								},
 								ModelInfo: litellmv1alpha1.ModelInfo{
 									BaseModel: "gpt-3.5-turbo",
@@ -175,8 +181,9 @@ var _ = Describe("LiteLLMInstance Controller", func() {
 			Expect(yamlData).To(ContainSubstring("model_list:"))
 			// Verify the model_list has the expected structure
 			Expect(yamlData).To(ContainSubstring("tier: free"))
-			Expect(yamlData).To(ContainSubstring("useLiteLLMProxy: true"))
-			Expect(yamlData).To(ContainSubstring("inputCostPerToken: 0.0001"))
+			Expect(yamlData).To(ContainSubstring("use_litellm_proxy: true"))
+			Expect(yamlData).To(ContainSubstring("input_cost_per_token: 0.0001"))
+			Expect(yamlData).To(ContainSubstring("additionalProp1:"))
 		})
 
 	})
