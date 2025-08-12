@@ -33,24 +33,70 @@ type LiteLLMInstanceSpec struct {
 }
 
 type ModelList struct {
-	ModelName     string            `json:"modelName,omitempty"`
-	LiteLLMParams LiteLLMParams     `json:"liteLLMParams,omitempty"`
-	ModelInfo     map[string]string `json:"modelInfo,omitempty"`
+	ModelName       string            `json:"modelName,omitempty"`
+	LiteLLMParams   LiteLLMParams     `json:"liteLLMParams,omitempty"`
+	ModelInfo       ModelInfo         `json:"modelInfo,omitempty"`
+	AdditionalProps map[string]string `json:"additionalProps,omitempty"`
 }
 
 type LiteLLMParams struct {
-	ApiKey 		ApiKeySecretRef `json:"apiKey,omitempty"`
-	ApiBase 	string `json:"apiBase,omitempty"`
-	Model 		string `json:"model,omitempty"`
-	MaxBudget   string `json:"maxBudget,omitempty"`
-	MaxRetries  int    `json:"maxRetries,omitempty"`
-	TPM		    int    `json:"tpm,omitempty"`
-	RPM		    int    `json:"rpm,omitempty"`
-	RegionName 	string `json:"regionName,omitempty"`
+	ApiKey                           ApiKeySecretRef     `json:"apiKey,omitempty"`
+	ApiBase                          string              `json:"apiBase,omitempty"`
+	AwsAccessKeyID                   string              `json:"awsAccessKeyId,omitempty"`
+	AwsSecretAccessKey               string              `json:"awsSecretAccessKey,omitempty"`
+	AwsRegionName                    string              `json:"awsRegionName,omitempty"`
+	AutoRouterConfigPath             string              `json:"autoRouterConfigPath,omitempty"`
+	AutoRouterConfig                 string              `json:"autoRouterConfig,omitempty"`
+	AutoRouterDefaultModel           string              `json:"autoRouterDefaultModel,omitempty"`
+	AutoRouterEmbeddingModel         string              `json:"autoRouterEmbeddingModel,omitempty"`
+	AdditionalProps                  map[string]string   `json:"additionalProps,omitempty"`
+	ApiVersion                       string              `json:"apiVersion,omitempty"`
+	BudgetDuration                   string              `json:"budgetDuration,omitempty"`
+	ConfigurableClientsideAuthParams []map[string]string `json:"configurableClientsideAuthParams,omitempty"`
+	InputCostPerToken                float64             `json:"inputCostPerToken,omitempty"`
+	InputCostPerPixel                float64             `json:"inputCostPerPixel,omitempty"`
+	InputCostPerSecond               float64             `json:"inputCostPerSecond,omitempty"`
+	LiteLLMTraceID                   string              `json:"litellmTraceId,omitempty"`
+	LiteLLMCredentialName            string              `json:"litellmCredentialName,omitempty"`
+	MaxFileSizeMB                    float64             `json:"maxFileSizeMb,omitempty"`
+	MergeReasoningContentInChoices   bool                `json:"mergeReasoningContentInChoices,omitempty"`
+	MockResponse                     string              `json:"mockResponse,omitempty"`
+	Model                            string              `json:"model,omitempty"`
+	MaxBudget                        float64             `json:"maxBudget,omitempty"`
+	MaxRetries                       int                 `json:"maxRetries,omitempty"`
+	Organization                     string              `json:"organization,omitempty"`
+	OutputCostPerToken               float64             `json:"outputCostPerToken,omitempty"`
+	OutputCostPerSecond              float64             `json:"outputCostPerSecond,omitempty"`
+	OutputCostPerPixel               float64             `json:"outputCostPerPixel,omitempty"`
+	RegionName                       string              `json:"regionName,omitempty"`
+	RPM                              int                 `json:"rpm,omitempty"`
+	StreamTimeout                    int                 `json:"streamTimeout,omitempty"`
+	TPM                              int                 `json:"tpm,omitempty"`
+	Timeout                          int                 `json:"timeout,omitempty"`
+	UseInPassThrough                 bool                `json:"useInPassThrough,omitempty"`
+	UseLiteLLMProxy                  bool                `json:"useLiteLLMProxy,omitempty"`
+	VertexProject                    string              `json:"vertexProject,omitempty"`
+	VertexLocation                   string              `json:"vertexLocation,omitempty"`
+	VertexCredentials                string              `json:"vertexCredentials,omitempty"`
+	WatsonxRegionName                string              `json:"watsonxRegionName,omitempty"`
+}
+
+type ModelInfo struct {
+	ID                  string            `json:"id,omitempty"`
+	DbModel             bool              `json:"dbModel,omitempty"`
+	UpdatedAt           metav1.Time       `json:"updatedAt,omitempty"`
+	UpdatedBy           string            `json:"updatedBy,omitempty"`
+	CreatedAt           metav1.Time       `json:"createdAt,omitempty"`
+	CreatedBy           string            `json:"createdBy,omitempty"`
+	BaseModel           string            `json:"baseModel,omitempty"`
+	Tier                string            `json:"tier,omitempty"`
+	TeamID              string            `json:"teamId,omitempty"`
+	TeamPublicModelName string            `json:"teamPublicModelName,omitempty"`
+	AdditionalProps     map[string]string `json:"additionalProps,omitempty"`
 }
 
 type ApiKeySecretRef struct {
-	NameRef string `json:"nameRef"`
+	NameRef string           `json:"nameRef"`
 	Keys    ApiKeySecretKeys `json:"keys"`
 }
 

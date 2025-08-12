@@ -103,14 +103,21 @@ var _ = Describe("LiteLLMInstance Controller", func() {
 						ModelList: []litellmv1alpha1.ModelList{
 							{
 								ModelName: "gpt-3.5-turbo",
-
 								LiteLLMParams: litellmv1alpha1.LiteLLMParams{
-									ApiBase:   "https://api.litellm.ai/v1",
-									Model:     "gpt-3.5-turbo",
-									MaxBudget: "1000",
+									ApiBase:           "https://api.litellm.ai/v1",
+									Model:             "gpt-3.5-turbo",
+									MaxBudget:         1000,
+									Organization:      "test-org",
+									UseLiteLLMProxy:   true,
+									InputCostPerToken: 0.0001,
 								},
-								ModelInfo: map[string]string{
-									"provider": "litellm",
+								ModelInfo: litellmv1alpha1.ModelInfo{
+									BaseModel: "gpt-3.5-turbo",
+									Tier:      "free",
+									AdditionalProps: map[string]string{
+										"provider":   "test-provider",
+										"additional": "info",
+									},
 								},
 							},
 						},
@@ -166,8 +173,10 @@ var _ = Describe("LiteLLMInstance Controller", func() {
 			Expect(yamlData).To(ContainSubstring("router_settings"))
 			Expect(yamlData).To(ContainSubstring("general_settings"))
 			Expect(yamlData).To(ContainSubstring("model_list:"))
-			// Verify the model_list is not empty
-			Expect(yamlData).To(MatchRegexp(`model_list:\s*\n\s*-\s*`))
+			// Verify the model_list has the expected structure
+			Expect(yamlData).To(ContainSubstring("tier: free"))
+			Expect(yamlData).To(ContainSubstring("useLiteLLMProxy: true"))
+			Expect(yamlData).To(ContainSubstring("inputCostPerToken: 0.0001"))
 		})
 
 	})

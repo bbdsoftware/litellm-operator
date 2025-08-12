@@ -128,8 +128,16 @@ spec:
               modelList:
                 items:
                   properties:
+                    additionalProps:
+                      additionalProperties:
+                        type: string
+                      type: object
                     liteLLMParams:
                       properties:
+                        additionalProps:
+                          additionalProperties:
+                            type: string
+                          type: object
                         apiBase:
                           type: string
                         apiKey:
@@ -147,22 +155,111 @@ spec:
                           - keys
                           - nameRef
                           type: object
-                        maxBudget:
+                        apiVersion:
                           type: string
+                        autoRouterConfig:
+                          type: string
+                        autoRouterConfigPath:
+                          type: string
+                        autoRouterDefaultModel:
+                          type: string
+                        autoRouterEmbeddingModel:
+                          type: string
+                        awsAccessKeyId:
+                          type: string
+                        awsRegionName:
+                          type: string
+                        awsSecretAccessKey:
+                          type: string
+                        budgetDuration:
+                          type: string
+                        configurableClientsideAuthParams:
+                          items:
+                            additionalProperties:
+                              type: string
+                            type: object
+                          type: array
+                        inputCostPerPixel:
+                          type: number
+                        inputCostPerSecond:
+                          type: number
+                        inputCostPerToken:
+                          type: number
+                        litellmCredentialName:
+                          type: string
+                        litellmTraceId:
+                          type: string
+                        maxBudget:
+                          type: number
+                        maxFileSizeMb:
+                          type: number
                         maxRetries:
                           type: integer
+                        mergeReasoningContentInChoices:
+                          type: boolean
+                        mockResponse:
+                          type: string
                         model:
                           type: string
+                        organization:
+                          type: string
+                        outputCostPerPixel:
+                          type: number
+                        outputCostPerSecond:
+                          type: number
+                        outputCostPerToken:
+                          type: number
                         regionName:
                           type: string
                         rpm:
                           type: integer
+                        streamTimeout:
+                          type: integer
+                        timeout:
+                          type: integer
                         tpm:
                           type: integer
+                        useInPassThrough:
+                          type: boolean
+                        useLiteLLMProxy:
+                          type: boolean
+                        vertexCredentials:
+                          type: string
+                        vertexLocation:
+                          type: string
+                        vertexProject:
+                          type: string
+                        watsonxRegionName:
+                          type: string
                       type: object
                     modelInfo:
-                      additionalProperties:
-                        type: string
+                      properties:
+                        additionalProps:
+                          additionalProperties:
+                            type: string
+                          type: object
+                        baseModel:
+                          type: string
+                        createdAt:
+                          format: date-time
+                          type: string
+                        createdBy:
+                          type: string
+                        dbModel:
+                          type: boolean
+                        id:
+                          type: string
+                        teamId:
+                          type: string
+                        teamPublicModelName:
+                          type: string
+                        tier:
+                          type: string
+                        updatedAt:
+                          format: date-time
+                          type: string
+                        updatedBy:
+                          type: string
                       type: object
                     modelName:
                       type: string
