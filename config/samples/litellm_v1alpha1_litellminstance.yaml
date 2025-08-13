@@ -8,7 +8,7 @@ spec:
     nameRef:  redis-secret
     keys:
       hostSecret: host
-      portSecret: 5555
+      portSecret: port
       passwordSecret: password
   databaseSecretRef:
     nameRef:  postgres-secret
