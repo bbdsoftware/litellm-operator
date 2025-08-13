@@ -96,7 +96,7 @@ var _ = Describe("LiteLLMInstance Controller", func() {
 							NameRef: "test-redis-secret",
 							Keys: litellmv1alpha1.RedisSecretKeys{
 								HostSecret:     "host",
-								PortSecret:     6379,
+								PortSecret:     "port",
 								PasswordSecret: "password",
 							},
 						},
