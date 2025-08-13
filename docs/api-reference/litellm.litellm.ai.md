@@ -184,7 +184,7 @@ _Appears in:_
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
 | `hostSecret` _string_ |  |  |  |
-| `portSecret` _integer_ |  |  |  |
+| `portSecret` _string_ |  |  |  |
 | `passwordSecret` _string_ |  |  |  |
 
 

@@ -134,7 +134,7 @@ spec:
                       passwordSecret:
                         type: string
                       portSecret:
-                        type: integer
+                        type: string
                     required:
                     - hostSecret
                     - passwordSecret

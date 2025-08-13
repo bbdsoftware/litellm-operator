@@ -59,7 +59,7 @@ type DatabaseSecretKeys struct {
 
 type RedisSecretKeys struct {
 	HostSecret     string `json:"hostSecret"`
-	PortSecret     int    `json:"portSecret"`
+	PortSecret     string `json:"portSecret"`
 	PasswordSecret string `json:"passwordSecret"`
 }
 

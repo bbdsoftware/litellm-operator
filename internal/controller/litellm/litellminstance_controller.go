@@ -211,7 +211,7 @@ func renderProxyConfig(llm *litellmv1alpha1.LiteLLMInstance) string {
 
 	type RouterSettingsYAML struct {
 		Host     string `yaml:"host"`
-		Port     int    `yaml:"port"`
+		Port     string `yaml:"port"`
 		Password string `yaml:"password,omitempty"`
 	}
 
