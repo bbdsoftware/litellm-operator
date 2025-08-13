@@ -111,7 +111,7 @@ kubectl get svc -n litellm | grep litellm-postgres
 
 ## Optional: Deploy Redis
 
-The below example deploys a single instance of Redis. For more comprehensive deployment, see the [official Redis Helm chart](https://github.com/bitnami/charts/tree/master/bitnami/redis).
+The below example deploys a single instance of Redis
 
 ```yaml
 #redis-deployment.yaml
