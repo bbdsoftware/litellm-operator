@@ -33,31 +33,31 @@ metadata:
   namespace: litellm
 spec:
   instances: 1
-  
+
   postgresql:
     parameters:
-      max_connections: "200"
-      shared_buffers: "256MB"
-      effective_cache_size: "1GB"
-    
+      max_connections: '200'
+      shared_buffers: '256MB'
+      effective_cache_size: '1GB'
+
   bootstrap:
     initdb:
       database: litellm
       owner: litellm
       secret:
         name: litellm-postgres-credentials
-  
+
   storage:
     size: 10Gi
-    storageClass: "standard" # Adjust based on your cluster's storage classes
-  
+    storageClass: 'standard' # Adjust based on your cluster's storage classes
+
   resources:
     requests:
-      memory: "512Mi"
-      cpu: "500m"
+      memory: '512Mi'
+      cpu: '500m'
     limits:
-      memory: "1Gi"
-      cpu: "1000m"
+      memory: '1Gi'
+      cpu: '1000m'
 
 ---
 apiVersion: v1
@@ -107,6 +107,76 @@ kubectl get svc -n litellm | grep litellm-postgres
 # Database: litellm
 # Username: litellm
 # Password: password123 (or whatever you set in the secret)
+```
+
+## Optional: Deploy Redis
+
+The below example deploys a single instance of Redis. For more comprehensive deployment, see the [official Redis Helm chart](https://github.com/bitnami/charts/tree/master/bitnami/redis).
+
+```yaml
+#redis-deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis
+spec:
+  selector:
+    matchLabels:
+      app: redis
+  template:
+    metadata:
+      labels:
+        app: redis
+    spec:
+      containers:
+        - name: redis
+          image: redis:8.2.0 #For more versions, see https://hub.docker.com/_/redis
+          ports:
+            - containerPort: 6379
+          volumeMounts:
+            - name: redis-storage
+              mountPath: /data
+          env:
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: redis-secret
+                  key: redis-password
+      volumes:
+        - name: redis-storage
+          persistentVolumeClaim:
+            claimName: redis-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis-service
+spec:
+  selector:
+    app: redis
+  ports:
+    - port: 6379
+      targetPort: 6379
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: redis-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: redis-secret
+type: Opaque
+data:
+  # Base64 encoded password (echo -n 'password123' | base64). Change this!
+  redis-password: cGFzc3dvcmQxMjM=
 ```
 
 ## Step 1: Create Required Secrets
@@ -162,7 +232,7 @@ type: Opaque
 data:
   host: <base64-encoded-redis-host>
   port: <base64-encoded-redis-port>
-  password: <base64-encoded-redis-password>
+  password: <base64-encoded-redis-password> #should match the password in redis-deployment.yaml
 ```
 
 Apply the secrets:
@@ -226,7 +296,7 @@ spec:
   keyAlias: example-service
   models:
     - gpt-4o
-  maxBudget: "10"
+  maxBudget: '10'
   budgetDuration: 1h
   connectionRef:
     instanceRef:
@@ -301,8 +371,6 @@ curl -X POST "http://your-litellm-endpoint/chat/completions" \
   }'
 ```
 
-
-
 ## Complete Example File
 
 You can also create all resources in a single file:
@@ -361,7 +429,7 @@ spec:
   keyAlias: example-service
   models:
     - gpt-4o
-  maxBudget: "10"
+  maxBudget: '10'
   budgetDuration: 1h
   connectionRef:
     instanceRef:
@@ -391,4 +459,4 @@ kubectl delete virtualkey example-service
 kubectl delete litellminstance litellm-example
 kubectl delete secret redis-secret
 kubectl delete secret postgres-secret
-``` 
+```
