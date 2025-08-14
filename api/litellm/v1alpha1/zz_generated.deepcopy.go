@@ -21,7 +21,7 @@ limitations under the License.
 package v1alpha1
 
 import (
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 )
 
@@ -92,7 +92,6 @@ func (in *LiteLLMInstance) DeepCopyInto(out *LiteLLMInstance) {
 	out.TypeMeta = in.TypeMeta
 	in.ObjectMeta.DeepCopyInto(&out.ObjectMeta)
 	in.Spec.DeepCopyInto(&out.Spec)
-	in.Spec.DeepCopyInto(&out.Spec)
 	in.Status.DeepCopyInto(&out.Status)
 }
 
@@ -156,13 +155,6 @@ func (in *LiteLLMInstanceSpec) DeepCopyInto(out *LiteLLMInstanceSpec) {
 	if in.ModelList != nil {
 		in, out := &in.ModelList, &out.ModelList
 		*out = make([]Model, len(*in))
-		for i := range *in {
-			(*in)[i].DeepCopyInto(&(*out)[i])
-		}
-	}
-	if in.ModelList != nil {
-		in, out := &in.ModelList, &out.ModelList
-		*out = make([]ModelList, len(*in))
 		for i := range *in {
 			(*in)[i].DeepCopyInto(&(*out)[i])
 		}

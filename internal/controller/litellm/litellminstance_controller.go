@@ -133,7 +133,7 @@ type ModelListItemYAML struct {
 
 type RouterSettingsYAML struct {
 	Host     string `yaml:"host"`
-	Port     int    `yaml:"port"`
+	Port     string `yaml:"port"`
 	Password string `yaml:"password,omitempty"`
 }
 
