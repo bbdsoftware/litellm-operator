@@ -18,23 +18,19 @@ spec:
       usernameSecret: username
       dbnameSecret: dbname
   modelList:
-    - modelName: gpt-3.5-turbo
-      liteLLMParams:
-        apiBase: https://api.litellm.ai/v1
-        model: gpt-3.5-turbo
-        maxBudget: 1000.99
-        maxRetries: 3
-        input_cost_per_second: 0000.26
-        use_litellm_proxy: true
-        tpm: 60
-        rpm: 20
-        regionName: us-west-2
-        apiKey:
-          nameRef: api-key-secret
-          keys:
-            apiKey: api-key
-      modelInfo:
-        teamId: 
-        additionalProps:
-          description: "GPT-3.5 Turbo model for general-purpose tasks"
-          version: "1.0"
+  - modelName: azure-gpt-4o
+    requiresAuth: true
+    identifier: gpt-east-us-prod
+    modelCredentials:
+      nameRef: bedrock-model-credentials
+      keys:
+        awsAccessKeyId: awsAccessKeyId
+        awsSecretAccessKey: awsSecretAccessKey
+    liteLLMParams:
+      model: "azure/gpt-4o"
+      customLLMProvider: "azure"
+  - modelName: azure-gpt-4o
+    requiresAuth: false
+    identifier: gpt-west-eu-prod
+    liteLLMParams:
+      model: "azure/gpt-4o"

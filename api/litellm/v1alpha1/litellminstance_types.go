@@ -29,18 +29,19 @@ type LiteLLMInstanceSpec struct {
 	RedisSecretRef    RedisSecretRef    `json:"redisSecretRef,omitempty"`
 	Ingress           Ingress           `json:"ingress,omitempty"`
 	Gateway           Gateway           `json:"gateway,omitempty"`
-	ModelList         []ModelList       `json:"modelList,omitempty"`
+	ModelList         []Model           `json:"modelList,omitempty"`
 }
 
-type ModelList struct {
-	ModelName       string            `json:"modelName,omitempty"`
-	LiteLLMParams   LiteLLMParams     `json:"liteLLMParams,omitempty"`
-	ModelInfo       ModelInfo         `json:"modelInfo,omitempty"`
-	AdditionalProps map[string]string `json:"additionalProps,omitempty"`
+type Model struct {
+	ModelName        string                   `json:"modelName,omitempty"`
+	RequiresAuth     bool                     `json:"requiresAuth"`
+	Identifier       string                   `json:"identifier"`
+	ModelCredentials ModelCredentialSecretRef `json:"modelCredentials,omitempty"`
+	LiteLLMParams    LiteLLMParams            `json:"liteLLMParams,omitempty"`
 }
 
 type LiteLLMParams struct {
-	ApiKey                           ApiKeySecretRef     `json:"apiKey,omitempty"`
+	ApiKey                           string              `json:"apiKey,omitempty"`
 	ApiBase                          string              `json:"apiBase,omitempty"`
 	AwsAccessKeyID                   string              `json:"awsAccessKeyId,omitempty"`
 	AwsSecretAccessKey               string              `json:"awsSecretAccessKey,omitempty"`
@@ -53,6 +54,7 @@ type LiteLLMParams struct {
 	ApiVersion                       string              `json:"apiVersion,omitempty"`
 	BudgetDuration                   string              `json:"budgetDuration,omitempty"`
 	ConfigurableClientsideAuthParams []map[string]string `json:"configurableClientsideAuthParams,omitempty"`
+	CustomLLMProvider                string              `json:"customLLMProvider,omitempty"`
 	InputCostPerToken                float64             `json:"inputCostPerToken,omitempty"`
 	InputCostPerPixel                float64             `json:"inputCostPerPixel,omitempty"`
 	InputCostPerSecond               float64             `json:"inputCostPerSecond,omitempty"`
@@ -81,27 +83,18 @@ type LiteLLMParams struct {
 	WatsonxRegionName                string              `json:"watsonxRegionName,omitempty"`
 }
 
-type ModelInfo struct {
-	ID                  string            `json:"id,omitempty"`
-	DbModel             bool              `json:"dbModel,omitempty"`
-	UpdatedAt           metav1.Time       `json:"updatedAt,omitempty"`
-	UpdatedBy           string            `json:"updatedBy,omitempty"`
-	CreatedAt           metav1.Time       `json:"createdAt,omitempty"`
-	CreatedBy           string            `json:"createdBy,omitempty"`
-	BaseModel           string            `json:"baseModel,omitempty"`
-	Tier                string            `json:"tier,omitempty"`
-	TeamID              string            `json:"teamId,omitempty"`
-	TeamPublicModelName string            `json:"teamPublicModelName,omitempty"`
-	AdditionalProps     map[string]string `json:"additionalProp1,omitempty"`
+type ModelCredentialSecretRef struct {
+	NameRef string                    `json:"nameRef"`
+	Keys    ModelCredentialSecretKeys `json:"keys"`
 }
 
-type ApiKeySecretRef struct {
-	NameRef string           `json:"nameRef"`
-	Keys    ApiKeySecretKeys `json:"keys"`
-}
-
-type ApiKeySecretKeys struct {
-	ApiKey string `json:"apiKey"`
+type ModelCredentialSecretKeys struct {
+	ApiKey             string `json:"apiKey,omitempty"`
+	ApiBase            string `json:"apiBase,omitempty"`
+	AwsSecretAccessKey string `json:"awsSecretAccessKey,omitempty"`
+	AwsAccessKeyID     string `json:"awsAccessKeyId,omitempty"`
+	VertexCredentials  string `json:"vertexCredentials,omitempty"`
+	VertexProject      string `json:"vertexProject,omitempty"`
 }
 
 type DatabaseSecretRef struct {

@@ -31,16 +31,18 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
-	"gopkg.in/yaml.v2"
-	appsv1 "k8s.io/api/apps/v1"
-	corev1 "k8s.io/api/core/v1"
-	networkingv1 "k8s.io/api/networking/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"regexp"
+	"strings"
 
 	litellmv1alpha1 "github.com/bbdsoftware/litellm-operator/api/litellm/v1alpha1"
 	"github.com/bbdsoftware/litellm-operator/internal/util"
 	"github.com/google/uuid"
+	"gopkg.in/yaml.v2"
+	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
+	networkingv1 "k8s.io/api/networking/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 )
 
@@ -93,8 +95,9 @@ type LiteLLMParamsYAML struct {
 	AutoRouterEmbeddingModel         string              `yaml:"auto_router_embedding_model,omitempty"`
 	AdditionalProps                  map[string]string   `yaml:"additionalProps,omitempty"`
 	ApiVersion                       string              `yaml:"api_version,omitempty"`
-	BudgetDuration                   string              `yaml:"budget_furation,omitempty"`
+	BudgetDuration                   string              `yaml:"budget_duration,omitempty"`
 	ConfigurableClientsideAuthParams []map[string]string `yaml:"configurable_clientside_auth_params,omitempty"`
+	CustomLLMProvider                string              `yaml:"custom_llm_provider,omitempty"`
 	InputCostPerToken                float64             `yaml:"input_cost_per_token,omitempty"`
 	InputCostPerPixel                float64             `yaml:"input_cost_per_pixel,omitempty"`
 	InputCostPerSecond               float64             `yaml:"input_cost_per_second,omitempty"`
@@ -123,25 +126,9 @@ type LiteLLMParamsYAML struct {
 	WatsonxRegionName                string              `yaml:"watsonx_region_name,omitempty"`
 }
 
-type ModelInfoYaml struct {
-	ID                  string            `yaml:"id,omitempty"`
-	DbModel             bool              `yaml:"db_model,omitempty"`
-	UpdatedAt           metav1.Time       `yaml:"updated_at,omitempty"`
-	UpdatedBy           string            `yaml:"updated_by,omitempty"`
-	CreatedAt           metav1.Time       `yaml:"created_at,omitempty"`
-	CreatedBy           string            `yaml:"created_by,omitempty"`
-	BaseModel           string            `yaml:"base_model,omitempty"`
-	Tier                string            `yaml:"tier,omitempty"`
-	TeamID              string            `yaml:"team_id,omitempty"`
-	TeamPublicModelName string            `yaml:"team_public_model_name,omitempty"`
-	AdditionalProps     map[string]string `yaml:"additionalProp1,omitempty"`
-}
-
 type ModelListItemYAML struct {
-	ModelName       string            `yaml:"model_name"`
-	LitellmParams   LiteLLMParamsYAML `yaml:"litellm_params"`
-	ModelInfo       ModelInfoYaml     `yaml:"model_info,omitempty"` // Optional field for additional model info
-	AdditionalProps map[string]string `yaml:"additional_props,omitempty"`
+	ModelName     string            `yaml:"model_name"`
+	LitellmParams LiteLLMParamsYAML `yaml:"litellm_params"`
 }
 
 type RouterSettingsYAML struct {
@@ -195,6 +182,12 @@ func (r *LiteLLMInstanceReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		}
 	}
 
+	_, err := validateModelListForDuplicates(llm)
+	if err != nil {
+		log.Error(err, "LLM Instance modelList is not valid")
+		return ctrl.Result{}, err
+	}
+
 	// Create or update resources
 	configMap, err := r.createConfigMap(ctx, llm)
 	if err != nil {
@@ -202,7 +195,8 @@ func (r *LiteLLMInstanceReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		return util.HandleConflictError(err)
 	}
 
-	secret, err := r.createSecret(ctx, llm)
+	secret, err := r.createMasterKeySecret(ctx, llm)
+
 	if err != nil {
 		log.Error(err, "Failed to create or update Secret")
 		return util.HandleConflictError(err)
@@ -273,9 +267,23 @@ func (r *LiteLLMInstanceReconciler) handleDeletion(ctx context.Context, llm *lit
 	return DoNotRequeue()
 }
 
+func validateModelListForDuplicates(llm *litellmv1alpha1.LiteLLMInstance) (bool, error) {
+	seen := make(map[string]bool)
+
+	for _, model := range llm.Spec.ModelList {
+		if seen[model.Identifier] {
+			err := fmt.Errorf("LLM Instance model list contains duplicate identifiers %s", model.Identifier)
+			return false, err
+		}
+		seen[model.Identifier] = true
+	}
+
+	return true, nil
+}
+
 // renderProxyConfig generates the YAML configuration for the LiteLLM proxy server.
 // It creates a configuration structure with model list, router settings, and general settings.
-func renderProxyConfig(llm *litellmv1alpha1.LiteLLMInstance, ctx context.Context) string {
+func renderProxyConfig(llm *litellmv1alpha1.LiteLLMInstance, ctx context.Context, k8sClient client.Client, scheme *runtime.Scheme) (string, error) {
 	log := logf.FromContext(ctx)
 
 	var modelListYAML []ModelListItemYAML
@@ -285,11 +293,11 @@ func renderProxyConfig(llm *litellmv1alpha1.LiteLLMInstance, ctx context.Context
 			if model.LiteLLMParams.Model == "" {
 				err := fmt.Errorf("model name is required for each model in the list")
 				log.Error(err, "Failed to render proxy config")
-				continue
+				return "", err
 			} else {
 				//map all LiteLLMParams to the YAML struct
 				litellmParams := LiteLLMParamsYAML{
-					ApiKey:                           model.LiteLLMParams.ApiKey.Keys.ApiKey,
+					ApiKey:                           model.LiteLLMParams.ApiKey,
 					ApiBase:                          model.LiteLLMParams.ApiBase,
 					AwsAccessKeyID:                   model.LiteLLMParams.AwsAccessKeyID,
 					AwsSecretAccessKey:               model.LiteLLMParams.AwsSecretAccessKey,
@@ -302,6 +310,7 @@ func renderProxyConfig(llm *litellmv1alpha1.LiteLLMInstance, ctx context.Context
 					ApiVersion:                       model.LiteLLMParams.ApiVersion,
 					BudgetDuration:                   model.LiteLLMParams.BudgetDuration,
 					ConfigurableClientsideAuthParams: model.LiteLLMParams.ConfigurableClientsideAuthParams,
+					CustomLLMProvider:                model.LiteLLMParams.CustomLLMProvider,
 					InputCostPerToken:                model.LiteLLMParams.InputCostPerToken,
 					InputCostPerPixel:                model.LiteLLMParams.InputCostPerPixel,
 					InputCostPerSecond:               model.LiteLLMParams.InputCostPerSecond,
@@ -330,25 +339,48 @@ func renderProxyConfig(llm *litellmv1alpha1.LiteLLMInstance, ctx context.Context
 					WatsonxRegionName:                model.LiteLLMParams.WatsonxRegionName,
 				}
 
-				// If model info is provided, add it to the model entry
-				modelInfo := ModelInfoYaml{
-					ID:                  model.ModelInfo.ID,
-					DbModel:             model.ModelInfo.DbModel,
-					UpdatedAt:           model.ModelInfo.UpdatedAt,
-					UpdatedBy:           model.ModelInfo.UpdatedBy,
-					CreatedAt:           model.ModelInfo.CreatedAt,
-					CreatedBy:           model.ModelInfo.CreatedBy,
-					BaseModel:           model.ModelInfo.BaseModel,
-					Tier:                model.ModelInfo.Tier,
-					TeamID:              model.ModelInfo.TeamID,
-					TeamPublicModelName: model.ModelInfo.TeamPublicModelName,
-					AdditionalProps:     model.ModelInfo.AdditionalProps,
+				if model.RequiresAuth {
+					//get existing modelCredentials secret
+					modelCredentials := &corev1.Secret{}
+					err := k8sClient.Get(ctx, client.ObjectKey{Name: model.ModelCredentials.NameRef, Namespace: llm.Namespace}, modelCredentials)
+					if err != nil {
+						log.Error(err, "Model Credentials not found", "modelIdentifier", model.Identifier)
+						return "", nil
+					}
+
+					//create individual secrets from the ModelCredentials
+					secretNames, err := createAdditionalModelSecrets(ctx, &model, modelCredentials, llm, k8sClient, scheme)
+					if err != nil {
+						log.Error(err, "Failed to create secrets", "modelIdentifier", model.Identifier)
+					}
+
+					secretPrefix := "os.environ/"
+					keys := model.ModelCredentials.Keys
+					//match the secret to its yaml config to populate the yaml template
+					fieldMap := map[string]*string{
+						keys.VertexCredentials:  &litellmParams.VertexCredentials,
+						keys.ApiBase:            &litellmParams.ApiBase,
+						keys.AwsAccessKeyID:     &litellmParams.AwsAccessKeyID,
+						keys.AwsSecretAccessKey: &litellmParams.AwsSecretAccessKey,
+						keys.VertexProject:      &litellmParams.VertexCredentials,
+						keys.ApiKey:             &litellmParams.ApiKey,
+					}
+
+					for key, target := range fieldMap {
+						if key != "" {
+							if secretName, ok := secretNames[key]; ok {
+								*target = secretPrefix + secretName
+							}
+
+							// log.Info("A key is provided in the ModelCredentials that has no corresponding secret: %s","secretName", key )
+						}
+					}
+
 				}
 
 				modelYAML := ModelListItemYAML{
 					ModelName:     model.ModelName,
 					LitellmParams: litellmParams,
-					ModelInfo:     modelInfo,
 				}
 				modelListYAML = append(modelListYAML, modelYAML)
 			}
@@ -367,7 +399,7 @@ func renderProxyConfig(llm *litellmv1alpha1.LiteLLMInstance, ctx context.Context
 	cfg := ProxyConfig{ModelList: modelListYAML, RouterSettings: routerSettings}
 	cfg.GeneralSettings.AllowRequestsOnDBUnavailable = true
 	b, _ := yaml.Marshal(cfg)
-	return string(b)
+	return string(b), nil
 }
 
 // buildSecretData builds the secret data map for the LiteLLM instance.
@@ -622,7 +654,12 @@ func (r *LiteLLMInstanceReconciler) setCondition(llm *litellmv1alpha1.LiteLLMIns
 // It generates the LiteLLM proxy configuration and creates a ConfigMap containing the configuration file.
 func (r *LiteLLMInstanceReconciler) createConfigMap(ctx context.Context, llm *litellmv1alpha1.LiteLLMInstance) (*corev1.ConfigMap, error) {
 	log := log.FromContext(ctx)
-	configYAML := renderProxyConfig(llm, ctx)
+
+	configYAML, err := renderProxyConfig(llm, ctx, r.Client, r.Scheme)
+	if err != nil {
+		log.Error(err, "Failed to render proxy config")
+		return nil, err
+	}
 
 	configMap := &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
@@ -652,27 +689,79 @@ func (r *LiteLLMInstanceReconciler) createConfigMap(ctx context.Context, llm *li
 	return configMap, nil
 }
 
-// createSecret creates or updates the Secret for the LiteLLM instance.
-// It creates a Secret containing the master key and other sensitive data.
-func (r *LiteLLMInstanceReconciler) createSecret(ctx context.Context, llm *litellmv1alpha1.LiteLLMInstance) (*corev1.Secret, error) {
-	secret := &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      util.GetSecretName(llm.Name),
-			Namespace: llm.Namespace,
-		},
-		Type: corev1.SecretTypeOpaque,
+// sanitizes a key to a string that conforms with Kubernetes secret naming conventions
+func sanitizeKey(key string) string {
+	// Convert to lowercase
+	key = strings.ToLower(key)
+
+	// Replace any character that is not a-z, 0-9, or '-' with hyphen
+	reg := regexp.MustCompile(`[^a-z0-9-]+`)
+	sanitized := reg.ReplaceAllString(key, "-")
+
+	// Trim leading/trailing hyphens or dots
+	sanitized = strings.Trim(sanitized, "-.")
+
+	// Ensure it starts and ends with an alphanumeric character
+	startEndReg := regexp.MustCompile(`^[^a-z0-9]+|[^a-z0-9]+$`)
+	sanitized = startEndReg.ReplaceAllString(sanitized, "")
+
+	// Truncate to 253 characters if necessary
+	if len(sanitized) > 253 {
+		sanitized = sanitized[:253]
 	}
 
+	return sanitized
+}
+
+func createAdditionalModelSecrets(ctx context.Context, model *litellmv1alpha1.Model, modelCredentials *corev1.Secret, llm *litellmv1alpha1.LiteLLMInstance,
+	k8sClient client.Client, scheme *runtime.Scheme) (map[string]string, error) {
+
+	log := logf.FromContext(ctx)
+	secretNames := map[string]string{}
+	for key, value := range modelCredentials.Data {
+		secretName := sanitizeKey(fmt.Sprintf("%s_%s", model.Identifier, key))
+		data := map[string][]byte{key: value}
+
+		_, err := createSecret(ctx, k8sClient, scheme, secretName, modelCredentials.Namespace, data, llm)
+		if err != nil {
+			log.Error(err, "failed to create secret from ModelCredentials", "secretName", secretName)
+			return nil, err
+		}
+
+		secretNames[key] = secretName
+	}
+
+	return secretNames, nil
+}
+
+// createSecret creates or updates the Secret for the LiteLLM instance.
+// It creates a Secret containing the master key and other sensitive data.
+func (r *LiteLLMInstanceReconciler) createMasterKeySecret(ctx context.Context, llm *litellmv1alpha1.LiteLLMInstance) (*corev1.Secret, error) {
+
 	// Get existing secret to preserve data if it exists
+	secretName := util.GetSecretName(llm.Name)
 	existingSecret := &corev1.Secret{}
-	err := r.Get(ctx, client.ObjectKey{Name: secret.Name, Namespace: secret.Namespace}, existingSecret)
+	err := r.Get(ctx, client.ObjectKey{Name: secretName, Namespace: llm.Namespace}, existingSecret)
 	if err != nil && client.IgnoreNotFound(err) != nil {
 		return nil, err
 	}
 
-	secret.Data = buildSecretData(llm.Spec.MasterKey, existingSecret)
+	data := buildSecretData(llm.Spec.MasterKey, existingSecret)
 
-	if _, err := util.CreateOrUpdateWithRetry(ctx, r.Client, r.Scheme, secret, llm); err != nil {
+	return createSecret(ctx, r.Client, r.Scheme, secretName, llm.Namespace, data, llm)
+}
+
+func createSecret(ctx context.Context, k8sClient client.Client, scheme *runtime.Scheme, name string, namespace string, data map[string][]byte, owner client.Object) (*corev1.Secret, error) {
+	secret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
+		},
+		Type: corev1.SecretTypeOpaque,
+		Data: data,
+	}
+
+	if _, err := util.CreateOrUpdateWithRetry(ctx, k8sClient, scheme, secret, owner); err != nil {
 		return nil, err
 	}
 
@@ -700,7 +789,7 @@ func (r *LiteLLMInstanceReconciler) createDeployment(ctx context.Context, llm *l
 				Spec: corev1.PodSpec{
 					ServiceAccountName: serviceAccount.Name,
 					Containers: []corev1.Container{
-						buildContainerSpec(llm, secret.Name),
+						buildContainerSpec(llm, secret.Name, ctx, r.Client),
 					},
 					Volumes: []corev1.Volume{
 						{
@@ -868,7 +957,7 @@ func (r *LiteLLMInstanceReconciler) SetupWithManager(mgr ctrl.Manager) error {
 
 // buildContainerSpec builds the container specification for the LiteLLM deployment.
 // It creates a complete container spec with image, arguments, ports, environment variables, and health checks.
-func buildContainerSpec(llm *litellmv1alpha1.LiteLLMInstance, secretName string) corev1.Container {
+func buildContainerSpec(llm *litellmv1alpha1.LiteLLMInstance, secretName string, ctx context.Context, k8sClient client.Client) corev1.Container {
 	return corev1.Container{
 		Name:  "litellm",
 		Image: llm.Spec.Image,
@@ -878,7 +967,7 @@ func buildContainerSpec(llm *litellmv1alpha1.LiteLLMInstance, secretName string)
 				ContainerPort: ContainerPort,
 			},
 		},
-		Env: buildEnvironmentVariables(llm, secretName),
+		Env: buildEnvironmentVariables(llm, secretName, ctx, k8sClient),
 		VolumeMounts: []corev1.VolumeMount{
 			{
 				Name:      "config-volume",
@@ -894,7 +983,8 @@ func buildContainerSpec(llm *litellmv1alpha1.LiteLLMInstance, secretName string)
 
 // buildEnvironmentVariables builds the environment variables for the container.
 // It creates environment variables for the LiteLLM master key and database connection details.
-func buildEnvironmentVariables(llm *litellmv1alpha1.LiteLLMInstance, secretName string) []corev1.EnvVar {
+func buildEnvironmentVariables(llm *litellmv1alpha1.LiteLLMInstance, secretName string, ctx context.Context, k8sClient client.Client) []corev1.EnvVar {
+	log := logf.FromContext(ctx)
 	envVars := []corev1.EnvVar{
 		{
 			Name: "LITELLM_MASTER_KEY",
@@ -960,7 +1050,53 @@ func buildEnvironmentVariables(llm *litellmv1alpha1.LiteLLMInstance, secretName 
 		envVars = append(envVars, dbEnvVars...)
 	}
 
+	for _, model := range llm.Spec.ModelList {
+		if !model.RequiresAuth {
+			log.Info("model requires no auth, so skipping secret mounting!")
+			continue
+		}
+
+		prefix := sanitizeKey(model.Identifier)
+		modelSecrets, err := getAllSecretsByPrefix(ctx, k8sClient, llm.Namespace, prefix)
+		if err != nil {
+			log.Error(err, "Failed to retrieve secrets using model unique identifier")
+			return nil
+		}
+
+		//add all secrets we created into the EnvVars using valueFrom
+		for _, secret := range modelSecrets {
+			envVars = append(envVars, corev1.EnvVar{
+				Name: secret.Name, //will be used in proxy_server_config.yaml to reference secret
+				ValueFrom: &corev1.EnvVarSource{
+					SecretKeyRef: &corev1.SecretKeySelector{
+						LocalObjectReference: corev1.LocalObjectReference{
+							Name: secret.Name,
+						},
+						Key: secret.Name,
+					},
+				},
+			})
+		}
+	}
+
 	return envVars
+}
+
+func getAllSecretsByPrefix(ctx context.Context, k8sClient client.Client, namespace string, prefix string) ([]corev1.Secret, error) {
+	var allSecrets corev1.SecretList
+	err := k8sClient.List(ctx, &allSecrets, client.InNamespace(namespace))
+	if err != nil {
+		return nil, err
+	}
+
+	var secrets []corev1.Secret
+	for _, secret := range allSecrets.Items {
+		if strings.HasPrefix(secret.Name, prefix) {
+			secrets = append(secrets, secret)
+		}
+	}
+
+	return secrets, nil
 }
 
 // buildLivenessProbe builds the liveness probe configuration.

@@ -128,10 +128,8 @@ spec:
               modelList:
                 items:
                   properties:
-                    additionalProps:
-                      additionalProperties:
-                        type: string
-                      type: object
+                    identifier:
+                      type: string
                     liteLLMParams:
                       properties:
                         additionalProps:
@@ -141,20 +139,7 @@ spec:
                         apiBase:
                           type: string
                         apiKey:
-                          properties:
-                            keys:
-                              properties:
-                                apiKey:
-                                  type: string
-                              required:
-                              - apiKey
-                              type: object
-                            nameRef:
-                              type: string
-                          required:
-                          - keys
-                          - nameRef
-                          type: object
+                          type: string
                         apiVersion:
                           type: string
                         autoRouterConfig:
@@ -179,6 +164,8 @@ spec:
                               type: string
                             type: object
                           type: array
+                        customLLMProvider:
+                          type: string
                         inputCostPerPixel:
                           type: number
                         inputCostPerSecond:
@@ -232,37 +219,36 @@ spec:
                         watsonxRegionName:
                           type: string
                       type: object
-                    modelInfo:
+                    modelCredentials:
                       properties:
-                        additionalProp1:
-                          additionalProperties:
-                            type: string
+                        keys:
+                          properties:
+                            apiBase:
+                              type: string
+                            apiKey:
+                              type: string
+                            awsAccessKeyId:
+                              type: string
+                            awsSecretAccessKey:
+                              type: string
+                            vertexCredentials:
+                              type: string
+                            vertexProject:
+                              type: string
                           type: object
-                        baseModel:
+                        nameRef:
                           type: string
-                        createdAt:
-                          format: date-time
-                          type: string
-                        createdBy:
-                          type: string
-                        dbModel:
-                          type: boolean
-                        id:
-                          type: string
-                        teamId:
-                          type: string
-                        teamPublicModelName:
-                          type: string
-                        tier:
-                          type: string
-                        updatedAt:
-                          format: date-time
-                          type: string
-                        updatedBy:
-                          type: string
+                      required:
+                      - keys
+                      - nameRef
                       type: object
                     modelName:
                       type: string
+                    requiresAuth:
+                      type: boolean
+                  required:
+                  - identifier
+                  - requiresAuth
                   type: object
                 type: array
               redisSecretRef:
