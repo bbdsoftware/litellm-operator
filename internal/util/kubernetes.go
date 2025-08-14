@@ -54,10 +54,7 @@ func CreateOrUpdateWithRetry(ctx context.Context, c client.Client, scheme *runti
 		}
 
 		// Object exists, check if update is needed
-		needsUpdate, restart, err := needsUpdate(existing, obj)
-		if err != nil {
-			return false, err
-		}
+		needsUpdate, restart := needsUpdate(existing, obj)
 		if !needsUpdate {
 			return restart, nil // No update needed
 		}
@@ -112,19 +109,19 @@ func RestartDeployment(ctx context.Context, c client.Client, name, namespace str
 
 // needsUpdate checks if the resource needs to be updated by comparing existing and desired states.
 // It implements resource-specific comparison logic to determine whether an update is necessary.
-func needsUpdate(existing, desired client.Object) (bool, restart bool, err error) {
+func needsUpdate(existing, desired client.Object) (bool, restart bool) {
 	// For ConfigMaps, compare the data
 	if existingConfigMap, ok := existing.(*corev1.ConfigMap); ok {
 		if desiredConfigMap, ok := desired.(*corev1.ConfigMap); ok {
 			if len(existingConfigMap.Data) != len(desiredConfigMap.Data) {
-				return true, true, nil
+				return true, true
 			}
 			for key, value := range desiredConfigMap.Data {
 				if existingConfigMap.Data[key] != value {
-					return true, true, nil
+					return true, true
 				}
 			}
-			return false, false, nil
+			return false, false
 		}
 	}
 
@@ -134,14 +131,14 @@ func needsUpdate(existing, desired client.Object) (bool, restart bool, err error
 			// Compare replicas
 			if existingDeployment.Spec.Replicas != nil && desiredDeployment.Spec.Replicas != nil {
 				if *existingDeployment.Spec.Replicas != *desiredDeployment.Spec.Replicas {
-					return true, false, nil
+					return true, false
 				}
 			}
 
 			// Compare container image
 			if len(existingDeployment.Spec.Template.Spec.Containers) > 0 && len(desiredDeployment.Spec.Template.Spec.Containers) > 0 {
 				if existingDeployment.Spec.Template.Spec.Containers[0].Image != desiredDeployment.Spec.Template.Spec.Containers[0].Image {
-					return true, false, nil
+					return true, false
 				}
 			}
 
@@ -150,23 +147,23 @@ func needsUpdate(existing, desired client.Object) (bool, restart bool, err error
 				existingArgs := existingDeployment.Spec.Template.Spec.Containers[0].Args
 				desiredArgs := desiredDeployment.Spec.Template.Spec.Containers[0].Args
 				if len(existingArgs) != len(desiredArgs) {
-					return true, false, nil
+					return true, false
 				}
 				for i, arg := range existingArgs {
 					if i >= len(desiredArgs) || arg != desiredArgs[i] {
-						return true, false, nil
+						return true, false
 					}
 				}
 			}
 
 			// For now, we'll be conservative and update if we're not sure
 			// In a production environment, you might want more sophisticated comparison
-			return false, false, nil
+			return false, false
 		}
 	}
 
 	// Default to updating if we can't determine the type
-	return true, false, nil
+	return true, false
 }
 
 // isConflictError checks if the error is a Kubernetes conflict error.
