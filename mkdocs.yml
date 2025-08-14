@@ -71,7 +71,9 @@ extra:
   social:
     - icon: fontawesome/brands/github
       link: https://github.com/bbdsoftware/litellm-operator 
-    
-  # version:
-  #   provider: mike
-  #   default: stable
+  
+# Mike versioning
+  version:
+    provider: mike
+    default: latest
+    alias: true
