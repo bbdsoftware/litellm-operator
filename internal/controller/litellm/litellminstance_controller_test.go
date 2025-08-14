@@ -18,7 +18,6 @@ package litellm
 
 import (
 	"context"
-	// "encoding/json"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -27,7 +26,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	client "sigs.k8s.io/controller-runtime/pkg/client"
 
-	// "k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
@@ -141,7 +139,7 @@ var _ = Describe("LiteLLMInstance Controller", func() {
 								PasswordSecret: "password",
 							},
 						},
-						ModelList: []litellmv1alpha1.Model{
+						Models: []litellmv1alpha1.Model{
 							{
 								ModelName:  "amazon.titan-embed-text-v1",
 								Identifier: "aws/bedrock-3.0",
@@ -156,9 +154,9 @@ var _ = Describe("LiteLLMInstance Controller", func() {
 								LiteLLMParams: litellmv1alpha1.LiteLLMParams{
 									AwsRegionName:     "us-east-1",
 									Model:             "amazon.titan-embed-text-v1",
-									MaxBudget:         1000,
+									MaxBudget:         "1000.988",
 									UseLiteLLMProxy:   true,
-									InputCostPerToken: 0.0001,
+									InputCostPerToken: "0.0001",
 								},
 							}, {
 								ModelName:    "gpt-3.5-turbo",
@@ -173,10 +171,10 @@ var _ = Describe("LiteLLMInstance Controller", func() {
 								},
 								LiteLLMParams: litellmv1alpha1.LiteLLMParams{
 									Model:             "gpt-3.5-turbo",
-									MaxBudget:         1000,
+									MaxBudget:         "98.0",
 									Organization:      "test-org",
 									UseLiteLLMProxy:   true,
-									InputCostPerToken: 0.0001,
+									InputCostPerToken: "0.000000089",
 								},
 							},
 						},
@@ -246,6 +244,5 @@ var _ = Describe("LiteLLMInstance Controller", func() {
 			Expect(yamlData).To(ContainSubstring("aws_access_key_id: os.environ/aws-bedrock-3-0-awsaccesskeyid"))
 			Expect(yamlData).To(ContainSubstring("model: gpt-3.5-turbo"))
 		})
-
 	})
 })

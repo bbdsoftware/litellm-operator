@@ -125,7 +125,7 @@ spec:
                 type: object
               masterKey:
                 type: string
-              modelList:
+              models:
                 items:
                   properties:
                     identifier:
@@ -167,19 +167,19 @@ spec:
                         customLLMProvider:
                           type: string
                         inputCostPerPixel:
-                          type: number
+                          type: string
                         inputCostPerSecond:
-                          type: number
+                          type: string
                         inputCostPerToken:
-                          type: number
+                          type: string
                         litellmCredentialName:
                           type: string
                         litellmTraceId:
                           type: string
                         maxBudget:
-                          type: number
+                          type: string
                         maxFileSizeMb:
-                          type: number
+                          type: string
                         maxRetries:
                           type: integer
                         mergeReasoningContentInChoices:
@@ -191,11 +191,11 @@ spec:
                         organization:
                           type: string
                         outputCostPerPixel:
-                          type: number
+                          type: string
                         outputCostPerSecond:
-                          type: number
+                          type: string
                         outputCostPerToken:
-                          type: number
+                          type: string
                         regionName:
                           type: string
                         rpm:

@@ -29,7 +29,7 @@ type LiteLLMInstanceSpec struct {
 	RedisSecretRef    RedisSecretRef    `json:"redisSecretRef,omitempty"`
 	Ingress           Ingress           `json:"ingress,omitempty"`
 	Gateway           Gateway           `json:"gateway,omitempty"`
-	ModelList         []Model           `json:"modelList,omitempty"`
+	Models            []Model           `json:"models,omitempty"`
 }
 
 type Model struct {
@@ -55,21 +55,21 @@ type LiteLLMParams struct {
 	BudgetDuration                   string              `json:"budgetDuration,omitempty"`
 	ConfigurableClientsideAuthParams []map[string]string `json:"configurableClientsideAuthParams,omitempty"`
 	CustomLLMProvider                string              `json:"customLLMProvider,omitempty"`
-	InputCostPerToken                float64             `json:"inputCostPerToken,omitempty"`
-	InputCostPerPixel                float64             `json:"inputCostPerPixel,omitempty"`
-	InputCostPerSecond               float64             `json:"inputCostPerSecond,omitempty"`
+	InputCostPerToken                string              `json:"inputCostPerToken,omitempty"`
+	InputCostPerPixel                string              `json:"inputCostPerPixel,omitempty"`
+	InputCostPerSecond               string              `json:"inputCostPerSecond,omitempty"`
 	LiteLLMTraceID                   string              `json:"litellmTraceId,omitempty"`
 	LiteLLMCredentialName            string              `json:"litellmCredentialName,omitempty"`
-	MaxFileSizeMB                    float64             `json:"maxFileSizeMb,omitempty"`
+	MaxFileSizeMB                    string              `json:"maxFileSizeMb,omitempty"`
 	MergeReasoningContentInChoices   bool                `json:"mergeReasoningContentInChoices,omitempty"`
 	MockResponse                     string              `json:"mockResponse,omitempty"`
 	Model                            string              `json:"model,omitempty"`
-	MaxBudget                        float64             `json:"maxBudget,omitempty"`
+	MaxBudget                        string              `json:"maxBudget,omitempty"`
 	MaxRetries                       int                 `json:"maxRetries,omitempty"`
 	Organization                     string              `json:"organization,omitempty"`
-	OutputCostPerToken               float64             `json:"outputCostPerToken,omitempty"`
-	OutputCostPerSecond              float64             `json:"outputCostPerSecond,omitempty"`
-	OutputCostPerPixel               float64             `json:"outputCostPerPixel,omitempty"`
+	OutputCostPerToken               string              `json:"outputCostPerToken,omitempty"`
+	OutputCostPerSecond              string              `json:"outputCostPerSecond,omitempty"`
+	OutputCostPerPixel               string              `json:"outputCostPerPixel,omitempty"`
 	RegionName                       string              `json:"regionName,omitempty"`
 	RPM                              int                 `json:"rpm,omitempty"`
 	StreamTimeout                    int                 `json:"streamTimeout,omitempty"`

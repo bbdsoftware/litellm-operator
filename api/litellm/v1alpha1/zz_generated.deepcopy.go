@@ -152,8 +152,8 @@ func (in *LiteLLMInstanceSpec) DeepCopyInto(out *LiteLLMInstanceSpec) {
 	out.RedisSecretRef = in.RedisSecretRef
 	out.Ingress = in.Ingress
 	out.Gateway = in.Gateway
-	if in.ModelList != nil {
-		in, out := &in.ModelList, &out.ModelList
+	if in.Models != nil {
+		in, out := &in.Models, &out.Models
 		*out = make([]Model, len(*in))
 		for i := range *in {
 			(*in)[i].DeepCopyInto(&(*out)[i])
