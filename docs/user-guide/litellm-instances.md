@@ -328,6 +328,4 @@ spec:
 ## Next Steps
 
 - Learn about [Users](users.md), [Teams](teams.md), and [Virtual Keys](virtual-keys.md)
-- Set up [monitoring and alerting](../reference/monitoring.md)
-- Configure [network policies](../reference/api.md)
 - Review [security best practices](../community/security.md) 
