@@ -14,7 +14,7 @@ env:
   PYTHON_VERSION: '3.11'
 
 permissions:
-  contents: read
+  contents: write
   pages: write
   id-token: write
 
