@@ -36,6 +36,7 @@ import (
 	authv1alpha1 "github.com/bbdsoftware/litellm-operator/api/auth/v1alpha1"
 	"github.com/bbdsoftware/litellm-operator/internal/controller/common"
 	"github.com/bbdsoftware/litellm-operator/internal/litellm"
+	"github.com/bbdsoftware/litellm-operator/internal/util"
 )
 
 // VirtualKeyReconciler reconciles a VirtualKey object
@@ -43,7 +44,8 @@ type VirtualKeyReconciler struct {
 	client.Client
 	Scheme *runtime.Scheme
 	litellm.LitellmVirtualKey
-	connectionHandler *common.ConnectionHandler
+	connectionHandler     *common.ConnectionHandler
+	litellmResourceNaming *util.LitellmResourceNaming
 }
 
 // +kubebuilder:rbac:groups=auth.litellm.ai,resources=virtualkeys,verbs=get;list;watch;create;update;patch;delete
@@ -82,6 +84,10 @@ func (r *VirtualKeyReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		r.connectionHandler = common.NewConnectionHandler(r.Client)
 	}
 
+	if r.litellmResourceNaming == nil {
+		r.litellmResourceNaming = util.NewLitellmResourceNaming(&virtualKey.Spec.ConnectionRef)
+	}
+
 	// Get connection details
 	connectionDetails, err := r.connectionHandler.GetConnectionDetails(ctx, virtualKey.Spec.ConnectionRef, virtualKey.Namespace)
 	if err != nil {
@@ -105,7 +111,7 @@ func (r *VirtualKeyReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 
 	// If the VirtualKey is being deleted, delete the key from litellm
 	if virtualKey.GetDeletionTimestamp() != nil {
-		if controllerutil.ContainsFinalizer(virtualKey, finalizerName) {
+		if controllerutil.ContainsFinalizer(virtualKey, util.FinalizerName) {
 			log.Info("Deleting VirtualKey: " + virtualKey.Status.KeyAlias + " from litellm")
 			return r.deleteVirtualKey(ctx, virtualKey)
 		}
@@ -177,7 +183,7 @@ func (r *VirtualKeyReconciler) deleteVirtualKey(ctx context.Context, virtualKey 
 		})
 	}
 
-	controllerutil.RemoveFinalizer(virtualKey, finalizerName)
+	controllerutil.RemoveFinalizer(virtualKey, util.FinalizerName)
 	if err := r.Update(ctx, virtualKey); err != nil {
 		log.Error(err, "Failed to remove finalizer")
 		return ctrl.Result{}, err
@@ -213,7 +219,8 @@ func (r *VirtualKeyReconciler) generateVirtualKey(ctx context.Context, virtualKe
 		})
 	}
 
-	secretName := getSecretName(virtualKeyResponse.KeyAlias)
+	resourceNaming := util.NewLitellmResourceNaming(&virtualKey.Spec.ConnectionRef)
+	secretName := resourceNaming.GenerateSecretName(virtualKeyResponse.KeyAlias)
 
 	updateVirtualKeyStatus(virtualKey, virtualKeyResponse, secretName)
 	_, err = r.updateConditions(ctx, virtualKey, metav1.Condition{
@@ -226,7 +233,7 @@ func (r *VirtualKeyReconciler) generateVirtualKey(ctx context.Context, virtualKe
 		return ctrl.Result{}, err
 	}
 
-	controllerutil.AddFinalizer(virtualKey, finalizerName)
+	controllerutil.AddFinalizer(virtualKey, util.FinalizerName)
 	if err := r.Update(ctx, virtualKey); err != nil {
 		log.Error(err, "Failed to add finalizer")
 		return ctrl.Result{}, err
@@ -312,8 +319,9 @@ func (r *VirtualKeyReconciler) syncVirtualKey(ctx context.Context, virtualKey *a
 
 // getKeyFromSecret gets the key from the secret associated with the VirtualKey
 func (r *VirtualKeyReconciler) getKeyFromSecret(ctx context.Context, virtualKey *authv1alpha1.VirtualKey) (string, error) {
+
 	namespacedName := types.NamespacedName{
-		Name:      getSecretName(virtualKey.Spec.KeyAlias),
+		Name:      r.litellmResourceNaming.GenerateSecretName(virtualKey.Spec.KeyAlias),
 		Namespace: virtualKey.Namespace,
 	}
 	var secret corev1.Secret
@@ -339,7 +347,7 @@ func createVirtualKeyRequest(virtualKey *authv1alpha1.VirtualKey) (litellm.Virtu
 		Key:                  virtualKey.Spec.Key,
 		KeyAlias:             virtualKey.Spec.KeyAlias,
 		MaxParallelRequests:  virtualKey.Spec.MaxParallelRequests,
-		Metadata:             ensureMetadata(virtualKey.Spec.Metadata),
+		Metadata:             util.EnsureMetadata(virtualKey.Spec.Metadata),
 		ModelMaxBudget:       virtualKey.Spec.ModelMaxBudget,
 		ModelRPMLimit:        virtualKey.Spec.ModelRPMLimit,
 		ModelTPMLimit:        virtualKey.Spec.ModelTPMLimit,

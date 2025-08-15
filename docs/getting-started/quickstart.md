@@ -267,11 +267,45 @@ spec:
       passwordSecret: password
       usernameSecret: username
       dbnameSecret: dbname
+  models:
+  - modelName: claude-opus                      # ui friendly name for model, models in the list can share a model name
+    requiresAuth: true                          # set to true if model requires use of ApiKey or some type of Authentication
+    identifier: claude-opus4.1                  # unique identifier for a model. DO NOT DUPLICATE an identifier in the list
+    modelCredentials:                             #modelCredentials is required field if RequiresAuth = true  
+      nameRef: bedrock-model-credentials
+      keys:                                   #should match keys in your model credentials secret
+        awsAccessKeyId: awsAccessKeyId
+        awsSecretAccessKey: awsSecretAccessKey
+        apiBase: apiBase
+    liteLLMParams:
+      model: "anthropic/claude-opus4.1"     #Required field. This is your actual model. The naming convention is <provider>/<base-model>
+      customLLMProvider: "bedrock"
+  - modelName: gpt-4o
+    requiresAuth: false
+    identifier: gpt-west-eu-prod
+    liteLLMParams:
+      model: "azure/gpt-4o"
 ```
+### Model Credentials Secret
+Create the Model credentials Secret for your model if the model <b>requiresAuth = true</b>  
+Each model that requires auth should have its own Secret that encapsulates its data
 
-Apply the LiteLLM Instance:
+```yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: bedrock-model-credentials
+  namespace: litellm
+type: Opaque
+data:
+  awsAccessKeyId: bGl0ZWxsbQ== # base64 encoded value of "litellm"
+  awsSecretAccessKey: bGl0ZWxsbQ== # base64 encoded value of "litellm"
+  apiBase: aHR0cDovL2xvY2FsaG9zdDo0MDAw #base64 encoded value of http://localhost:4000
+```
+Apply the LiteLLM Instance and the Model Credentials Secret:
 
 ```bash
+kubectl apply -f model-credentials-secret.yaml
 kubectl apply -f litellm-instance.yaml
 ```
 
@@ -401,6 +435,17 @@ data:
   port: <base64-encoded-redis-port>
   password: <base64-encoded-redis-password>
 ---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: bedrock-model-credentials
+  namespace: litellm
+type: Opaque
+data:
+  awsAccessKeyId: bGl0ZWxsbQ== # base64 encoded value of "litellm"
+  awsSecretAccessKey: bGl0ZWxsbQ== # base64 encoded value of "litellm"
+  apiBase: aHR0cDovL2xvY2FsaG9zdDo0MDAw #base64 encoded value of http://localhost:4000
+---
 apiVersion: litellm.litellm.ai/v1alpha1
 kind: LiteLLMInstance
 metadata:
@@ -408,18 +453,35 @@ metadata:
   namespace: litellm
 spec:
   redisSecretRef:
-    nameRef: redis-secret
+    nameRef:  redis-secret
     keys:
       hostSecret: host
       portSecret: port
       passwordSecret: password
   databaseSecretRef:
-    nameRef: postgres-secret
+    nameRef:  postgres-secret
     keys:
       hostSecret: host
       passwordSecret: password
       usernameSecret: username
       dbnameSecret: dbname
+  models:
+  - modelName: claude-opus
+    requiresAuth: true
+    identifier: claude-opus4.1
+    modelCredentials:
+      nameRef: bedrock-model-credentials
+      keys:
+        awsAccessKeyId: awsAccessKeyId
+        awsSecretAccessKey: awsSecretAccessKey
+    liteLLMParams:
+      model: "anthropic/claude-opus4.1"
+      customLLMProvider: "bedrock"
+  - modelName: gpt-4o
+    requiresAuth: false
+    identifier: gpt-west-eu-prod
+    liteLLMParams:
+      model: "azure/gpt-4o"
 ---
 apiVersion: auth.litellm.ai/v1alpha1
 kind: VirtualKey
@@ -459,4 +521,5 @@ kubectl delete virtualkey example-service
 kubectl delete litellminstance litellm-example
 kubectl delete secret redis-secret
 kubectl delete secret postgres-secret
+kubectl delete secret bedrock-model-credentials
 ```

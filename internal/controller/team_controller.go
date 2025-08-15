@@ -34,6 +34,7 @@ import (
 	authv1alpha1 "github.com/bbdsoftware/litellm-operator/api/auth/v1alpha1"
 	"github.com/bbdsoftware/litellm-operator/internal/controller/common"
 	"github.com/bbdsoftware/litellm-operator/internal/litellm"
+	"github.com/bbdsoftware/litellm-operator/internal/util"
 )
 
 // TeamReconciler reconciles a Team object
@@ -102,7 +103,7 @@ func (r *TeamReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 
 	// If the Team is being deleted, delete the team from litellm
 	if team.GetDeletionTimestamp() != nil {
-		if controllerutil.ContainsFinalizer(team, finalizerName) {
+		if controllerutil.ContainsFinalizer(team, util.FinalizerName) {
 			log.Info("Deleting Team: " + team.Status.TeamAlias + " from litellm")
 			return r.deleteTeam(ctx, team)
 		}
@@ -186,7 +187,7 @@ func (r *TeamReconciler) deleteTeam(ctx context.Context, team *authv1alpha1.Team
 		})
 	}
 
-	controllerutil.RemoveFinalizer(team, finalizerName)
+	controllerutil.RemoveFinalizer(team, util.FinalizerName)
 	if err := r.Update(ctx, team); err != nil {
 		log.Error(err, "Failed to remove finalizer")
 		return ctrl.Result{}, err
@@ -245,7 +246,7 @@ func (r *TeamReconciler) createTeam(ctx context.Context, team *authv1alpha1.Team
 		return ctrl.Result{}, err
 	}
 
-	controllerutil.AddFinalizer(team, finalizerName)
+	controllerutil.AddFinalizer(team, util.FinalizerName)
 	if err := r.Update(ctx, team); err != nil {
 		log.Error(err, "Failed to add finalizer")
 		return ctrl.Result{}, err
@@ -301,7 +302,7 @@ func createTeamRequest(team *authv1alpha1.Team) (litellm.TeamRequest, error) {
 		Blocked:               team.Spec.Blocked,
 		BudgetDuration:        team.Spec.BudgetDuration,
 		Guardrails:            team.Spec.Guardrails,
-		Metadata:              ensureMetadata(team.Spec.Metadata),
+		Metadata:              util.EnsureMetadata(team.Spec.Metadata),
 		ModelAliases:          team.Spec.ModelAliases,
 		Models:                team.Spec.Models,
 		OrganizationID:        team.Spec.OrganizationID,

@@ -17,4 +17,20 @@ spec:
       passwordSecret: password
       usernameSecret: username
       dbnameSecret: dbname
-  
+  models:
+  - modelName: claude-opus
+    requiresAuth: true
+    identifier: claude-opus4.1
+    modelCredentials:
+      nameRef: bedrock-model-credentials
+      keys:
+        awsAccessKeyId: awsAccessKeyId
+        awsSecretAccessKey: awsSecretAccessKey
+    liteLLMParams:
+      model: "anthropic/claude-opus4.1"
+      customLLMProvider: "bedrock"
+  - modelName: gpt-4o
+    requiresAuth: false
+    identifier: gpt-west-eu-prod
+    liteLLMParams:
+      model: "azure/gpt-4o"

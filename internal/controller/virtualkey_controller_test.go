@@ -30,6 +30,7 @@ import (
 
 	authv1alpha1 "github.com/bbdsoftware/litellm-operator/api/auth/v1alpha1"
 	"github.com/bbdsoftware/litellm-operator/internal/litellm"
+	"github.com/bbdsoftware/litellm-operator/internal/util"
 )
 
 type FakeLitellmVirtualKeyClient struct{}
@@ -84,6 +85,15 @@ var _ = Describe("VirtualKey Controller", func() {
 		}
 		virtualkey := &authv1alpha1.VirtualKey{}
 
+		var llmName string
+		if virtualkey.Spec.ConnectionRef.InstanceRef != nil {
+			llmName = virtualkey.Spec.ConnectionRef.InstanceRef.Name
+		} else {
+			llmName = util.DefaultLLMName
+		}
+
+		resourceNaming := util.NewLitellmResourceNaming(llmName)
+
 		BeforeEach(func() {
 			By("creating the test connection secret")
 			connectionSecret := &corev1.Secret{
@@ -102,6 +112,7 @@ var _ = Describe("VirtualKey Controller", func() {
 			err := k8sClient.Get(ctx, typeNamespacedName, virtualkey)
 			if err != nil && errors.IsNotFound(err) {
 				// create VirtualKey
+
 				resource := &authv1alpha1.VirtualKey{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      resourceName,
@@ -120,14 +131,17 @@ var _ = Describe("VirtualKey Controller", func() {
 						KeyAlias: "test-key-alias",
 					},
 					Status: authv1alpha1.VirtualKeyStatus{
-						KeySecretRef: getSecretName("test-key-alias"),
+						KeySecretRef: resourceNaming.GenerateSecretName("test-key-alias"),
 					},
 				}
 				Expect(k8sClient.Create(ctx, resource)).To(Succeed())
+
+				secretName := resourceNaming.GenerateSecretName(resource.Spec.KeyAlias)
+
 				// create Secret
 				secret := &corev1.Secret{
 					ObjectMeta: metav1.ObjectMeta{
-						Name:      getSecretName(resource.Spec.KeyAlias),
+						Name:      secretName,
 						Namespace: "default",
 					},
 					Data: map[string][]byte{

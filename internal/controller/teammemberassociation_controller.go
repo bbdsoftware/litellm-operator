@@ -33,6 +33,7 @@ import (
 	authv1alpha1 "github.com/bbdsoftware/litellm-operator/api/auth/v1alpha1"
 	"github.com/bbdsoftware/litellm-operator/internal/controller/common"
 	"github.com/bbdsoftware/litellm-operator/internal/litellm"
+	"github.com/bbdsoftware/litellm-operator/internal/util"
 )
 
 // TeamMemberAssociationReconciler reconciles a TeamMemberAssociation object
@@ -101,7 +102,7 @@ func (r *TeamMemberAssociationReconciler) Reconcile(ctx context.Context, req ctr
 
 	// If the TeamMemberAssociation is being deleted, delete the team member association from litellm
 	if teamMemberAssociation.GetDeletionTimestamp() != nil {
-		if controllerutil.ContainsFinalizer(teamMemberAssociation, finalizerName) {
+		if controllerutil.ContainsFinalizer(teamMemberAssociation, util.FinalizerName) {
 			log.Info("Deleting TeamMemberAssociation: " + teamMemberAssociation.Status.TeamAlias + " from litellm")
 			return r.deleteTeamMemberAssociation(ctx, teamMemberAssociation)
 		}
@@ -177,7 +178,7 @@ func (r *TeamMemberAssociationReconciler) deleteTeamMemberAssociation(ctx contex
 			Message:            err.Error(),
 		})
 	}
-	controllerutil.RemoveFinalizer(teamMemberAssociation, finalizerName)
+	controllerutil.RemoveFinalizer(teamMemberAssociation, util.FinalizerName)
 	if err := r.Update(ctx, teamMemberAssociation); err != nil {
 		log.Error(err, "Failed to remove finalizer")
 		return ctrl.Result{}, err
@@ -232,7 +233,7 @@ func (r *TeamMemberAssociationReconciler) createTeamMemberAssociation(ctx contex
 		return ctrl.Result{}, err
 	}
 
-	controllerutil.AddFinalizer(teamMemberAssociation, finalizerName)
+	controllerutil.AddFinalizer(teamMemberAssociation, util.FinalizerName)
 	if err := r.Update(ctx, teamMemberAssociation); err != nil {
 		log.Error(err, "Failed to add finalizer")
 		return ctrl.Result{}, err

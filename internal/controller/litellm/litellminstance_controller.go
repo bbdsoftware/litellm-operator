@@ -22,7 +22,9 @@ package litellm
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"strconv"
 	"time"
 
 	"k8s.io/apimachinery/pkg/runtime"
@@ -30,16 +32,18 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
-	"gopkg.in/yaml.v2"
-	appsv1 "k8s.io/api/apps/v1"
-	corev1 "k8s.io/api/core/v1"
-	networkingv1 "k8s.io/api/networking/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"regexp"
+	"strings"
 
 	litellmv1alpha1 "github.com/bbdsoftware/litellm-operator/api/litellm/v1alpha1"
 	"github.com/bbdsoftware/litellm-operator/internal/util"
 	"github.com/google/uuid"
+	"gopkg.in/yaml.v2"
+	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
+	networkingv1 "k8s.io/api/networking/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 )
 
@@ -77,7 +81,70 @@ func RequeueAfter(duration time.Duration) (ctrl.Result, error) {
 // Services, and optionally Ingress resources.
 type LiteLLMInstanceReconciler struct {
 	client.Client
-	Scheme *runtime.Scheme
+	Scheme                *runtime.Scheme
+	litellmResourceNaming *util.LitellmResourceNaming
+}
+
+type LiteLLMParamsYAML struct {
+	ApiKey                           string              `yaml:"api_key,omitempty"`
+	ApiBase                          string              `yaml:"api_base,omitempty"`
+	AwsAccessKeyID                   string              `yaml:"aws_access_key_id,omitempty"`
+	AwsSecretAccessKey               string              `yaml:"aws_secret_access_key,omitempty"`
+	AwsRegionName                    string              `yaml:"aws_region_name,omitempty"`
+	AutoRouterConfigPath             string              `yaml:"auto_router_config_path,omitempty"`
+	AutoRouterConfig                 string              `yaml:"auto_router_config,omitempty"`
+	AutoRouterDefaultModel           string              `yaml:"auto_router_default_model,omitempty"`
+	AutoRouterEmbeddingModel         string              `yaml:"auto_router_embedding_model,omitempty"`
+	AdditionalProps                  map[string]string   `yaml:"additionalProps,omitempty"`
+	ApiVersion                       string              `yaml:"api_version,omitempty"`
+	BudgetDuration                   string              `yaml:"budget_duration,omitempty"`
+	ConfigurableClientsideAuthParams []map[string]string `yaml:"configurable_clientside_auth_params,omitempty"`
+	CustomLLMProvider                string              `yaml:"custom_llm_provider,omitempty"`
+	InputCostPerToken                float64             `yaml:"input_cost_per_token,omitempty"`
+	InputCostPerPixel                float64             `yaml:"input_cost_per_pixel,omitempty"`
+	InputCostPerSecond               float64             `yaml:"input_cost_per_second,omitempty"`
+	LiteLLMTraceID                   string              `yaml:"litellm_trace_id,omitempty"`
+	LiteLLMCredentialName            string              `yaml:"litellm_credential_name,omitempty"`
+	MaxFileSizeMB                    float64             `yaml:"max_file_size_mb,omitempty"`
+	MergeReasoningContentInChoices   bool                `yaml:"merge_reasoning_content_in_choices,omitempty"`
+	MockResponse                     string              `yaml:"mock_response,omitempty"`
+	Model                            string              `yaml:"model"`
+	MaxBudget                        float64             `yaml:"max_budget,omitempty"`
+	MaxRetries                       int                 `yaml:"max_retries,omitempty"`
+	Organization                     string              `yaml:"organization,omitempty"`
+	OutputCostPerToken               float64             `yaml:"output_cost_per_token,omitempty"`
+	OutputCostPerSecond              float64             `yaml:"output_cost_per_second,omitempty"`
+	OutputCostPerPixel               float64             `yaml:"output_cost_per_pixel,omitempty"`
+	RegionName                       string              `yaml:"region_name,omitempty"`
+	RPM                              int                 `yaml:"rpm,omitempty"`
+	StreamTimeout                    int                 `yaml:"stream_timeout,omitempty"`
+	TPM                              int                 `yaml:"tpm,omitempty"`
+	Timeout                          int                 `yaml:"timeout,omitempty"`
+	UseInPassThrough                 bool                `yaml:"use_in_pass_through,omitempty"`
+	UseLiteLLMProxy                  bool                `yaml:"use_litellm_proxy,omitempty"`
+	VertexProject                    string              `yaml:"vertex_project,omitempty"`
+	VertexLocation                   string              `yaml:"vertex_location,omitempty"`
+	VertexCredentials                string              `yaml:"vertex_credentials,omitempty"`
+	WatsonxRegionName                string              `yaml:"watsonx_region_name,omitempty"`
+}
+
+type ModelListItemYAML struct {
+	ModelName     string            `yaml:"model_name"`
+	LitellmParams LiteLLMParamsYAML `yaml:"litellm_params"`
+}
+
+type RouterSettingsYAML struct {
+	Host     string `yaml:"host"`
+	Port     string `yaml:"port"`
+	Password string `yaml:"password,omitempty"`
+}
+
+type ProxyConfig struct {
+	ModelList       []ModelListItemYAML `yaml:"model_list"`
+	RouterSettings  RouterSettingsYAML  `yaml:"router_settings,omitempty"`
+	GeneralSettings struct {
+		AllowRequestsOnDBUnavailable bool `yaml:"allow_requests_on_db_unavailable"`
+	} `yaml:"general_settings"`
 }
 
 // +kubebuilder:rbac:groups=litellm.litellm.ai,resources=litellminstances,verbs=get;list;watch;create;update;patch;delete
@@ -104,6 +171,10 @@ func (r *LiteLLMInstanceReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		return RequeueWithError(client.IgnoreNotFound(err))
 	}
 
+	if r.litellmResourceNaming == nil {
+		r.litellmResourceNaming = util.NewLitellmResourceNaming(llm.Name)
+	}
+
 	// Check if the instance is being deleted
 	if llm.DeletionTimestamp != nil {
 		return r.handleDeletion(ctx, llm)
@@ -117,6 +188,12 @@ func (r *LiteLLMInstanceReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		}
 	}
 
+	_, err := validateModelListForDuplicates(llm)
+	if err != nil {
+		log.Error(err, "LLM Instance modelList is not valid")
+		return ctrl.Result{}, err
+	}
+
 	// Create or update resources
 	configMap, err := r.createConfigMap(ctx, llm)
 	if err != nil {
@@ -124,7 +201,8 @@ func (r *LiteLLMInstanceReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		return util.HandleConflictError(err)
 	}
 
-	secret, err := r.createSecret(ctx, llm)
+	secret, err := r.createMasterKeySecret(ctx, llm)
+
 	if err != nil {
 		log.Error(err, "Failed to create or update Secret")
 		return util.HandleConflictError(err)
@@ -195,52 +273,159 @@ func (r *LiteLLMInstanceReconciler) handleDeletion(ctx context.Context, llm *lit
 	return DoNotRequeue()
 }
 
+func validateModelListForDuplicates(llm *litellmv1alpha1.LiteLLMInstance) (bool, error) {
+	seen := make(map[string]bool)
+
+	for _, model := range llm.Spec.Models {
+		if seen[model.Identifier] {
+			err := fmt.Errorf("LLM Instance model list contains duplicate identifiers %s", model.Identifier)
+			return false, err
+		}
+		seen[model.Identifier] = true
+	}
+
+	return true, nil
+}
+
+func parseAndAssign(field string, target *float64, fieldName string) error {
+	if field != "" {
+		value, err := strconv.ParseFloat(field, 64)
+		if err != nil {
+			return errors.New(fieldName + " not parsable to float")
+		}
+		*target = value
+	}
+	return nil
+}
+
 // renderProxyConfig generates the YAML configuration for the LiteLLM proxy server.
 // It creates a configuration structure with model list, router settings, and general settings.
-func renderProxyConfig(llm *litellmv1alpha1.LiteLLMInstance) string {
-	// Create a custom struct for YAML output that handles API key references
-	type ModelEntryYAML struct {
-		ModelName     string `yaml:"model_name"`
-		LitellmParams struct {
-			Model   string `yaml:"model"`
-			APIBase string `yaml:"api_base"`
-			APIKey  string `yaml:"api_key"`
-			RPM     *int   `yaml:"rpm,omitempty"`
-		} `yaml:"litellm_params"`
+func renderProxyConfig(llm *litellmv1alpha1.LiteLLMInstance, ctx context.Context, k8sClient client.Client, scheme *runtime.Scheme) (string, error) {
+	log := logf.FromContext(ctx)
+
+	var modelListYAML []ModelListItemYAML
+	if llm.Spec.Models != nil {
+		for _, model := range llm.Spec.Models {
+
+			if model.LiteLLMParams.Model == "" {
+				err := fmt.Errorf("model name is required for each model in the list")
+				log.Error(err, "Failed to render proxy config")
+				return "", err
+			}
+
+			//map all LiteLLMParams to the YAML struct
+			litellmParams := LiteLLMParamsYAML{
+				ApiKey:                           model.LiteLLMParams.ApiKey,
+				ApiBase:                          model.LiteLLMParams.ApiBase,
+				AwsAccessKeyID:                   model.LiteLLMParams.AwsAccessKeyID,
+				AwsSecretAccessKey:               model.LiteLLMParams.AwsSecretAccessKey,
+				AwsRegionName:                    model.LiteLLMParams.AwsRegionName,
+				AutoRouterConfigPath:             model.LiteLLMParams.AutoRouterConfigPath,
+				AutoRouterConfig:                 model.LiteLLMParams.AutoRouterConfig,
+				AutoRouterDefaultModel:           model.LiteLLMParams.AutoRouterDefaultModel,
+				AutoRouterEmbeddingModel:         model.LiteLLMParams.AutoRouterEmbeddingModel,
+				AdditionalProps:                  model.LiteLLMParams.AdditionalProps,
+				ApiVersion:                       model.LiteLLMParams.ApiVersion,
+				BudgetDuration:                   model.LiteLLMParams.BudgetDuration,
+				ConfigurableClientsideAuthParams: model.LiteLLMParams.ConfigurableClientsideAuthParams,
+				CustomLLMProvider:                model.LiteLLMParams.CustomLLMProvider,
+				LiteLLMTraceID:                   model.LiteLLMParams.LiteLLMTraceID,
+				LiteLLMCredentialName:            model.LiteLLMParams.LiteLLMCredentialName,
+				MergeReasoningContentInChoices:   model.LiteLLMParams.MergeReasoningContentInChoices,
+				MockResponse:                     model.LiteLLMParams.MockResponse,
+				Model:                            model.LiteLLMParams.Model,
+				MaxRetries:                       model.LiteLLMParams.MaxRetries,
+				Organization:                     model.LiteLLMParams.Organization,
+				RegionName:                       model.LiteLLMParams.RegionName,
+				RPM:                              model.LiteLLMParams.RPM,
+				StreamTimeout:                    model.LiteLLMParams.StreamTimeout,
+				TPM:                              model.LiteLLMParams.TPM,
+				Timeout:                          model.LiteLLMParams.Timeout,
+				UseInPassThrough:                 model.LiteLLMParams.UseInPassThrough,
+				UseLiteLLMProxy:                  model.LiteLLMParams.UseLiteLLMProxy,
+				VertexProject:                    model.LiteLLMParams.VertexProject,
+				VertexLocation:                   model.LiteLLMParams.VertexLocation,
+				VertexCredentials:                model.LiteLLMParams.VertexCredentials,
+				WatsonxRegionName:                model.LiteLLMParams.WatsonxRegionName,
+			}
+
+			if err := parseAndAssign(model.LiteLLMParams.OutputCostPerToken, &litellmParams.OutputCostPerToken, "OutputCostPerToken"); err != nil {
+				log.Error(err, "parsing error")
+				return "", err
+			}
+			if err := parseAndAssign(model.LiteLLMParams.OutputCostPerSecond, &litellmParams.OutputCostPerSecond, "OutputCostPerSecond"); err != nil {
+				log.Error(err, "parsing error")
+				return "", err
+			}
+			if err := parseAndAssign(model.LiteLLMParams.OutputCostPerPixel, &litellmParams.OutputCostPerPixel, "OutputCostPerPixel"); err != nil {
+				log.Error(err, "parsing error")
+				return "", err
+			}
+			if err := parseAndAssign(model.LiteLLMParams.InputCostPerPixel, &litellmParams.InputCostPerPixel, "InputCostPerPixel"); err != nil {
+				log.Error(err, "parsing error")
+				return "", err
+			}
+			if err := parseAndAssign(model.LiteLLMParams.InputCostPerSecond, &litellmParams.InputCostPerSecond, "InputCostPerSecond"); err != nil {
+				log.Error(err, "parsing error")
+				return "", err
+			}
+			if err := parseAndAssign(model.LiteLLMParams.InputCostPerToken, &litellmParams.InputCostPerSecond, "InputCostPerToken"); err != nil {
+				log.Error(err, "parsing error")
+				return "", err
+			}
+			if err := parseAndAssign(model.LiteLLMParams.MaxBudget, &litellmParams.MaxBudget, "MaxBudget"); err != nil {
+				log.Error(err, "parsing error")
+				return "", err
+			}
+			if err := parseAndAssign(model.LiteLLMParams.MaxFileSizeMB, &litellmParams.MaxFileSizeMB, "MaxFileSizeMB"); err != nil {
+				log.Error(err, "parsing error")
+				return "", err
+			}
+
+			if model.RequiresAuth {
+				//get existing modelCredentials secret
+				modelCredentials := &corev1.Secret{}
+				err := k8sClient.Get(ctx, client.ObjectKey{Name: model.ModelCredentials.NameRef, Namespace: llm.Namespace}, modelCredentials)
+				if err != nil {
+					log.Error(err, "Model Credentials not found", "modelIdentifier", model.Identifier)
+					return "", nil
+				}
+
+				//create individual secrets from the ModelCredentials
+				secretNames, err := createAdditionalModelSecrets(ctx, &model, modelCredentials, llm, k8sClient, scheme)
+				if err != nil {
+					log.Error(err, "Failed to create secrets", "modelIdentifier", model.Identifier)
+				}
+
+				secretPrefix := "os.environ/"
+				keys := model.ModelCredentials.Keys
+				//match the secret to its yaml config to populate the yaml template
+				fieldMap := map[string]*string{
+					keys.VertexCredentials:  &litellmParams.VertexCredentials,
+					keys.ApiBase:            &litellmParams.ApiBase,
+					keys.AwsAccessKeyID:     &litellmParams.AwsAccessKeyID,
+					keys.AwsSecretAccessKey: &litellmParams.AwsSecretAccessKey,
+					keys.VertexProject:      &litellmParams.VertexCredentials,
+					keys.ApiKey:             &litellmParams.ApiKey,
+				}
+
+				for key, target := range fieldMap {
+					if key != "" {
+						if secretName, ok := secretNames[key]; ok {
+							*target = secretPrefix + secretName
+						}
+					}
+				}
+
+			}
+
+			modelYAML := ModelListItemYAML{
+				ModelName:     model.ModelName,
+				LitellmParams: litellmParams,
+			}
+			modelListYAML = append(modelListYAML, modelYAML)
+		}
 	}
-
-	type RouterSettingsYAML struct {
-		Host     string `yaml:"host"`
-		Port     string `yaml:"port"`
-		Password string `yaml:"password,omitempty"`
-	}
-
-	type ProxyConfig struct {
-		ModelList       []ModelEntryYAML   `yaml:"model_list"`
-		RouterSettings  RouterSettingsYAML `yaml:"router_settings,omitempty"`
-		GeneralSettings struct {
-			AllowRequestsOnDBUnavailable bool `yaml:"allow_requests_on_db_unavailable"`
-		} `yaml:"general_settings"`
-	}
-
-	var modelListYAML []ModelEntryYAML
-	// if llm.Spec.ModelList != nil {
-	// 	for _, model := range llm.Spec.ModelList {
-	// 		modelYAML := ModelEntryYAML{
-	// 			ModelName: model.ModelName,
-	// 		}
-	// 		modelYAML.LitellmParams.Model = model.LitellmParams.Model
-	// 		modelYAML.LitellmParams.APIBase = model.LitellmParams.APIBase
-	// 		modelYAML.LitellmParams.RPM = model.LitellmParams.RPM
-
-	// 		// Reference API key from environment variable
-	// 		if model.LitellmParams.APIKey != "" {
-	// 			modelYAML.LitellmParams.APIKey = fmt.Sprintf("os.environ/%s_API_KEY", model.ModelName)
-	// 		}
-
-	// 		modelListYAML = append(modelListYAML, modelYAML)
-	// 	}
-	// }
 
 	var routerSettings RouterSettingsYAML
 	if llm.Spec.RedisSecretRef.NameRef != "" {
@@ -254,7 +439,7 @@ func renderProxyConfig(llm *litellmv1alpha1.LiteLLMInstance) string {
 	cfg := ProxyConfig{ModelList: modelListYAML, RouterSettings: routerSettings}
 	cfg.GeneralSettings.AllowRequestsOnDBUnavailable = true
 	b, _ := yaml.Marshal(cfg)
-	return string(b)
+	return string(b), nil
 }
 
 // buildSecretData builds the secret data map for the LiteLLM instance.
@@ -508,44 +693,115 @@ func (r *LiteLLMInstanceReconciler) setCondition(llm *litellmv1alpha1.LiteLLMIns
 // createConfigMap creates or updates the ConfigMap for the LiteLLM instance.
 // It generates the LiteLLM proxy configuration and creates a ConfigMap containing the configuration file.
 func (r *LiteLLMInstanceReconciler) createConfigMap(ctx context.Context, llm *litellmv1alpha1.LiteLLMInstance) (*corev1.ConfigMap, error) {
-	configYAML := renderProxyConfig(llm)
+	log := logf.FromContext(ctx)
+
+	configYAML, err := renderProxyConfig(llm, ctx, r.Client, r.Scheme)
+	if err != nil {
+		log.Error(err, "Failed to render proxy config")
+		return nil, err
+	}
 
 	configMap := &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      util.GetConfigMapName(llm.Name),
+			Name:      r.litellmResourceNaming.GetConfigMapName(),
 			Namespace: llm.Namespace,
 		},
 		Data: map[string]string{"proxy_server_config.yaml": configYAML},
 	}
 
-	if err := util.CreateOrUpdateWithRetry(ctx, r.Client, r.Scheme, configMap, llm); err != nil {
+	if restart, err := util.CreateOrUpdateWithRetry(ctx, r.Client, r.Scheme, configMap, llm); err != nil {
+		log.Error(err, "Failed to create or update config map", "configMap", configMap.Name)
 		return nil, err
+	} else if restart {
+		//get the deployment
+		deployment := &appsv1.Deployment{}
+		err := r.Get(ctx, client.ObjectKey{Name: r.litellmResourceNaming.GetDeploymentName(), Namespace: llm.Namespace}, deployment)
+		if err != nil {
+			return nil, err
+		}
+		log.Info("Restarting deployment", "deployment", deployment.Name)
+		if err := util.RestartDeployment(ctx, r.Client, deployment.Name, deployment.Namespace); err != nil {
+			log.Error(err, "Failed to restart deployment", "deployment", deployment.Name)
+			return nil, err
+		}
 	}
 
 	return configMap, nil
 }
 
-// createSecret creates or updates the Secret for the LiteLLM instance.
-// It creates a Secret containing the master key and other sensitive data.
-func (r *LiteLLMInstanceReconciler) createSecret(ctx context.Context, llm *litellmv1alpha1.LiteLLMInstance) (*corev1.Secret, error) {
-	secret := &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      util.GetSecretName(llm.Name),
-			Namespace: llm.Namespace,
-		},
-		Type: corev1.SecretTypeOpaque,
+// sanitizes a key to a string that conforms with Kubernetes secret naming conventions
+func sanitizeKey(key string) string {
+	// Convert to lowercase
+	key = strings.ToLower(key)
+
+	// Replace any character that is not a-z, 0-9, or '-' with hyphen
+	reg := regexp.MustCompile(`[^a-z0-9-]+`)
+	sanitized := reg.ReplaceAllString(key, "-")
+
+	// Trim leading/trailing hyphens or dots
+	sanitized = strings.Trim(sanitized, "-.")
+
+	// Ensure it starts and ends with an alphanumeric character
+	startEndReg := regexp.MustCompile(`^[^a-z0-9]+|[^a-z0-9]+$`)
+	sanitized = startEndReg.ReplaceAllString(sanitized, "")
+
+	// Truncate to 253 characters if necessary
+	if len(sanitized) > 253 {
+		sanitized = sanitized[:253]
 	}
 
+	return sanitized
+}
+
+func createAdditionalModelSecrets(ctx context.Context, model *litellmv1alpha1.Model, modelCredentials *corev1.Secret, llm *litellmv1alpha1.LiteLLMInstance,
+	k8sClient client.Client, scheme *runtime.Scheme) (map[string]string, error) {
+
+	log := logf.FromContext(ctx)
+	secretNames := map[string]string{}
+	for key, value := range modelCredentials.Data {
+		secretName := sanitizeKey(fmt.Sprintf("%s_%s", model.Identifier, key))
+		data := map[string][]byte{key: value}
+
+		_, err := createSecret(ctx, k8sClient, scheme, secretName, modelCredentials.Namespace, data, llm)
+		if err != nil {
+			log.Error(err, "failed to create secret from ModelCredentials", "secretName", secretName)
+			return nil, err
+		}
+
+		secretNames[key] = secretName
+	}
+
+	return secretNames, nil
+}
+
+// createSecret creates or updates the Secret for the LiteLLM instance.
+// It creates a Secret containing the master key and other sensitive data.
+func (r *LiteLLMInstanceReconciler) createMasterKeySecret(ctx context.Context, llm *litellmv1alpha1.LiteLLMInstance) (*corev1.Secret, error) {
+
 	// Get existing secret to preserve data if it exists
+	secretName := r.litellmResourceNaming.GetSecretName()
 	existingSecret := &corev1.Secret{}
-	err := r.Get(ctx, client.ObjectKey{Name: secret.Name, Namespace: secret.Namespace}, existingSecret)
+	err := r.Get(ctx, client.ObjectKey{Name: secretName, Namespace: llm.Namespace}, existingSecret)
 	if err != nil && client.IgnoreNotFound(err) != nil {
 		return nil, err
 	}
 
-	secret.Data = buildSecretData(llm.Spec.MasterKey, existingSecret)
+	data := buildSecretData(llm.Spec.MasterKey, existingSecret)
 
-	if err := util.CreateOrUpdateWithRetry(ctx, r.Client, r.Scheme, secret, llm); err != nil {
+	return createSecret(ctx, r.Client, r.Scheme, secretName, llm.Namespace, data, llm)
+}
+
+func createSecret(ctx context.Context, k8sClient client.Client, scheme *runtime.Scheme, name string, namespace string, data map[string][]byte, owner client.Object) (*corev1.Secret, error) {
+	secret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
+		},
+		Type: corev1.SecretTypeOpaque,
+		Data: data,
+	}
+
+	if _, err := util.CreateOrUpdateWithRetry(ctx, k8sClient, scheme, secret, owner); err != nil {
 		return nil, err
 	}
 
@@ -557,23 +813,23 @@ func (r *LiteLLMInstanceReconciler) createSecret(ctx context.Context, llm *litel
 func (r *LiteLLMInstanceReconciler) createDeployment(ctx context.Context, llm *litellmv1alpha1.LiteLLMInstance, configMap *corev1.ConfigMap, secret *corev1.Secret, serviceAccount *corev1.ServiceAccount) (*appsv1.Deployment, error) {
 	deployment := &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      util.GetDeploymentName(llm.Name),
+			Name:      r.litellmResourceNaming.GetDeploymentName(),
 			Namespace: llm.Namespace,
-			Labels:    util.GetAppLabels(llm.Name),
+			Labels:    r.litellmResourceNaming.GetAppLabels(),
 		},
 		Spec: appsv1.DeploymentSpec{
 			Replicas: util.Int32Ptr(1),
 			Selector: &metav1.LabelSelector{
-				MatchLabels: util.GetAppLabels(llm.Name),
+				MatchLabels: r.litellmResourceNaming.GetAppLabels(),
 			},
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
-					Labels: util.GetAppLabels(llm.Name),
+					Labels: r.litellmResourceNaming.GetAppLabels(),
 				},
 				Spec: corev1.PodSpec{
 					ServiceAccountName: serviceAccount.Name,
 					Containers: []corev1.Container{
-						buildContainerSpec(llm, secret.Name),
+						buildContainerSpec(llm, secret.Name, ctx, r.Client),
 					},
 					Volumes: []corev1.Volume{
 						{
@@ -592,7 +848,7 @@ func (r *LiteLLMInstanceReconciler) createDeployment(ctx context.Context, llm *l
 		},
 	}
 
-	if err := util.CreateOrUpdateWithRetry(ctx, r.Client, r.Scheme, deployment, llm); err != nil {
+	if _, err := util.CreateOrUpdateWithRetry(ctx, r.Client, r.Scheme, deployment, llm); err != nil {
 		return nil, err
 	}
 
@@ -604,12 +860,12 @@ func (r *LiteLLMInstanceReconciler) createDeployment(ctx context.Context, llm *l
 func (r *LiteLLMInstanceReconciler) createService(ctx context.Context, llm *litellmv1alpha1.LiteLLMInstance) (*corev1.Service, error) {
 	service := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      util.GetServiceName(llm.Name),
+			Name:      r.litellmResourceNaming.GetServiceName(),
 			Namespace: llm.Namespace,
-			Labels:    util.GetAppLabels(llm.Name),
+			Labels:    r.litellmResourceNaming.GetAppLabels(),
 		},
 		Spec: corev1.ServiceSpec{
-			Selector: util.GetAppLabels(llm.Name),
+			Selector: r.litellmResourceNaming.GetAppLabels(),
 			Ports: []corev1.ServicePort{
 				{
 					Name:       "http",
@@ -622,7 +878,7 @@ func (r *LiteLLMInstanceReconciler) createService(ctx context.Context, llm *lite
 		},
 	}
 
-	if err := util.CreateOrUpdateWithRetry(ctx, r.Client, r.Scheme, service, llm); err != nil {
+	if _, err := util.CreateOrUpdateWithRetry(ctx, r.Client, r.Scheme, service, llm); err != nil {
 		return nil, err
 	}
 
@@ -634,13 +890,13 @@ func (r *LiteLLMInstanceReconciler) createService(ctx context.Context, llm *lite
 func (r *LiteLLMInstanceReconciler) createServiceAccount(ctx context.Context, llm *litellmv1alpha1.LiteLLMInstance) (*corev1.ServiceAccount, error) {
 	serviceAccount := &corev1.ServiceAccount{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      util.GetServiceAccountName(llm.Name),
+			Name:      r.litellmResourceNaming.GetServiceAccountName(),
 			Namespace: llm.Namespace,
-			Labels:    util.GetAppLabels(llm.Name),
+			Labels:    r.litellmResourceNaming.GetAppLabels(),
 		},
 	}
 
-	if err := util.CreateOrUpdateWithRetry(ctx, r.Client, r.Scheme, serviceAccount, llm); err != nil {
+	if _, err := util.CreateOrUpdateWithRetry(ctx, r.Client, r.Scheme, serviceAccount, llm); err != nil {
 		return nil, err
 	}
 
@@ -653,9 +909,9 @@ func (r *LiteLLMInstanceReconciler) createRBAC(ctx context.Context, llm *litellm
 	// Create Role with minimal permissions for the LiteLLM instance
 	role := &rbacv1.Role{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      util.GetRoleName(llm.Name),
+			Name:      r.litellmResourceNaming.GetRoleName(),
 			Namespace: llm.Namespace,
-			Labels:    util.GetAppLabels(llm.Name),
+			Labels:    r.litellmResourceNaming.GetAppLabels(),
 		},
 		Rules: []rbacv1.PolicyRule{
 			{
@@ -666,16 +922,16 @@ func (r *LiteLLMInstanceReconciler) createRBAC(ctx context.Context, llm *litellm
 		},
 	}
 
-	if err := util.CreateOrUpdateWithRetry(ctx, r.Client, r.Scheme, role, llm); err != nil {
+	if _, err := util.CreateOrUpdateWithRetry(ctx, r.Client, r.Scheme, role, llm); err != nil {
 		return err
 	}
 
 	// Create RoleBinding to bind the Role to the ServiceAccount
 	roleBinding := &rbacv1.RoleBinding{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      util.GetRoleBindingName(llm.Name),
+			Name:      r.litellmResourceNaming.GetRoleBindingName(),
 			Namespace: llm.Namespace,
-			Labels:    util.GetAppLabels(llm.Name),
+			Labels:    r.litellmResourceNaming.GetAppLabels(),
 		},
 		Subjects: []rbacv1.Subject{
 			{
@@ -691,7 +947,11 @@ func (r *LiteLLMInstanceReconciler) createRBAC(ctx context.Context, llm *litellm
 		},
 	}
 
-	return util.CreateOrUpdateWithRetry(ctx, r.Client, r.Scheme, roleBinding, llm)
+	if _, err := util.CreateOrUpdateWithRetry(ctx, r.Client, r.Scheme, roleBinding, llm); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // createIngress creates or updates the Ingress for the LiteLLM instance.
@@ -699,7 +959,7 @@ func (r *LiteLLMInstanceReconciler) createRBAC(ctx context.Context, llm *litellm
 func (r *LiteLLMInstanceReconciler) createIngress(ctx context.Context, llm *litellmv1alpha1.LiteLLMInstance) error {
 	ingress := &networkingv1.Ingress{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      util.GetIngressName(llm.Name),
+			Name:      r.litellmResourceNaming.GetIngressName(),
 			Namespace: llm.Namespace,
 		},
 		Spec: networkingv1.IngressSpec{
@@ -711,7 +971,11 @@ func (r *LiteLLMInstanceReconciler) createIngress(ctx context.Context, llm *lite
 		},
 	}
 
-	return util.CreateOrUpdateWithRetry(ctx, r.Client, r.Scheme, ingress, llm)
+	if _, err := util.CreateOrUpdateWithRetry(ctx, r.Client, r.Scheme, ingress, llm); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // SetupWithManager sets up the controller with the Manager.
@@ -733,7 +997,7 @@ func (r *LiteLLMInstanceReconciler) SetupWithManager(mgr ctrl.Manager) error {
 
 // buildContainerSpec builds the container specification for the LiteLLM deployment.
 // It creates a complete container spec with image, arguments, ports, environment variables, and health checks.
-func buildContainerSpec(llm *litellmv1alpha1.LiteLLMInstance, secretName string) corev1.Container {
+func buildContainerSpec(llm *litellmv1alpha1.LiteLLMInstance, secretName string, ctx context.Context, k8sClient client.Client) corev1.Container {
 	return corev1.Container{
 		Name:  "litellm",
 		Image: llm.Spec.Image,
@@ -743,7 +1007,7 @@ func buildContainerSpec(llm *litellmv1alpha1.LiteLLMInstance, secretName string)
 				ContainerPort: ContainerPort,
 			},
 		},
-		Env: buildEnvironmentVariables(llm, secretName),
+		Env: buildEnvironmentVariables(llm, secretName, ctx, k8sClient),
 		VolumeMounts: []corev1.VolumeMount{
 			{
 				Name:      "config-volume",
@@ -759,7 +1023,8 @@ func buildContainerSpec(llm *litellmv1alpha1.LiteLLMInstance, secretName string)
 
 // buildEnvironmentVariables builds the environment variables for the container.
 // It creates environment variables for the LiteLLM master key and database connection details.
-func buildEnvironmentVariables(llm *litellmv1alpha1.LiteLLMInstance, secretName string) []corev1.EnvVar {
+func buildEnvironmentVariables(llm *litellmv1alpha1.LiteLLMInstance, secretName string, ctx context.Context, k8sClient client.Client) []corev1.EnvVar {
+	log := logf.FromContext(ctx)
 	envVars := []corev1.EnvVar{
 		{
 			Name: "LITELLM_MASTER_KEY",
@@ -825,7 +1090,53 @@ func buildEnvironmentVariables(llm *litellmv1alpha1.LiteLLMInstance, secretName 
 		envVars = append(envVars, dbEnvVars...)
 	}
 
+	for _, model := range llm.Spec.Models {
+		if !model.RequiresAuth {
+			log.Info("model requires no auth, so skipping secret mounting!")
+			continue
+		}
+
+		prefix := sanitizeKey(model.Identifier)
+		modelSecrets, err := getAllSecretsByPrefix(ctx, k8sClient, llm.Namespace, prefix)
+		if err != nil {
+			log.Error(err, "Failed to retrieve secrets using model unique identifier")
+			return nil
+		}
+
+		//add all secrets we created into the EnvVars using valueFrom
+		for _, secret := range modelSecrets {
+			envVars = append(envVars, corev1.EnvVar{
+				Name: secret.Name, //will be used in proxy_server_config.yaml to reference secret
+				ValueFrom: &corev1.EnvVarSource{
+					SecretKeyRef: &corev1.SecretKeySelector{
+						LocalObjectReference: corev1.LocalObjectReference{
+							Name: secret.Name,
+						},
+						Key: secret.Name,
+					},
+				},
+			})
+		}
+	}
+
 	return envVars
+}
+
+func getAllSecretsByPrefix(ctx context.Context, k8sClient client.Client, namespace string, prefix string) ([]corev1.Secret, error) {
+	var allSecrets corev1.SecretList
+	err := k8sClient.List(ctx, &allSecrets, client.InNamespace(namespace))
+	if err != nil {
+		return nil, err
+	}
+
+	var secrets []corev1.Secret
+	for _, secret := range allSecrets.Items {
+		if strings.HasPrefix(secret.Name, prefix) {
+			secrets = append(secrets, secret)
+		}
+	}
+
+	return secrets, nil
 }
 
 // buildLivenessProbe builds the liveness probe configuration.

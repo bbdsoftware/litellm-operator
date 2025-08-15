@@ -125,6 +125,132 @@ spec:
                 type: object
               masterKey:
                 type: string
+              models:
+                items:
+                  properties:
+                    identifier:
+                      type: string
+                    liteLLMParams:
+                      properties:
+                        additionalProps:
+                          additionalProperties:
+                            type: string
+                          type: object
+                        apiBase:
+                          type: string
+                        apiKey:
+                          type: string
+                        apiVersion:
+                          type: string
+                        autoRouterConfig:
+                          type: string
+                        autoRouterConfigPath:
+                          type: string
+                        autoRouterDefaultModel:
+                          type: string
+                        autoRouterEmbeddingModel:
+                          type: string
+                        awsAccessKeyId:
+                          type: string
+                        awsRegionName:
+                          type: string
+                        awsSecretAccessKey:
+                          type: string
+                        budgetDuration:
+                          type: string
+                        configurableClientsideAuthParams:
+                          items:
+                            additionalProperties:
+                              type: string
+                            type: object
+                          type: array
+                        customLLMProvider:
+                          type: string
+                        inputCostPerPixel:
+                          type: string
+                        inputCostPerSecond:
+                          type: string
+                        inputCostPerToken:
+                          type: string
+                        litellmCredentialName:
+                          type: string
+                        litellmTraceId:
+                          type: string
+                        maxBudget:
+                          type: string
+                        maxFileSizeMb:
+                          type: string
+                        maxRetries:
+                          type: integer
+                        mergeReasoningContentInChoices:
+                          type: boolean
+                        mockResponse:
+                          type: string
+                        model:
+                          type: string
+                        organization:
+                          type: string
+                        outputCostPerPixel:
+                          type: string
+                        outputCostPerSecond:
+                          type: string
+                        outputCostPerToken:
+                          type: string
+                        regionName:
+                          type: string
+                        rpm:
+                          type: integer
+                        streamTimeout:
+                          type: integer
+                        timeout:
+                          type: integer
+                        tpm:
+                          type: integer
+                        useInPassThrough:
+                          type: boolean
+                        useLiteLLMProxy:
+                          type: boolean
+                        vertexCredentials:
+                          type: string
+                        vertexLocation:
+                          type: string
+                        vertexProject:
+                          type: string
+                        watsonxRegionName:
+                          type: string
+                      type: object
+                    modelCredentials:
+                      properties:
+                        keys:
+                          properties:
+                            apiBase:
+                              type: string
+                            apiKey:
+                              type: string
+                            awsAccessKeyId:
+                              type: string
+                            awsSecretAccessKey:
+                              type: string
+                            vertexCredentials:
+                              type: string
+                            vertexProject:
+                              type: string
+                          type: object
+                        nameRef:
+                          type: string
+                      required:
+                      - keys
+                      - nameRef
+                      type: object
+                    modelName:
+                      type: string
+                    requiresAuth:
+                      type: boolean
+                  required:
+                  - identifier
+                  - requiresAuth
+                  type: object
+                type: array
               redisSecretRef:
                 properties:
                   keys:

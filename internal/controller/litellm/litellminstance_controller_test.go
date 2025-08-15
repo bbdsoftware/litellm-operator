@@ -23,10 +23,11 @@ import (
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	client "sigs.k8s.io/controller-runtime/pkg/client"
+
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	litellmv1alpha1 "github.com/bbdsoftware/litellm-operator/api/litellm/v1alpha1"
 )
@@ -72,8 +73,46 @@ var _ = Describe("LiteLLMInstance Controller", func() {
 			}
 			Expect(k8sClient.Create(ctx, redisSecret)).To(Succeed())
 
+			By("creating the test openAI model secret")
+			openAIModelSecret := &corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-openai-model-secret",
+					Namespace: "default",
+				},
+				Data: map[string][]byte{
+					"ApiKey":  []byte("test-api-key"),
+					"ApiBase": []byte("test-api-base-url"),
+				},
+			}
+			Expect(k8sClient.Create(ctx, openAIModelSecret)).To(Succeed())
+			openAISecret := &corev1.Secret{}
+			err := k8sClient.Get(ctx, types.NamespacedName{
+				Name:      "test-openai-model-secret",
+				Namespace: "default",
+			}, openAISecret)
+			Expect(err).NotTo(HaveOccurred())
+
+			By("creating the test bedrock model secret")
+			bedrockModelSecret := &corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-bedrock-model-secret",
+					Namespace: "default",
+				},
+				Data: map[string][]byte{
+					"AwsAccessKeyId":     []byte("test-access-key-id"),
+					"AwsSecretAccessKey": []byte("test-secret-access-key"),
+				},
+			}
+			Expect(k8sClient.Create(ctx, bedrockModelSecret)).To(Succeed())
+			bedrockSecret := &corev1.Secret{}
+			err = k8sClient.Get(ctx, types.NamespacedName{
+				Name:      "test-bedrock-model-secret",
+				Namespace: "default",
+			}, bedrockSecret)
+			Expect(err).NotTo(HaveOccurred())
+
 			By("creating the custom resource for the Kind LiteLLMInstance")
-			err := k8sClient.Get(ctx, typeNamespacedName, litellminstance)
+			err = k8sClient.Get(ctx, typeNamespacedName, litellminstance)
 			if err != nil && errors.IsNotFound(err) {
 				resource := &litellmv1alpha1.LiteLLMInstance{
 					ObjectMeta: metav1.ObjectMeta{
@@ -100,6 +139,45 @@ var _ = Describe("LiteLLMInstance Controller", func() {
 								PasswordSecret: "password",
 							},
 						},
+						Models: []litellmv1alpha1.Model{
+							{
+								ModelName:  "amazon.titan-embed-text-v1",
+								Identifier: "aws/bedrock-3.0",
+								ModelCredentials: litellmv1alpha1.ModelCredentialSecretRef{
+									NameRef: "test-bedrock-model-secret",
+									Keys: litellmv1alpha1.ModelCredentialSecretKeys{
+										AwsAccessKeyID:     "AwsAccessKeyId",
+										AwsSecretAccessKey: "AwsSecretAccessKey",
+									},
+								},
+								RequiresAuth: true,
+								LiteLLMParams: litellmv1alpha1.LiteLLMParams{
+									AwsRegionName:     "us-east-1",
+									Model:             "amazon.titan-embed-text-v1",
+									MaxBudget:         "1000.988",
+									UseLiteLLMProxy:   true,
+									InputCostPerToken: "0.0001",
+								},
+							}, {
+								ModelName:    "gpt-3.5-turbo",
+								RequiresAuth: true,
+								Identifier:   "gpt-3.5",
+								ModelCredentials: litellmv1alpha1.ModelCredentialSecretRef{
+									NameRef: "test-openai-model-secret",
+									Keys: litellmv1alpha1.ModelCredentialSecretKeys{
+										ApiKey:  "ApiKey",
+										ApiBase: "ApiBase",
+									},
+								},
+								LiteLLMParams: litellmv1alpha1.LiteLLMParams{
+									Model:             "gpt-3.5-turbo",
+									MaxBudget:         "98.0",
+									Organization:      "test-org",
+									UseLiteLLMProxy:   true,
+									InputCostPerToken: "0.000000089",
+								},
+							},
+						},
 					},
 				}
 				Expect(k8sClient.Create(ctx, resource)).To(Succeed())
@@ -110,25 +188,35 @@ var _ = Describe("LiteLLMInstance Controller", func() {
 			// TODO(user): Cleanup logic after each test, like removing the resource instance.
 			resource := &litellmv1alpha1.LiteLLMInstance{}
 			err := k8sClient.Get(ctx, typeNamespacedName, resource)
-			Expect(err).NotTo(HaveOccurred())
+
+			if err != nil && errors.IsNotFound(err) {
+				return // Resource does not exist, nothing to clean up
+			}
+			Expect(err).NotTo(HaveOccurred(), "Failed to get the resource instance")
+
+			By("Cleanup the specific resource instance ConfigMap")
+			configMap := &corev1.ConfigMap{}
+			err = k8sClient.Get(ctx, types.NamespacedName{Name: resourceName + "-config", Namespace: "default"}, configMap)
+			if err == nil {
+				Expect(k8sClient.Delete(ctx, configMap)).To(Succeed())
+			} else if !errors.IsNotFound(err) {
+				Fail("Failed to get the configmap for the resource: " + err.Error())
+			}
 
 			By("Cleanup the specific resource instance LiteLLMInstance")
 			Expect(k8sClient.Delete(ctx, resource)).To(Succeed())
 
 			By("Cleanup the test secrets")
-			databaseSecret := &corev1.Secret{}
-			err = k8sClient.Get(ctx, types.NamespacedName{Name: "test-database-secret", Namespace: "default"}, databaseSecret)
-			if err == nil {
-				Expect(k8sClient.Delete(ctx, databaseSecret)).To(Succeed())
-			}
-
-			redisSecret := &corev1.Secret{}
-			err = k8sClient.Get(ctx, types.NamespacedName{Name: "test-redis-secret", Namespace: "default"}, redisSecret)
-			if err == nil {
-				Expect(k8sClient.Delete(ctx, redisSecret)).To(Succeed())
+			secrets := &corev1.SecretList{}
+			err = k8sClient.List(ctx, secrets, &client.ListOptions{Namespace: "default"})
+			Expect(err).NotTo(HaveOccurred(), "Failed to list secrets in the default namespace")
+			for _, secret := range secrets.Items {
+				Expect(k8sClient.Delete(ctx, &secret)).To(Succeed())
 			}
 		})
+
 		It("should successfully reconcile the resource", func() {
+
 			By("Reconciling the created resource")
 			controllerReconciler := &LiteLLMInstanceReconciler{
 				Client: k8sClient,
@@ -141,6 +229,20 @@ var _ = Describe("LiteLLMInstance Controller", func() {
 			Expect(err).NotTo(HaveOccurred())
 			// TODO(user): Add more specific assertions depending on your controller's reconciliation logic.
 			// Example: If you expect a certain status condition after reconciliation, verify it here.
+
+			//verify the configmap exists with its values
+			configMap := &corev1.ConfigMap{}
+			err = k8sClient.Get(ctx, types.NamespacedName{Name: resourceName + "-config", Namespace: "default"}, configMap)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(configMap.Data).To(HaveKey("proxy_server_config.yaml"))
+			yamlData := configMap.Data["proxy_server_config.yaml"]
+			Expect(yamlData).To(ContainSubstring("router_settings"))
+			Expect(yamlData).To(ContainSubstring("general_settings"))
+			Expect(yamlData).To(ContainSubstring("model_list:"))
+			Expect(yamlData).To(ContainSubstring("model_name: amazon.titan-embed-text-v1"))
+			Expect(yamlData).To(ContainSubstring("api_key: os.environ/gpt-3-5-apikey"))
+			Expect(yamlData).To(ContainSubstring("aws_access_key_id: os.environ/aws-bedrock-3-0-awsaccesskeyid"))
+			Expect(yamlData).To(ContainSubstring("model: gpt-3.5-turbo"))
 		})
 	})
 })

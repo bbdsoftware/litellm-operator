@@ -34,9 +34,9 @@ import (
 // CreateOrUpdateWithRetry creates or updates a Kubernetes resource with retry logic.
 // It implements optimistic concurrency control with exponential backoff to handle
 // resource conflicts in high-concurrency environments.
-func CreateOrUpdateWithRetry(ctx context.Context, c client.Client, scheme *runtime.Scheme, obj client.Object, owner client.Object) error {
+func CreateOrUpdateWithRetry(ctx context.Context, c client.Client, scheme *runtime.Scheme, obj client.Object, owner client.Object) (bool, error) {
 	const maxRetries = 5
-
+	restart := false
 	for attempt := 0; attempt < maxRetries; attempt++ {
 		// Try to get the existing object
 		existing := obj.DeepCopyObject().(client.Object)
@@ -46,16 +46,17 @@ func CreateOrUpdateWithRetry(ctx context.Context, c client.Client, scheme *runti
 			if client.IgnoreNotFound(err) == nil {
 				// Object doesn't exist, create it
 				if err := ctrl.SetControllerReference(owner, obj, scheme); err != nil {
-					return err
+					return false, err
 				}
-				return c.Create(ctx, obj)
+				return false, c.Create(ctx, obj)
 			}
-			return err
+			return false, err
 		}
 
 		// Object exists, check if update is needed
-		if !needsUpdate(existing, obj) {
-			return nil // No update needed
+		needsUpdate, restart := needsUpdate(existing, obj)
+		if !needsUpdate {
+			return restart, nil // No update needed
 		}
 
 		// Object exists and needs update
@@ -65,13 +66,13 @@ func CreateOrUpdateWithRetry(ctx context.Context, c client.Client, scheme *runti
 
 		// Set controller reference for the update
 		if err := ctrl.SetControllerReference(owner, obj, scheme); err != nil {
-			return err
+			return restart, err
 		}
 
 		// Try to update
 		err = c.Update(ctx, obj)
 		if err == nil {
-			return nil // Success
+			return restart, nil // Success
 		}
 
 		// Check if it's a conflict error
@@ -83,27 +84,44 @@ func CreateOrUpdateWithRetry(ctx context.Context, c client.Client, scheme *runti
 			}
 		}
 
+		return restart, err
+	}
+
+	return restart, fmt.Errorf("failed to update after %d attempts", maxRetries)
+}
+
+// cause a restart of the deployment
+func RestartDeployment(ctx context.Context, c client.Client, name, namespace string) error {
+	deployment := &appsv1.Deployment{}
+	err := c.Get(ctx, client.ObjectKey{Name: name, Namespace: namespace}, deployment)
+	if err != nil {
 		return err
 	}
 
-	return fmt.Errorf("failed to update after %d attempts", maxRetries)
+	// Add a restart annotation to force pod recreation
+	if deployment.Spec.Template.Annotations == nil {
+		deployment.Spec.Template.Annotations = make(map[string]string)
+	}
+	deployment.Spec.Template.Annotations["kubectl.kubernetes.io/restartedAt"] = time.Now().Format(time.RFC3339)
+
+	return c.Update(ctx, deployment)
 }
 
 // needsUpdate checks if the resource needs to be updated by comparing existing and desired states.
 // It implements resource-specific comparison logic to determine whether an update is necessary.
-func needsUpdate(existing, desired client.Object) bool {
+func needsUpdate(existing, desired client.Object) (bool, restart bool) {
 	// For ConfigMaps, compare the data
 	if existingConfigMap, ok := existing.(*corev1.ConfigMap); ok {
 		if desiredConfigMap, ok := desired.(*corev1.ConfigMap); ok {
 			if len(existingConfigMap.Data) != len(desiredConfigMap.Data) {
-				return true
+				return true, true
 			}
 			for key, value := range desiredConfigMap.Data {
 				if existingConfigMap.Data[key] != value {
-					return true
+					return true, true
 				}
 			}
-			return false
+			return false, false
 		}
 	}
 
@@ -113,14 +131,14 @@ func needsUpdate(existing, desired client.Object) bool {
 			// Compare replicas
 			if existingDeployment.Spec.Replicas != nil && desiredDeployment.Spec.Replicas != nil {
 				if *existingDeployment.Spec.Replicas != *desiredDeployment.Spec.Replicas {
-					return true
+					return true, false
 				}
 			}
 
 			// Compare container image
 			if len(existingDeployment.Spec.Template.Spec.Containers) > 0 && len(desiredDeployment.Spec.Template.Spec.Containers) > 0 {
 				if existingDeployment.Spec.Template.Spec.Containers[0].Image != desiredDeployment.Spec.Template.Spec.Containers[0].Image {
-					return true
+					return true, false
 				}
 			}
 
@@ -129,23 +147,23 @@ func needsUpdate(existing, desired client.Object) bool {
 				existingArgs := existingDeployment.Spec.Template.Spec.Containers[0].Args
 				desiredArgs := desiredDeployment.Spec.Template.Spec.Containers[0].Args
 				if len(existingArgs) != len(desiredArgs) {
-					return true
+					return true, false
 				}
 				for i, arg := range existingArgs {
 					if i >= len(desiredArgs) || arg != desiredArgs[i] {
-						return true
+						return true, false
 					}
 				}
 			}
 
 			// For now, we'll be conservative and update if we're not sure
 			// In a production environment, you might want more sophisticated comparison
-			return false
+			return false, false
 		}
 	}
 
 	// Default to updating if we can't determine the type
-	return true
+	return true, false
 }
 
 // isConflictError checks if the error is a Kubernetes conflict error.
