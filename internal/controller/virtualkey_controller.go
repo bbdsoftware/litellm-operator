@@ -214,7 +214,13 @@ func (r *VirtualKeyReconciler) generateVirtualKey(ctx context.Context, virtualKe
 		})
 	}
 
-	secretName := util.GetSecretName(virtualKeyResponse.KeyAlias)
+	var llmName string
+	if virtualKey.Spec.ConnectionRef.InstanceRef != nil {
+		llmName = virtualKey.Spec.ConnectionRef.InstanceRef.Name
+	} else {
+		llmName = "litellm"
+	}
+	secretName := util.GetSecretNameForUser(llmName, virtualKeyResponse.KeyAlias)
 
 	updateVirtualKeyStatus(virtualKey, virtualKeyResponse, secretName)
 	_, err = r.updateConditions(ctx, virtualKey, metav1.Condition{

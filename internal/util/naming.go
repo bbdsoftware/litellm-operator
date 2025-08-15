@@ -41,6 +41,10 @@ func GetSecretName(llmName string) string {
 	return llmName + SecretSuffix
 }
 
+func GetSecretNameForUser(llmName, userAlias string) string {
+	return llmName + "-key-" + userAlias
+}
+
 // GetDeploymentName generates the name for a Deployment resource based on the LiteLLM instance name.
 func GetDeploymentName(llmName string) string {
 	return llmName + DeploymentSuffix

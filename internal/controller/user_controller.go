@@ -237,7 +237,13 @@ func (r *UserReconciler) createUser(ctx context.Context, user *authv1alpha1.User
 		})
 	}
 
-	secretName := util.GetSecretName(userResponse.UserAlias)
+	var llmName string
+	if user.Spec.ConnectionRef.InstanceRef != nil {
+		llmName = user.Spec.ConnectionRef.InstanceRef.Name
+	} else {
+		llmName = "litellm"
+	}
+	secretName := util.GetSecretNameForUser(llmName, userResponse.UserAlias)
 
 	updateUserStatus(user, userResponse, secretName)
 	_, err = r.updateConditions(ctx, user, metav1.Condition{
