@@ -81,7 +81,8 @@ func RequeueAfter(duration time.Duration) (ctrl.Result, error) {
 // Services, and optionally Ingress resources.
 type LiteLLMInstanceReconciler struct {
 	client.Client
-	Scheme *runtime.Scheme
+	Scheme                *runtime.Scheme
+	litellmResourceNaming *util.LitellmResourceNaming
 }
 
 type LiteLLMParamsYAML struct {
@@ -168,6 +169,10 @@ func (r *LiteLLMInstanceReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	llm := &litellmv1alpha1.LiteLLMInstance{}
 	if err := r.Get(ctx, req.NamespacedName, llm); err != nil {
 		return RequeueWithError(client.IgnoreNotFound(err))
+	}
+
+	if r.litellmResourceNaming == nil {
+		r.litellmResourceNaming = util.NewLitellmResourceNaming(llm.Name)
 	}
 
 	// Check if the instance is being deleted
@@ -698,7 +703,7 @@ func (r *LiteLLMInstanceReconciler) createConfigMap(ctx context.Context, llm *li
 
 	configMap := &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      util.GetConfigMapName(llm.Name),
+			Name:      r.litellmResourceNaming.GetConfigMapName(),
 			Namespace: llm.Namespace,
 		},
 		Data: map[string]string{"proxy_server_config.yaml": configYAML},
@@ -710,7 +715,7 @@ func (r *LiteLLMInstanceReconciler) createConfigMap(ctx context.Context, llm *li
 	} else if restart {
 		//get the deployment
 		deployment := &appsv1.Deployment{}
-		err := r.Get(ctx, client.ObjectKey{Name: util.GetDeploymentName(llm.Name), Namespace: llm.Namespace}, deployment)
+		err := r.Get(ctx, client.ObjectKey{Name: r.litellmResourceNaming.GetDeploymentName(), Namespace: llm.Namespace}, deployment)
 		if err != nil {
 			return nil, err
 		}
@@ -774,7 +779,7 @@ func createAdditionalModelSecrets(ctx context.Context, model *litellmv1alpha1.Mo
 func (r *LiteLLMInstanceReconciler) createMasterKeySecret(ctx context.Context, llm *litellmv1alpha1.LiteLLMInstance) (*corev1.Secret, error) {
 
 	// Get existing secret to preserve data if it exists
-	secretName := util.GetSecretName(llm.Name)
+	secretName := r.litellmResourceNaming.GetSecretName()
 	existingSecret := &corev1.Secret{}
 	err := r.Get(ctx, client.ObjectKey{Name: secretName, Namespace: llm.Namespace}, existingSecret)
 	if err != nil && client.IgnoreNotFound(err) != nil {
@@ -808,18 +813,18 @@ func createSecret(ctx context.Context, k8sClient client.Client, scheme *runtime.
 func (r *LiteLLMInstanceReconciler) createDeployment(ctx context.Context, llm *litellmv1alpha1.LiteLLMInstance, configMap *corev1.ConfigMap, secret *corev1.Secret, serviceAccount *corev1.ServiceAccount) (*appsv1.Deployment, error) {
 	deployment := &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      util.GetDeploymentName(llm.Name),
+			Name:      r.litellmResourceNaming.GetDeploymentName(),
 			Namespace: llm.Namespace,
-			Labels:    util.GetAppLabels(llm.Name),
+			Labels:    r.litellmResourceNaming.GetAppLabels(),
 		},
 		Spec: appsv1.DeploymentSpec{
 			Replicas: util.Int32Ptr(1),
 			Selector: &metav1.LabelSelector{
-				MatchLabels: util.GetAppLabels(llm.Name),
+				MatchLabels: r.litellmResourceNaming.GetAppLabels(),
 			},
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
-					Labels: util.GetAppLabels(llm.Name),
+					Labels: r.litellmResourceNaming.GetAppLabels(),
 				},
 				Spec: corev1.PodSpec{
 					ServiceAccountName: serviceAccount.Name,
@@ -855,12 +860,12 @@ func (r *LiteLLMInstanceReconciler) createDeployment(ctx context.Context, llm *l
 func (r *LiteLLMInstanceReconciler) createService(ctx context.Context, llm *litellmv1alpha1.LiteLLMInstance) (*corev1.Service, error) {
 	service := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      util.GetServiceName(llm.Name),
+			Name:      r.litellmResourceNaming.GetServiceName(),
 			Namespace: llm.Namespace,
-			Labels:    util.GetAppLabels(llm.Name),
+			Labels:    r.litellmResourceNaming.GetAppLabels(),
 		},
 		Spec: corev1.ServiceSpec{
-			Selector: util.GetAppLabels(llm.Name),
+			Selector: r.litellmResourceNaming.GetAppLabels(),
 			Ports: []corev1.ServicePort{
 				{
 					Name:       "http",
@@ -885,9 +890,9 @@ func (r *LiteLLMInstanceReconciler) createService(ctx context.Context, llm *lite
 func (r *LiteLLMInstanceReconciler) createServiceAccount(ctx context.Context, llm *litellmv1alpha1.LiteLLMInstance) (*corev1.ServiceAccount, error) {
 	serviceAccount := &corev1.ServiceAccount{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      util.GetServiceAccountName(llm.Name),
+			Name:      r.litellmResourceNaming.GetServiceAccountName(),
 			Namespace: llm.Namespace,
-			Labels:    util.GetAppLabels(llm.Name),
+			Labels:    r.litellmResourceNaming.GetAppLabels(),
 		},
 	}
 
@@ -904,9 +909,9 @@ func (r *LiteLLMInstanceReconciler) createRBAC(ctx context.Context, llm *litellm
 	// Create Role with minimal permissions for the LiteLLM instance
 	role := &rbacv1.Role{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      util.GetRoleName(llm.Name),
+			Name:      r.litellmResourceNaming.GetRoleName(),
 			Namespace: llm.Namespace,
-			Labels:    util.GetAppLabels(llm.Name),
+			Labels:    r.litellmResourceNaming.GetAppLabels(),
 		},
 		Rules: []rbacv1.PolicyRule{
 			{
@@ -924,9 +929,9 @@ func (r *LiteLLMInstanceReconciler) createRBAC(ctx context.Context, llm *litellm
 	// Create RoleBinding to bind the Role to the ServiceAccount
 	roleBinding := &rbacv1.RoleBinding{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      util.GetRoleBindingName(llm.Name),
+			Name:      r.litellmResourceNaming.GetRoleBindingName(),
 			Namespace: llm.Namespace,
-			Labels:    util.GetAppLabels(llm.Name),
+			Labels:    r.litellmResourceNaming.GetAppLabels(),
 		},
 		Subjects: []rbacv1.Subject{
 			{
@@ -954,7 +959,7 @@ func (r *LiteLLMInstanceReconciler) createRBAC(ctx context.Context, llm *litellm
 func (r *LiteLLMInstanceReconciler) createIngress(ctx context.Context, llm *litellmv1alpha1.LiteLLMInstance) error {
 	ingress := &networkingv1.Ingress{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      util.GetIngressName(llm.Name),
+			Name:      r.litellmResourceNaming.GetIngressName(),
 			Namespace: llm.Namespace,
 		},
 		Spec: networkingv1.IngressSpec{

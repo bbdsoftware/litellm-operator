@@ -44,7 +44,8 @@ type VirtualKeyReconciler struct {
 	client.Client
 	Scheme *runtime.Scheme
 	litellm.LitellmVirtualKey
-	connectionHandler *common.ConnectionHandler
+	connectionHandler     *common.ConnectionHandler
+	litellmResourceNaming *util.LitellmResourceNaming
 }
 
 // +kubebuilder:rbac:groups=auth.litellm.ai,resources=virtualkeys,verbs=get;list;watch;create;update;patch;delete
@@ -81,6 +82,10 @@ func (r *VirtualKeyReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	// Initialize connection handler if not already done
 	if r.connectionHandler == nil {
 		r.connectionHandler = common.NewConnectionHandler(r.Client)
+	}
+
+	if r.litellmResourceNaming == nil {
+		r.litellmResourceNaming = util.NewLitellmResourceNaming(&virtualKey.Spec.ConnectionRef)
 	}
 
 	// Get connection details
@@ -214,13 +219,8 @@ func (r *VirtualKeyReconciler) generateVirtualKey(ctx context.Context, virtualKe
 		})
 	}
 
-	var llmName string
-	if virtualKey.Spec.ConnectionRef.InstanceRef != nil {
-		llmName = virtualKey.Spec.ConnectionRef.InstanceRef.Name
-	} else {
-		llmName = util.DefaultLLMName
-	}
-	secretName := util.GetSecretNameForResource(llmName, virtualKeyResponse.KeyAlias)
+	resourceNaming := util.NewLitellmResourceNaming(&virtualKey.Spec.ConnectionRef)
+	secretName := resourceNaming.GenerateSecretName(virtualKeyResponse.KeyAlias)
 
 	updateVirtualKeyStatus(virtualKey, virtualKeyResponse, secretName)
 	_, err = r.updateConditions(ctx, virtualKey, metav1.Condition{
@@ -319,15 +319,9 @@ func (r *VirtualKeyReconciler) syncVirtualKey(ctx context.Context, virtualKey *a
 
 // getKeyFromSecret gets the key from the secret associated with the VirtualKey
 func (r *VirtualKeyReconciler) getKeyFromSecret(ctx context.Context, virtualKey *authv1alpha1.VirtualKey) (string, error) {
-	var llmName string
-	if virtualKey.Spec.ConnectionRef.InstanceRef != nil {
-		llmName = virtualKey.Spec.ConnectionRef.InstanceRef.Name
-	} else {
-		llmName = util.DefaultLLMName
-	}
 
 	namespacedName := types.NamespacedName{
-		Name:      util.GetSecretNameForResource(llmName, virtualKey.Spec.KeyAlias),
+		Name:      r.litellmResourceNaming.GenerateSecretName(virtualKey.Spec.KeyAlias),
 		Namespace: virtualKey.Namespace,
 	}
 	var secret corev1.Secret

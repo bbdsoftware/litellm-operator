@@ -43,7 +43,8 @@ type UserReconciler struct {
 	client.Client
 	Scheme *runtime.Scheme
 	litellm.LitellmUser
-	connectionHandler *common.ConnectionHandler
+	connectionHandler     *common.ConnectionHandler
+	litellmResourceNaming *util.LitellmResourceNaming
 }
 
 // +kubebuilder:rbac:groups=auth.litellm.ai,resources=users,verbs=get;list;watch;create;update;patch;delete
@@ -78,6 +79,10 @@ func (r *UserReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 	// Initialize connection handler if not already done
 	if r.connectionHandler == nil {
 		r.connectionHandler = common.NewConnectionHandler(r.Client)
+	}
+
+	if r.litellmResourceNaming == nil {
+		r.litellmResourceNaming = util.NewLitellmResourceNaming(&user.Spec.ConnectionRef)
 	}
 
 	// Get connection details
@@ -237,13 +242,7 @@ func (r *UserReconciler) createUser(ctx context.Context, user *authv1alpha1.User
 		})
 	}
 
-	var llmName string
-	if user.Spec.ConnectionRef.InstanceRef != nil {
-		llmName = user.Spec.ConnectionRef.InstanceRef.Name
-	} else {
-		llmName = util.DefaultLLMName
-	}
-	secretName := util.GetSecretNameForResource(llmName, userResponse.UserAlias)
+	secretName := r.litellmResourceNaming.GenerateSecretName(userResponse.UserAlias)
 
 	updateUserStatus(user, userResponse, secretName)
 	_, err = r.updateConditions(ctx, user, metav1.Condition{
