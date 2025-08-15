@@ -20,8 +20,8 @@ nav:
     - Development: developer-guide/development.md
     - Contributions: developer-guide/contributions.md
   - API Reference:
-    - Auth: reference/auth.litellm.ai.md
-    - LiteLLM: reference/litellm.litellm.ai.md
+    - Auth: api-reference/auth.litellm.ai.md
+    - LiteLLM: api-reference/litellm.litellm.ai.md
     
   - Community:
     - Code of Conduct: community/code-of-conduct.md

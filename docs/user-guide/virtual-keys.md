@@ -207,5 +207,4 @@ When a User resource has `autoCreateKey: true`, a Virtual Key is automatically c
 ## Next Steps
 
 - Learn about [Users](users.md) and [Teams](teams.md)
-- Set up [monitoring and alerts](../reference/monitoring.md)
 - Review [security best practices](../community/security.md) 
