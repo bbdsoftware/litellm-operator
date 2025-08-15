@@ -29,6 +29,7 @@ const (
 	ServiceAccountSuffix = "-sa"          // Suffix for ServiceAccount resources
 	RoleSuffix           = "-role"        // Suffix for Role resources
 	RoleBindingSuffix    = "-rolebinding" // Suffix for RoleBinding resources
+	DefaultLLMName       = "litellm"
 )
 
 // GetConfigMapName generates the name for a ConfigMap resource based on the LiteLLM instance name.
@@ -41,7 +42,7 @@ func GetSecretName(llmName string) string {
 	return llmName + SecretSuffix
 }
 
-func GetSecretNameForUser(llmName, userAlias string) string {
+func GetSecretNameForResource(llmName, userAlias string) string {
 	return llmName + "-key-" + userAlias
 }
 

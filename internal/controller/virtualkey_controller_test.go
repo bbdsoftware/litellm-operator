@@ -85,6 +85,13 @@ var _ = Describe("VirtualKey Controller", func() {
 		}
 		virtualkey := &authv1alpha1.VirtualKey{}
 
+		var llmName string
+		if virtualkey.Spec.ConnectionRef.InstanceRef != nil {
+			llmName = virtualkey.Spec.ConnectionRef.InstanceRef.Name
+		} else {
+			llmName = util.DefaultLLMName
+		}
+
 		BeforeEach(func() {
 			By("creating the test connection secret")
 			connectionSecret := &corev1.Secret{
@@ -121,14 +128,15 @@ var _ = Describe("VirtualKey Controller", func() {
 						KeyAlias: "test-key-alias",
 					},
 					Status: authv1alpha1.VirtualKeyStatus{
-						KeySecretRef: util.GetSecretName("test-key-alias"),
+						KeySecretRef: util.GetSecretNameForResource(llmName, "test-key-alias"),
 					},
 				}
 				Expect(k8sClient.Create(ctx, resource)).To(Succeed())
+
 				// create Secret
 				secret := &corev1.Secret{
 					ObjectMeta: metav1.ObjectMeta{
-						Name:      util.GetSecretName(resource.Spec.KeyAlias),
+						Name:      util.GetSecretNameForResource(llmName, resource.Spec.KeyAlias),
 						Namespace: "default",
 					},
 					Data: map[string][]byte{
