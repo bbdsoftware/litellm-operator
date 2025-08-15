@@ -95,7 +95,6 @@ The operator supports the following environment variables:
 
 ### Getting Help
 
-- Check the [troubleshooting guide](../reference/troubleshooting.md)
 - View operator logs: `kubectl logs -n litellm deployment/litellm-operator-controller-manager`
 - Submit an issue on [GitHub](https://github.com/bbdsoftware/litellm-operator/issues/new/choose)
 

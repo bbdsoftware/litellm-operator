@@ -20,8 +20,8 @@ nav:
     - Development: developer-guide/development.md
     - Contributions: developer-guide/contributions.md
   - API Reference:
-    - Auth: reference/auth.litellm.ai.md
-    - LiteLLM: reference/litellm.litellm.ai.md
+    - Auth: api-reference/auth.litellm.ai.md
+    - LiteLLM: api-reference/litellm.litellm.ai.md
     
   - Community:
     - Code of Conduct: community/code-of-conduct.md
@@ -71,7 +71,9 @@ extra:
   social:
     - icon: fontawesome/brands/github
       link: https://github.com/bbdsoftware/litellm-operator 
-    
-  # version:
-  #   provider: mike
-  #   default: stable
+  
+# Mike versioning
+  version:
+    provider: mike
+    default: latest
+    alias: true
