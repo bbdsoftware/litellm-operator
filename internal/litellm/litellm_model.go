@@ -33,22 +33,22 @@ type ModelResponse struct {
 
 // UpdateLiteLLMParams represents the LiteLLM parameters for model configuration
 type UpdateLiteLLMParams struct {
-	InputCostPerToken                *string                `json:"input_cost_per_token,omitempty"`
-	OutputCostPerToken               *string                `json:"output_cost_per_token,omitempty"`
-	InputCostPerSecond               *string                `json:"input_cost_per_second,omitempty"`
-	OutputCostPerSecond              *string                `json:"output_cost_per_second,omitempty"`
-	InputCostPerPixel                *string                `json:"input_cost_per_pixel,omitempty"`
-	OutputCostPerPixel               *string                `json:"output_cost_per_pixel,omitempty"`
-	APIKey                           *string                `json:"api_key,omitempty"`
-	APIBase                          *string                `json:"api_base,omitempty"`
-	APIVersion                       *string                `json:"api_version,omitempty"`
+	InputCostPerToken                *float64               `json:"input_cost_per_token,omitempty"`
+	OutputCostPerToken               *float64               `json:"output_cost_per_token,omitempty"`
+	InputCostPerSecond               *float64               `json:"input_cost_per_second,omitempty"`
+	OutputCostPerSecond              *float64               `json:"output_cost_per_second,omitempty"`
+	InputCostPerPixel                *float64               `json:"input_cost_per_pixel,omitempty"`
+	OutputCostPerPixel               *float64               `json:"output_cost_per_pixel,omitempty"`
+	ApiKey                           *string                `json:"api_key,omitempty"`
+	ApiBase                          *string                `json:"api_base,omitempty"`
+	ApiVersion                       *string                `json:"api_version,omitempty"`
 	VertexProject                    *string                `json:"vertex_project,omitempty"`
 	VertexLocation                   *string                `json:"vertex_location,omitempty"`
 	VertexCredentials                interface{}            `json:"vertex_credentials,omitempty"`
 	RegionName                       *string                `json:"region_name,omitempty"`
-	AWSAccessKeyID                   *string                `json:"aws_access_key_id,omitempty"`
-	AWSSecretAccessKey               *string                `json:"aws_secret_access_key,omitempty"`
-	AWSRegionName                    *string                `json:"aws_region_name,omitempty"`
+	AwsAccessKeyID                   *string                `json:"aws_access_key_id,omitempty"`
+	AwsSecretAccessKey               *string                `json:"aws_secret_access_key,omitempty"`
+	AwsRegionName                    *string                `json:"aws_region_name,omitempty"`
 	WatsonXRegionName                *string                `json:"watsonx_region_name,omitempty"`
 	CustomLLMProvider                *string                `json:"custom_llm_provider,omitempty"`
 	TPM                              *int                   `json:"tpm,omitempty"`
@@ -56,12 +56,12 @@ type UpdateLiteLLMParams struct {
 	Timeout                          interface{}            `json:"timeout,omitempty"`
 	StreamTimeout                    interface{}            `json:"stream_timeout,omitempty"`
 	MaxRetries                       *int                   `json:"max_retries,omitempty"`
-	Organisation                     *string                `json:"organization,omitempty"`
+	Organization                     *string                `json:"organization,omitempty"`
 	ConfigurableClientsideAuthParams []interface{}          `json:"configurable_clientside_auth_params,omitempty"`
 	LiteLLMCredentialName            *string                `json:"litellm_credential_name,omitempty"`
 	LiteLLMTraceID                   *string                `json:"litellm_trace_id,omitempty"`
-	MaxFileSizeMB                    *int64                 `json:"max_file_size_mb,omitempty"`
-	MaxBudget                        *string                `json:"max_budget,omitempty"`
+	MaxFileSizeMB                    *int                   `json:"max_file_size_mb,omitempty"`
+	MaxBudget                        *float64               `json:"max_budget,omitempty"`
 	BudgetDuration                   *string                `json:"budget_duration,omitempty"`
 	UseInPassThrough                 *bool                  `json:"use_in_pass_through,omitempty"`
 	UseLiteLLMProxy                  *bool                  `json:"use_litellm_proxy,omitempty"`
@@ -149,10 +149,10 @@ func (l *LitellmClient) UpdateModel(ctx context.Context, req *ModelRequest) (Mod
 }
 
 // GetModel retrieves a model from the LiteLLM service
-func (l *LitellmClient) GetModel(ctx context.Context, modelName string) (ModelResponse, error) {
+func (l *LitellmClient) GetModel(ctx context.Context, modelID string) (ModelResponse, error) {
 	log := log.FromContext(ctx)
 
-	response, err := l.makeRequest(ctx, "GET", "/model/"+modelName, nil)
+	response, err := l.makeRequest(ctx, "GET", "/model/"+modelID, nil)
 	if err != nil {
 		log.Error(err, "Failed to get model from LiteLLM")
 		return ModelResponse{}, err

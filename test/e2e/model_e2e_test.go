@@ -99,8 +99,8 @@ var _ = Describe("Model E2E Tests", Ordered, func() {
 			}, updatedModelCR)).To(Succeed())
 
 			// Update the model parameters
-			updatedModelCR.Spec.LiteLLMParams.InputCostPerToken = "0.00004"
-			updatedModelCR.Spec.LiteLLMParams.OutputCostPerToken = "0.00008"
+			updatedModelCR.Spec.LiteLLMParams.InputCostPerToken = stringPtr("0.00004")
+			updatedModelCR.Spec.LiteLLMParams.OutputCostPerToken = stringPtr("0.00008")
 			Expect(k8sClient.Update(context.Background(), updatedModelCR)).To(Succeed())
 
 			By("verifying the model was updated in LiteLLM")
@@ -258,7 +258,7 @@ var _ = Describe("Model E2E Tests", Ordered, func() {
 				Namespace: modelTestNamespace,
 			}, updatedModelCR)).To(Succeed())
 
-			updatedModelCR.Spec.LiteLLMParams.TPM = 15000
+			updatedModelCR.Spec.LiteLLMParams.TPM = intPtr(15000)
 			Expect(k8sClient.Update(context.Background(), updatedModelCR)).To(Succeed())
 
 			By("verifying the model was reconciled successfully")
@@ -284,7 +284,7 @@ func createLiteLLMInstance() {
 				NameRef: "redis-secret",
 				Keys: litellmv1alpha1.RedisSecretKeys{
 					HostSecret:     "host",
-					PortSecret:     6379,
+					PortSecret:     "6379",
 					PasswordSecret: "password",
 				},
 			},
@@ -311,30 +311,30 @@ func createModelCR(name, modelName string) *litellmv1alpha1.Model {
 		},
 		Spec: litellmv1alpha1.ModelSpec{
 			ConnectionRef: litellmv1alpha1.ConnectionRef{
-				LitellmInstanceRef: litellmv1alpha1.LitellmInstanceRef{
-					Namespace:           modelTestNamespace,
-					LitellmInstanceName: "e2e-test-instance",
+				InstanceRef: litellmv1alpha1.InstanceRef{
+					Namespace: modelTestNamespace,
+					Name:      "e2e-test-instance",
 				},
 			},
 			ModelName: modelName,
 			LiteLLMParams: litellmv1alpha1.LiteLLMParams{
-				APIKey:             "sk-test-api-key",
-				APIBase:            "https://api.openai.com/v1",
-				InputCostPerToken:  "0.00003",
-				OutputCostPerToken: "0.00006",
-				TPM:                10000,
-				RPM:                100,
-				Timeout:            60,
-				MaxRetries:         3,
-				Organisation:       "test-org",
-				UseInPassThrough:   false,
-				UseLiteLLMProxy:    true,
+				ApiKey:             stringPtr("sk-test-api-key"),
+				ApiBase:            stringPtr("https://api.openai.com/v1"),
+				InputCostPerToken:  stringPtr("0.00003"),
+				OutputCostPerToken: stringPtr("0.00006"),
+				TPM:                intPtr(10000),
+				RPM:                intPtr(100),
+				Timeout:            intPtr(60),
+				MaxRetries:         intPtr(3),
+				Organization:       stringPtr("test-org"),
+				UseInPassThrough:   boolPtr(false),
+				UseLiteLLMProxy:    boolPtr(true),
 			},
 			ModelInfo: litellmv1alpha1.ModelInfo{
-				BaseModel:           "gpt-4",
-				Tier:                "premium",
-				TeamID:              "team-123",
-				TeamPublicModelName: "gpt-4-public",
+				BaseModel:           stringPtr("gpt-4"),
+				Tier:                stringPtr("premium"),
+				TeamID:              stringPtr("team-123"),
+				TeamPublicModelName: stringPtr("gpt-4-public"),
 			},
 		},
 	}
@@ -350,9 +350,9 @@ func createInvalidModelCR(name, modelName string) *litellmv1alpha1.Model {
 			ModelName: modelName,
 			LiteLLMParams: litellmv1alpha1.LiteLLMParams{
 				// Missing required API key
-				APIBase:            "https://api.openai.com/v1",
-				InputCostPerToken:  "-0.00003", // Invalid negative cost
-				OutputCostPerToken: "0.00006",
+				ApiBase:            stringPtr("https://api.openai.com/v1"),
+				InputCostPerToken:  stringPtr("-0.00003"), // Invalid negative cost
+				OutputCostPerToken: stringPtr("0.00006"),
 			},
 		},
 	}
@@ -444,4 +444,21 @@ func verifyModelCRStatus(modelCRName, expectedStatus string) error {
 	}
 
 	return nil
+}
+
+// Helper functions for creating pointers to primitive types
+func float64Ptr(v float64) *float64 {
+	return &v
+}
+
+func stringPtr(v string) *string {
+	return &v
+}
+
+func intPtr(v int) *int {
+	return &v
+}
+
+func boolPtr(v bool) *bool {
+	return &v
 }

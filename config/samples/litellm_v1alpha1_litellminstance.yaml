@@ -30,7 +30,7 @@ spec:
         awsSecretAccessKey: awsSecretAccessKey
     liteLLMParams:
       model: "anthropic/claude-opus4.1"
-      customLLMProvider: "bedrock"
+      custom_llm_provider: "bedrock"
   - modelName: gpt-4o
     requiresAuth: false
     identifier: gpt-west-eu-prod

@@ -171,8 +171,6 @@ func (h *ConnectionHandler) getConnectionDetailsFromSecretRef(ctx context.Contex
 			URL:       string(urlBytes),
 		}, nil
 	}
-
-	return nil, fmt.Errorf("unsupported SecretRef type")
 }
 
 // getConnectionDetailsFromInstanceRef handles different InstanceRef types

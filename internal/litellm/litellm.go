@@ -178,9 +178,6 @@ func (l *LitellmClient) makeRequest(ctx context.Context, method, path string, bo
 		}
 		return nil, fmt.Errorf("request failed with status %d: %s", httpResp.StatusCode, litellmError.Message)
 	}
-
-	log.V(1).Info("Request completed successfully")
-	return respBody, nil
 }
 
 // various ways in which litellm can return an error

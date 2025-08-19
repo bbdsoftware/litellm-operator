@@ -139,7 +139,7 @@ var _ = Describe("LiteLLMInstance Controller", func() {
 								PasswordSecret: "password",
 							},
 						},
-						Models: []litellmv1alpha1.Model{
+						Models: []litellmv1alpha1.InitModelInstance{
 							{
 								ModelName:  "amazon.titan-embed-text-v1",
 								Identifier: "aws/bedrock-3.0",
@@ -152,11 +152,11 @@ var _ = Describe("LiteLLMInstance Controller", func() {
 								},
 								RequiresAuth: true,
 								LiteLLMParams: litellmv1alpha1.LiteLLMParams{
-									AwsRegionName:     "us-east-1",
-									Model:             "amazon.titan-embed-text-v1",
-									MaxBudget:         "1000.988",
-									UseLiteLLMProxy:   true,
-									InputCostPerToken: "0.0001",
+									AwsRegionName:     stringPtr("us-east-1"),
+									Model:             stringPtr("amazon.titan-embed-text-v1"),
+									MaxBudget:         stringPtr("1000.988"),
+									UseLiteLLMProxy:   boolPtr(true),
+									InputCostPerToken: stringPtr("0.0001"),
 								},
 							}, {
 								ModelName:    "gpt-3.5-turbo",
@@ -170,11 +170,11 @@ var _ = Describe("LiteLLMInstance Controller", func() {
 									},
 								},
 								LiteLLMParams: litellmv1alpha1.LiteLLMParams{
-									Model:             "gpt-3.5-turbo",
-									MaxBudget:         "98.0",
-									Organization:      "test-org",
-									UseLiteLLMProxy:   true,
-									InputCostPerToken: "0.000000089",
+									Model:             stringPtr("gpt-3.5-turbo"),
+									MaxBudget:         stringPtr("98.0"),
+									Organization:      stringPtr("test-org"),
+									UseLiteLLMProxy:   boolPtr(true),
+									InputCostPerToken: stringPtr("0.000000089"),
 								},
 							},
 						},
@@ -246,3 +246,20 @@ var _ = Describe("LiteLLMInstance Controller", func() {
 		})
 	})
 })
+
+// Helper functions for creating pointers to primitive types
+func float64Ptr(v float64) *float64 {
+	return &v
+}
+
+func stringPtr(v string) *string {
+	return &v
+}
+
+func intPtr(v int) *int {
+	return &v
+}
+
+func boolPtr(v bool) *bool {
+	return &v
+}

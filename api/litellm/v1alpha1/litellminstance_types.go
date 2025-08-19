@@ -18,6 +18,7 @@ package v1alpha1
 
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 )
 
 // LiteLLMInstanceSpec defines the desired state of LiteLLMInstance.
@@ -43,47 +44,14 @@ type Model struct {
 	LiteLLMParams    LiteLLMParams            `json:"liteLLMParams,omitempty"`
 }
 
-type LiteLLMParams struct {
-	ApiKey                           string              `json:"apiKey,omitempty"`
-	ApiBase                          string              `json:"apiBase,omitempty"`
-	AwsAccessKeyID                   string              `json:"awsAccessKeyId,omitempty"`
-	AwsSecretAccessKey               string              `json:"awsSecretAccessKey,omitempty"`
-	AwsRegionName                    string              `json:"awsRegionName,omitempty"`
-	AutoRouterConfigPath             string              `json:"autoRouterConfigPath,omitempty"`
-	AutoRouterConfig                 string              `json:"autoRouterConfig,omitempty"`
-	AutoRouterDefaultModel           string              `json:"autoRouterDefaultModel,omitempty"`
-	AutoRouterEmbeddingModel         string              `json:"autoRouterEmbeddingModel,omitempty"`
-	AdditionalProps                  map[string]string   `json:"additionalProps,omitempty"`
-	ApiVersion                       string              `json:"apiVersion,omitempty"`
-	BudgetDuration                   string              `json:"budgetDuration,omitempty"`
-	ConfigurableClientsideAuthParams []map[string]string `json:"configurableClientsideAuthParams,omitempty"`
-	CustomLLMProvider                string              `json:"customLLMProvider,omitempty"`
-	InputCostPerToken                string              `json:"inputCostPerToken,omitempty"`
-	InputCostPerPixel                string              `json:"inputCostPerPixel,omitempty"`
-	InputCostPerSecond               string              `json:"inputCostPerSecond,omitempty"`
-	LiteLLMTraceID                   string              `json:"litellmTraceId,omitempty"`
-	LiteLLMCredentialName            string              `json:"litellmCredentialName,omitempty"`
-	MaxFileSizeMB                    string              `json:"maxFileSizeMb,omitempty"`
-	MergeReasoningContentInChoices   bool                `json:"mergeReasoningContentInChoices,omitempty"`
-	MockResponse                     string              `json:"mockResponse,omitempty"`
-	Model                            string              `json:"model,omitempty"`
-	MaxBudget                        string              `json:"maxBudget,omitempty"`
-	MaxRetries                       int                 `json:"maxRetries,omitempty"`
-	Organization                     string              `json:"organization,omitempty"`
-	OutputCostPerToken               string              `json:"outputCostPerToken,omitempty"`
-	OutputCostPerSecond              string              `json:"outputCostPerSecond,omitempty"`
-	OutputCostPerPixel               string              `json:"outputCostPerPixel,omitempty"`
-	RegionName                       string              `json:"regionName,omitempty"`
-	RPM                              int                 `json:"rpm,omitempty"`
-	StreamTimeout                    int                 `json:"streamTimeout,omitempty"`
-	TPM                              int                 `json:"tpm,omitempty"`
-	Timeout                          int                 `json:"timeout,omitempty"`
-	UseInPassThrough                 bool                `json:"useInPassThrough,omitempty"`
-	UseLiteLLMProxy                  bool                `json:"useLiteLLMProxy,omitempty"`
-	VertexProject                    string              `json:"vertexProject,omitempty"`
-	VertexLocation                   string              `json:"vertexLocation,omitempty"`
-	VertexCredentials                string              `json:"vertexCredentials,omitempty"`
-	WatsonxRegionName                string              `json:"watsonxRegionName,omitempty"`
+// model instance used to create proxy server config map
+type InitModelInstance struct {
+	ModelName            string                   `json:"modelName,omitempty"`
+	RequiresAuth         bool                     `json:"requiresAuth"`
+	Identifier           string                   `json:"identifier"`
+	ModelCredentials     ModelCredentialSecretRef `json:"modelCredentials,omitempty"`
+	LiteLLMParams        LiteLLMParams            `json:"liteLLMParams,omitempty"`
+	AdditionalProperties runtime.RawExtension     `json:"additionalProperties,omitempty"`
 }
 
 type ModelCredentialSecretRef struct {

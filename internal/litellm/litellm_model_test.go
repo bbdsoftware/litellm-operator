@@ -71,8 +71,8 @@ var _ = Describe("Litellm Model", func() {
 					response := ModelResponse{
 						ModelName: "test-model",
 						LiteLLMParams: &UpdateLiteLLMParams{
-							InputCostPerToken:  stringPtr("0.001"),
-							OutputCostPerToken: stringPtr("0.002"),
+							InputCostPerToken:  float64Ptr(0.001),
+							OutputCostPerToken: float64Ptr(0.002),
 						},
 						ModelInfo: &ModelInfo{
 							ID:        stringPtr("model-123"),
@@ -93,8 +93,8 @@ var _ = Describe("Litellm Model", func() {
 				req := &ModelRequest{
 					ModelName: "test-model",
 					LiteLLMParams: &UpdateLiteLLMParams{
-						InputCostPerToken:  stringPtr("0.001"),
-						OutputCostPerToken: stringPtr("0.002"),
+						InputCostPerToken:  float64Ptr(0.001),
+						OutputCostPerToken: float64Ptr(0.002),
 					},
 					ModelInfo: &ModelInfo{
 						BaseModel: stringPtr("gpt-4"),
@@ -183,8 +183,8 @@ var _ = Describe("Litellm Model", func() {
 					response := ModelResponse{
 						ModelName: "test-model",
 						LiteLLMParams: &UpdateLiteLLMParams{
-							InputCostPerToken:  stringPtr("0.002"),
-							OutputCostPerToken: stringPtr("0.003"),
+							InputCostPerToken:  float64Ptr(0.002),
+							OutputCostPerToken: float64Ptr(0.003),
 						},
 					}
 
@@ -201,8 +201,8 @@ var _ = Describe("Litellm Model", func() {
 				req := &ModelRequest{
 					ModelName: "test-model",
 					LiteLLMParams: &UpdateLiteLLMParams{
-						InputCostPerToken:  stringPtr("0.002"),
-						OutputCostPerToken: stringPtr("0.003"),
+						InputCostPerToken:  float64Ptr(0.002),
+						OutputCostPerToken: float64Ptr(0.003),
 					},
 				}
 
@@ -210,8 +210,8 @@ var _ = Describe("Litellm Model", func() {
 
 				Expect(err).NotTo(HaveOccurred())
 				Expect(response.ModelName).To(Equal("test-model"))
-				Expect(response.LiteLLMParams.InputCostPerToken).To(Equal(stringPtr("0.002")))
-				Expect(response.LiteLLMParams.OutputCostPerToken).To(Equal(stringPtr("0.003")))
+				Expect(response.LiteLLMParams.InputCostPerToken).To(Equal(float64Ptr(0.002)))
+				Expect(response.LiteLLMParams.OutputCostPerToken).To(Equal(float64Ptr(0.003)))
 			})
 		})
 
@@ -239,7 +239,9 @@ var _ = Describe("Litellm Model", func() {
 				_, err := client.UpdateModel(ctx, req)
 
 				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("Model not found"))
+				Expect(err.Error()).To(ContainSubstring("resource does not exist"))
+				// check log message
+				Expect(ctx).To(ContainSubstring("Failed to update model in LiteLLM"))
 			})
 		})
 	})
@@ -257,9 +259,9 @@ var _ = Describe("Litellm Model", func() {
 					response := ModelResponse{
 						ModelName: "test-model",
 						LiteLLMParams: &UpdateLiteLLMParams{
-							InputCostPerToken:  stringPtr("0.001"),
-							OutputCostPerToken: stringPtr("0.002"),
-							APIKey:             stringPtr("sk-test-key"),
+							InputCostPerToken:  float64Ptr(0.001),
+							OutputCostPerToken: float64Ptr(0.002),
+							ApiKey:             stringPtr("sk-test-key"),
 						},
 						ModelInfo: &ModelInfo{
 							ID:        stringPtr("model-123"),
@@ -284,7 +286,7 @@ var _ = Describe("Litellm Model", func() {
 				Expect(response.ModelName).To(Equal("test-model"))
 				Expect(response.LiteLLMParams.InputCostPerToken).To(Equal(stringPtr("0.001")))
 				Expect(response.LiteLLMParams.OutputCostPerToken).To(Equal(stringPtr("0.002")))
-				Expect(response.LiteLLMParams.APIKey).To(Equal(stringPtr("sk-test-key")))
+				Expect(response.LiteLLMParams.ApiKey).To(Equal(stringPtr("sk-test-key")))
 				Expect(response.ModelInfo.ID).To(Equal(stringPtr("model-123")))
 				Expect(response.ModelInfo.BaseModel).To(Equal(stringPtr("gpt-4")))
 				Expect(response.ModelInfo.Tier).To(Equal(stringPtr("premium")))
@@ -401,13 +403,13 @@ var _ = Describe("Litellm Model", func() {
 				model := &ModelResponse{
 					ModelName: "test-model",
 					LiteLLMParams: &UpdateLiteLLMParams{
-						InputCostPerToken: stringPtr("0.001"),
+						InputCostPerToken: float64Ptr(0.001),
 					},
 				}
 				req := &ModelRequest{
 					ModelName: "test-model",
 					LiteLLMParams: &UpdateLiteLLMParams{
-						InputCostPerToken: stringPtr("0.002"),
+						InputCostPerToken: float64Ptr(0.002),
 					},
 				}
 
@@ -420,13 +422,13 @@ var _ = Describe("Litellm Model", func() {
 				model := &ModelResponse{
 					ModelName: "test-model",
 					LiteLLMParams: &UpdateLiteLLMParams{
-						OutputCostPerToken: stringPtr("0.001"),
+						OutputCostPerToken: float64Ptr(0.001),
 					},
 				}
 				req := &ModelRequest{
 					ModelName: "test-model",
 					LiteLLMParams: &UpdateLiteLLMParams{
-						OutputCostPerToken: stringPtr("0.002"),
+						OutputCostPerToken: float64Ptr(0.002),
 					},
 				}
 
@@ -439,13 +441,13 @@ var _ = Describe("Litellm Model", func() {
 				model := &ModelResponse{
 					ModelName: "test-model",
 					LiteLLMParams: &UpdateLiteLLMParams{
-						APIKey: stringPtr("old-key"),
+						ApiKey: stringPtr("old-key"),
 					},
 				}
 				req := &ModelRequest{
 					ModelName: "test-model",
 					LiteLLMParams: &UpdateLiteLLMParams{
-						APIKey: stringPtr("new-key"),
+						ApiKey: stringPtr("new-key"),
 					},
 				}
 
@@ -500,9 +502,9 @@ var _ = Describe("Litellm Model", func() {
 				model := &ModelResponse{
 					ModelName: "test-model",
 					LiteLLMParams: &UpdateLiteLLMParams{
-						InputCostPerToken:  stringPtr("0.001"),
-						OutputCostPerToken: stringPtr("0.002"),
-						APIKey:             stringPtr("test-key"),
+						InputCostPerToken:  float64Ptr(0.001),
+						OutputCostPerToken: float64Ptr(0.002),
+						ApiKey:             stringPtr("test-key"),
 					},
 					ModelInfo: &ModelInfo{
 						BaseModel: stringPtr("gpt-4"),
@@ -512,9 +514,9 @@ var _ = Describe("Litellm Model", func() {
 				req := &ModelRequest{
 					ModelName: "test-model",
 					LiteLLMParams: &UpdateLiteLLMParams{
-						InputCostPerToken:  stringPtr("0.001"),
-						OutputCostPerToken: stringPtr("0.002"),
-						APIKey:             stringPtr("test-key"),
+						InputCostPerToken:  float64Ptr(0.001),
+						OutputCostPerToken: float64Ptr(0.002),
+						ApiKey:             stringPtr("test-key"),
 					},
 					ModelInfo: &ModelInfo{
 						BaseModel: stringPtr("gpt-4"),
@@ -536,7 +538,7 @@ var _ = Describe("Litellm Model", func() {
 				req := &ModelRequest{
 					ModelName: "test-model",
 					LiteLLMParams: &UpdateLiteLLMParams{
-						InputCostPerToken: stringPtr("0.001"),
+						InputCostPerToken: float64Ptr(0.001),
 					},
 				}
 
@@ -568,10 +570,10 @@ var _ = Describe("Litellm Model", func() {
 			req := &ModelRequest{
 				ModelName: "test-model",
 				LiteLLMParams: &UpdateLiteLLMParams{
-					InputCostPerToken:  stringPtr("0.001"),
-					OutputCostPerToken: stringPtr("0.002"),
-					APIKey:             stringPtr("sk-test-key"),
-					APIBase:            stringPtr("https://api.openai.com"),
+					InputCostPerToken:  float64Ptr(0.001),
+					OutputCostPerToken: float64Ptr(0.002),
+					ApiKey:             stringPtr("sk-test-key"),
+					ApiBase:            stringPtr("https://api.openai.com"),
 					TPM:                intPtr(1000),
 					RPM:                intPtr(100),
 				},
@@ -592,8 +594,8 @@ var _ = Describe("Litellm Model", func() {
 			Expect(unmarshalled.ModelName).To(Equal(req.ModelName))
 			Expect(unmarshalled.LiteLLMParams.InputCostPerToken).To(Equal(req.LiteLLMParams.InputCostPerToken))
 			Expect(unmarshalled.LiteLLMParams.OutputCostPerToken).To(Equal(req.LiteLLMParams.OutputCostPerToken))
-			Expect(unmarshalled.LiteLLMParams.APIKey).To(Equal(req.LiteLLMParams.APIKey))
-			Expect(unmarshalled.LiteLLMParams.APIBase).To(Equal(req.LiteLLMParams.APIBase))
+			Expect(unmarshalled.LiteLLMParams.ApiKey).To(Equal(req.LiteLLMParams.ApiKey))
+			Expect(unmarshalled.LiteLLMParams.ApiBase).To(Equal(req.LiteLLMParams.ApiBase))
 			Expect(unmarshalled.LiteLLMParams.TPM).To(Equal(req.LiteLLMParams.TPM))
 			Expect(unmarshalled.LiteLLMParams.RPM).To(Equal(req.LiteLLMParams.RPM))
 			Expect(unmarshalled.ModelInfo.BaseModel).To(Equal(req.ModelInfo.BaseModel))
@@ -605,9 +607,9 @@ var _ = Describe("Litellm Model", func() {
 			resp := &ModelResponse{
 				ModelName: "test-model",
 				LiteLLMParams: &UpdateLiteLLMParams{
-					InputCostPerToken:  stringPtr("0.001"),
-					OutputCostPerToken: stringPtr("0.002"),
-					APIKey:             stringPtr("sk-test-key"),
+					InputCostPerToken:  float64Ptr(0.001),
+					OutputCostPerToken: float64Ptr(0.002),
+					ApiKey:             stringPtr("sk-test-key"),
 				},
 				ModelInfo: &ModelInfo{
 					ID:        stringPtr("model-123"),
@@ -628,7 +630,7 @@ var _ = Describe("Litellm Model", func() {
 			Expect(unmarshalled.ModelName).To(Equal(resp.ModelName))
 			Expect(unmarshalled.LiteLLMParams.InputCostPerToken).To(Equal(resp.LiteLLMParams.InputCostPerToken))
 			Expect(unmarshalled.LiteLLMParams.OutputCostPerToken).To(Equal(resp.LiteLLMParams.OutputCostPerToken))
-			Expect(unmarshalled.LiteLLMParams.APIKey).To(Equal(resp.LiteLLMParams.APIKey))
+			Expect(unmarshalled.LiteLLMParams.ApiKey).To(Equal(resp.LiteLLMParams.ApiKey))
 			Expect(unmarshalled.ModelInfo.ID).To(Equal(resp.ModelInfo.ID))
 			Expect(unmarshalled.ModelInfo.BaseModel).To(Equal(resp.ModelInfo.BaseModel))
 			Expect(unmarshalled.ModelInfo.Tier).To(Equal(resp.ModelInfo.Tier))
