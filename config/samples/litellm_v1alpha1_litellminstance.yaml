@@ -24,6 +24,7 @@ spec:
     modelCredentials:
       nameRef: bedrock-model-credentials
       keys:
+        apiBase: apiBase
         awsAccessKeyId: awsAccessKeyId
         awsSecretAccessKey: awsSecretAccessKey
     liteLLMParams:
