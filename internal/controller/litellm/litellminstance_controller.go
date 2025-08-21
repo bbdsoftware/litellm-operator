@@ -437,7 +437,7 @@ func renderProxyConfig(llm *litellmv1alpha1.LiteLLMInstance, ctx context.Context
 	}
 
 	cfg := ProxyConfig{ModelList: modelListYAML, RouterSettings: routerSettings}
-	cfg.GeneralSettings.AllowRequestsOnDBUnavailable = true
+	cfg.GeneralSettings.AllowRequestsOnDBUnavailable = false //set to false to ensure pod does not become healthy if DB is not reachable
 	b, _ := yaml.Marshal(cfg)
 	return string(b), nil
 }
