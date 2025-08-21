@@ -1112,7 +1112,14 @@ func buildEnvironmentVariables(llm *litellmv1alpha1.LiteLLMInstance, secretName 
 						LocalObjectReference: corev1.LocalObjectReference{
 							Name: secret.Name,
 						},
-						Key: secret.Name,
+						Key: func() string {
+							for key := range secret.Data {
+								return key // use the first key in the secret data
+							}
+							err := errors.New("failed to retrieve secret key")
+							log.Error(err, "No keys found in secret", "secretName", secret.Name)
+							return ""
+						}(),
 					},
 				},
 			})
