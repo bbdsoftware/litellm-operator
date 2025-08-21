@@ -1,0 +1,83 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis
+  namespace: litellm
+spec:
+  selector:
+    matchLabels:
+      app: redis
+  template:
+    metadata:
+      labels:
+        app: redis
+    spec:
+      containers:
+        - name: redis
+          image: redis:8.2.0 #For more versions, see https://hub.docker.com/_/redis
+          ports:
+            - containerPort: 6379
+          volumeMounts:
+            - name: redis-storage
+              mountPath: /data
+          env:
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: litellm-redis-credentials
+                  key: redis-password
+      volumes:
+        - name: redis-storage
+          persistentVolumeClaim:
+            claimName: redis-pvc
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis
+  namespace: litellm
+spec:
+  selector:
+    app: redis
+  ports:
+    - port: 6379
+      targetPort: 6379
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: redis-pvc
+  namespace: litellm
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+
+---
+# secret for initialising redis cluster
+apiVersion: v1
+kind: Secret
+metadata:
+  name: litellm-redis-credentials
+  namespace: litellm
+type: Opaque
+data:
+  # Base64 encoded password (echo -n 'password123' | base64). Change this!
+  redis-password: cGFzc3dvcmQxMjM=
+
+---
+# secret for litellm instance to connect to redis
+apiVersion: v1
+kind: Secret
+metadata:
+  name: redis-secret
+  namespace: litellm
+type: Opaque
+data:
+  host: cmVkaXMubGl0ZWxsbS5zdmMuY2x1c3Rlci5sb2NhbA== # redis.litellm.svc.cluster.local
+  port: NjM3OQ== # 6379
+  password: cGFzc3dvcmQxMjM= # password123 (should match the password in litellm-redis-credentials)

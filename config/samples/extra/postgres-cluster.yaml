@@ -1,9 +1,58 @@
 apiVersion: postgresql.cnpg.io/v1
 kind: Cluster
 metadata:
-  name: cluster-example
+  name: litellm-postgres
   namespace: litellm
 spec:
   instances: 1
+
+  postgresql:
+    parameters:
+      max_connections: '200'
+      shared_buffers: '256MB'
+      effective_cache_size: '1GB'
+
+  bootstrap:
+    initdb:
+      database: litellm
+      owner: litellm
+      secret:
+        name: litellm-postgres-credentials
+
   storage:
-    size: 1Gi
+    size: 10Gi
+    storageClass: 'standard' # Adjust based on your cluster's storage classes
+
+  resources:
+    requests:
+      memory: '512Mi'
+      cpu: '500m'
+    limits:
+      memory: '1Gi'
+      cpu: '1000m'
+
+---
+# secret for initialising postgres cluster
+apiVersion: v1
+kind: Secret
+metadata:
+  name: litellm-postgres-credentials
+  namespace: litellm
+type: Opaque
+data:
+  username: bGl0ZWxsbQ== # litellm
+  password: cGFzc3dvcmQxMjM= # password123 - Change this!
+
+---
+# secret for litellm instance to connect to postgres
+apiVersion: v1
+kind: Secret
+metadata:
+  name: postgres-secret
+  namespace: litellm
+type: Opaque
+data:
+  host: bGl0ZWxsbS1wb3N0Z3Jlcy1ydy5saXRlbGxtLnN2Yy5jbHVzdGVyLmxvY2Fs # litellm-postgres-rw.litellm.svc.cluster.local
+  password: cGFzc3dvcmQxMjM= # password123 (should match what you set in litellm-postgres-credentials)
+  username: bGl0ZWxsbQ== # litellm
+  dbname: bGl0ZWxsbQ== # litellm

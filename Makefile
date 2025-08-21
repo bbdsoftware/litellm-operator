@@ -371,10 +371,6 @@ catalog-push: ## Push a catalog image.
 # Include Helm-specific Makefile
 include ./deploy/Makefile
 
-
 include ./scripts/local-dev/Makefile
 
 include ./docs/Makefile
-
-
-
