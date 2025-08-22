@@ -205,16 +205,6 @@ spec:
                     description: AdditionalProps contains additional properties
                     type: object
                     x-kubernetes-preserve-unknown-fields: true
-                  base_model:
-                    description: BaseModel is the base model name
-                    type: string
-                  created_at:
-                    description: CreatedAt is the creation timestamp
-                    format: date-time
-                    type: string
-                  created_by:
-                    description: CreatedBy is who created the model
-                    type: string
                   db_model:
                     description: DBModel indicates if this is a database model
                     type: boolean
@@ -226,16 +216,6 @@ spec:
                     type: string
                   team_public_model_name:
                     description: TeamPublicModelName is the team public model name
-                    type: string
-                  tier:
-                    description: Tier is the model tier (e.g., "free")
-                    type: string
-                  updated_at:
-                    description: UpdatedAt is the last update timestamp
-                    format: date-time
-                    type: string
-                  updated_by:
-                    description: UpdatedBy is who updated the model
                     type: string
                 type: object
               model_name:
@@ -444,46 +424,9 @@ spec:
                     description: WatsonXRegionName is the WatsonX region name
                     type: string
                 type: object
-              model_info:
-                description: ModelInfo contains the model information
-                properties:
-                  additionalProp1:
-                    description: AdditionalProps contains additional properties
-                    type: object
-                    x-kubernetes-preserve-unknown-fields: true
-                  base_model:
-                    description: BaseModel is the base model name
-                    type: string
-                  created_at:
-                    description: CreatedAt is the creation timestamp
-                    format: date-time
-                    type: string
-                  created_by:
-                    description: CreatedBy is who created the model
-                    type: string
-                  db_model:
-                    description: DBModel indicates if this is a database model
-                    type: boolean
-                  id:
-                    description: ID is the model ID
-                    type: string
-                  team_id:
-                    description: TeamID is the team ID
-                    type: string
-                  team_public_model_name:
-                    description: TeamPublicModelName is the team public model name
-                    type: string
-                  tier:
-                    description: Tier is the model tier (e.g., "free")
-                    type: string
-                  updated_at:
-                    description: UpdatedAt is the last update timestamp
-                    format: date-time
-                    type: string
-                  updated_by:
-                    description: UpdatedBy is who updated the model
-                    type: string
-                type: object
+              model_id:
+                description: ModelId contains the model uuid provided by litellm server
+                type: string
               model_name:
                 description: ModelName is the name of the model
                 type: string

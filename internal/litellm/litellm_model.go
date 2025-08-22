@@ -92,7 +92,7 @@ type ModelInfo struct {
 }
 
 func NewModelInfo() *ModelInfo {
-	dbModel := false
+	dbModel := true
 	return &ModelInfo{
 		DBModel: &dbModel,
 	}
@@ -152,7 +152,7 @@ func (l *LitellmClient) UpdateModel(ctx context.Context, req *ModelRequest) (Mod
 func (l *LitellmClient) GetModel(ctx context.Context, modelID string) (ModelResponse, error) {
 	log := log.FromContext(ctx)
 
-	response, err := l.makeRequest(ctx, "GET", "/model/"+modelID, nil)
+	response, err := l.makeRequest(ctx, "GET", "/model/?litellm_model_id="+modelID, nil)
 	if err != nil {
 		log.Error(err, "Failed to get model from LiteLLM")
 		return ModelResponse{}, err
@@ -168,14 +168,14 @@ func (l *LitellmClient) GetModel(ctx context.Context, modelID string) (ModelResp
 }
 
 // DeleteModel deletes a model from the LiteLLM service
-func (l *LitellmClient) DeleteModel(ctx context.Context, modelName string) error {
+func (l *LitellmClient) DeleteModel(ctx context.Context, modelId string) error {
 	log := log.FromContext(ctx)
 
-	body := []byte(`{"model_name": "` + modelName + `"}`)
+	body := []byte(`{"id": "` + modelId + `"}`)
 
 	if _, err := l.makeRequest(ctx, "POST", "/model/delete", body); err != nil {
 		log.Error(err, "Failed to delete model from LiteLLM")
-		return err
+		return nil
 	}
 
 	return nil

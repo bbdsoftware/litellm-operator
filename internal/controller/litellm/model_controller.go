@@ -120,8 +120,8 @@ func (r *ModelReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 	}
 
 	// Try to get the existing model from LiteLLM service using model ID
-	if modelRequest.ModelInfo.ID != nil && *modelRequest.ModelInfo.ID != "" {
-		existingModel, err := r.LitellmClient.GetModel(ctx, *modelRequest.ModelInfo.ID)
+	if model.Status.ModelId != nil && *model.Status.ModelId != "" {
+		existingModel, err := r.LitellmClient.GetModel(ctx, *model.Status.ModelId)
 		if err != nil {
 			log.Error(err, "Failed to get existing model from LiteLLM")
 			if _, updateErr := r.updateConditions(ctx, model, metav1.Condition{
@@ -151,21 +151,33 @@ func (r *ModelReconciler) handleCreation(ctx context.Context, model *litellmv1al
 
 	modelResponse, err := r.LitellmClient.CreateModel(ctx, modelRequest)
 	if err != nil {
-		return r.updateConditions(ctx, model, metav1.Condition{
+		if _, err := r.updateConditions(ctx, model, metav1.Condition{
 			Type:    "Ready",
 			Status:  metav1.ConditionFalse,
 			Reason:  "LitellmError",
 			Message: err.Error(),
-		})
+		}); err != nil {
+			return ctrl.Result{}, err
+		}
+		return ctrl.Result{}, err
 	}
 
 	updateModelStatus(model, &modelResponse)
+	//update status
+	if err := r.Status().Update(ctx, model); err != nil {
+		log.Error(err, "Failed to update Model status")
+		return ctrl.Result{}, err
+	}
+
 	_, err = r.updateConditions(ctx, model, metav1.Condition{
 		Type:    "Ready",
 		Status:  metav1.ConditionTrue,
 		Reason:  "LitellmSuccess",
 		Message: "Model created in Litellm",
 	})
+	if err != nil {
+		return ctrl.Result{}, err
+	}
 
 	controllerutil.AddFinalizer(model, util.FinalizerName)
 	if err := r.Update(ctx, model); err != nil {
@@ -180,35 +192,20 @@ func (r *ModelReconciler) handleCreation(ctx context.Context, model *litellmv1al
 func updateModelStatus(model *litellmv1alpha1.Model, modelResponse *litellm.ModelResponse) {
 
 	model.Status.ModelName = &modelResponse.ModelName
-
+	model.Status.ModelId = modelResponse.ModelInfo.ID
 	if modelResponse.LiteLLMParams != nil && modelResponse.LiteLLMParams != (&litellm.UpdateLiteLLMParams{}) {
 		model.Status.LiteLLMParams = &litellmv1alpha1.LiteLLMParams{
-			ApiKey:                         modelResponse.LiteLLMParams.ApiKey,
+
 			ApiBase:                        modelResponse.LiteLLMParams.ApiBase,
-			ApiVersion:                     modelResponse.LiteLLMParams.ApiVersion,
-			VertexProject:                  modelResponse.LiteLLMParams.VertexProject,
-			VertexLocation:                 modelResponse.LiteLLMParams.VertexLocation,
 			RegionName:                     modelResponse.LiteLLMParams.RegionName,
-			AwsAccessKeyID:                 modelResponse.LiteLLMParams.AwsAccessKeyID,
-			AwsSecretAccessKey:             modelResponse.LiteLLMParams.AwsSecretAccessKey,
-			AwsRegionName:                  modelResponse.LiteLLMParams.AwsRegionName,
-			WatsonXRegionName:              modelResponse.LiteLLMParams.WatsonXRegionName,
 			CustomLLMProvider:              modelResponse.LiteLLMParams.CustomLLMProvider,
 			TPM:                            modelResponse.LiteLLMParams.TPM,
 			RPM:                            modelResponse.LiteLLMParams.RPM,
 			MaxRetries:                     modelResponse.LiteLLMParams.MaxRetries,
 			Organization:                   modelResponse.LiteLLMParams.Organization,
-			LiteLLMCredentialName:          modelResponse.LiteLLMParams.LiteLLMCredentialName,
-			LiteLLMTraceID:                 modelResponse.LiteLLMParams.LiteLLMTraceID,
-			MaxFileSizeMB:                  modelResponse.LiteLLMParams.MaxFileSizeMB,
-			BudgetDuration:                 modelResponse.LiteLLMParams.BudgetDuration,
 			UseInPassThrough:               modelResponse.LiteLLMParams.UseInPassThrough,
 			UseLiteLLMProxy:                modelResponse.LiteLLMParams.UseLiteLLMProxy,
 			MergeReasoningContentInChoices: modelResponse.LiteLLMParams.MergeReasoningContentInChoices,
-			AutoRouterConfigPath:           modelResponse.LiteLLMParams.AutoRouterConfigPath,
-			AutoRouterConfig:               modelResponse.LiteLLMParams.AutoRouterConfig,
-			AutoRouterDefaultModel:         modelResponse.LiteLLMParams.AutoRouterDefaultModel,
-			AutoRouterEmbeddingModel:       modelResponse.LiteLLMParams.AutoRouterEmbeddingModel,
 			Model:                          modelResponse.LiteLLMParams.Model,
 		}
 	}
@@ -221,11 +218,11 @@ func (r *ModelReconciler) handleUpdate(ctx context.Context, model *litellmv1alph
 
 	_, err := r.LitellmClient.UpdateModel(ctx, modelRequest)
 	if err != nil {
-		log.Error(err, "Failed to update model in LiteLLM")
+		log.Error(err, "Failed to update model in LiteLLM", "modelName", model.Spec.ModelName)
 		return ctrl.Result{}, err
 	}
 
-	log.Info("Successfully updated model in LiteLLM")
+	log.Info("Successfully updated model in LiteLLM", "modelName", model.Spec.ModelName)
 	return ctrl.Result{}, nil
 }
 
@@ -234,7 +231,7 @@ func (r *ModelReconciler) handleDeletion(ctx context.Context, model *litellmv1al
 	log := logf.FromContext(ctx)
 
 	// Try to delete the model from LiteLLM
-	err := r.LitellmClient.DeleteModel(ctx, model.Spec.ModelName)
+	err := r.LitellmClient.DeleteModel(ctx, *model.Status.ModelId)
 	if err != nil {
 		log.Error(err, "Failed to delete model from LiteLLM")
 		return ctrl.Result{}, err
@@ -252,12 +249,6 @@ func (r *ModelReconciler) convertToModelRequest(model *litellmv1alpha1.Model) (*
 
 	// Convert LiteLLMParams
 	if !reflect.DeepEqual(model.Spec.LiteLLMParams, litellmv1alpha1.LiteLLMParams{}) {
-		// Convert int64 to int for TPM, RPM, MaxRetries
-		// tpm := int(model.Spec.LiteLLMParams.TPM)
-		// rpm := int(model.Spec.LiteLLMParams.RPM)
-		// maxRetries := int(model.Spec.LiteLLMParams.MaxRetries)
-
-		// Convert int64 to float64 for MaxFileSizeMB
 
 		litellmParams := &litellm.UpdateLiteLLMParams{
 			ApiKey:                         model.Spec.LiteLLMParams.ApiKey,
@@ -311,11 +302,11 @@ func (r *ModelReconciler) convertToModelRequest(model *litellmv1alpha1.Model) (*
 		}
 
 		// Handle ModelInfo
-		if model.Spec.LiteLLMParams.ModelInfo.Raw != nil {
-			litellmParams.ModelInfo = model.Spec.LiteLLMParams.ModelInfo
-		} else {
-			litellmParams.ModelInfo = litellm.NewModelInfo()
-		}
+		// if model.Spec.ModelInfo != nil && model.Spec.LiteLLMParams.ModelInfo.Raw != nil {
+		// 	litellmParams.ModelInfo = model.Spec.LiteLLMParams.ModelInfo
+		// } else {
+		// 	litellmParams.ModelInfo = litellm.NewModelInfo()
+		// }
 
 		// Handle MockResponse
 		if model.Spec.LiteLLMParams.MockResponse != nil && *model.Spec.LiteLLMParams.MockResponse != "" {
@@ -356,36 +347,36 @@ func (r *ModelReconciler) convertToModelRequest(model *litellmv1alpha1.Model) (*
 	}
 
 	// Convert ModelInfo
-	if !reflect.DeepEqual(model.Spec.ModelInfo, litellmv1alpha1.ModelInfo{}) {
-		modelInfo := &litellm.ModelInfo{
-			ID:                  model.Spec.ModelInfo.ID,
-			DBModel:             model.Spec.ModelInfo.DBModel,
-			UpdatedBy:           model.Spec.ModelInfo.UpdatedBy,
-			CreatedBy:           model.Spec.ModelInfo.CreatedBy,
-			BaseModel:           model.Spec.ModelInfo.BaseModel,
-			Tier:                model.Spec.ModelInfo.Tier,
-			TeamID:              model.Spec.ModelInfo.TeamID,
-			TeamPublicModelName: model.Spec.ModelInfo.TeamPublicModelName,
-		}
+	// if !reflect.DeepEqual(model.Spec.ModelInfo, litellmv1alpha1.ModelInfo{}) {
+	// 	modelInfo := &litellm.ModelInfo{
+	// 		ID:                  model.Spec.ModelInfo.ID,
+	// 		DBModel:             model.Spec.ModelInfo.DBModel,
+	// 		UpdatedBy:           model.Spec.ModelInfo.UpdatedBy,
+	// 		CreatedBy:           model.Spec.ModelInfo.CreatedBy,
+	// 		BaseModel:           model.Spec.ModelInfo.BaseModel,
+	// 		Tier:                model.Spec.ModelInfo.Tier,
+	// 		TeamID:              model.Spec.ModelInfo.TeamID,
+	// 		TeamPublicModelName: model.Spec.ModelInfo.TeamPublicModelName,
+	// 	}
 
-		// 	// Handle timestamp fields
-		// 	if !model.Spec.ModelInfo.UpdatedAt.IsZero() {
-		// 		updatedAt := model.Spec.ModelInfo.UpdatedAt.Format("2006-01-02T15:04:05Z")
-		// 		modelInfo.UpdatedAt = &updatedAt
-		// 	}
-		// 	if !model.Spec.ModelInfo.CreatedAt.IsZero() {
-		// 		createdAt := model.Spec.ModelInfo.CreatedAt.Format("2006-01-02T15:04:05Z")
-		// 		modelInfo.CreatedAt = &createdAt
-		// 	}
+	// 	// Handle timestamp fields
+	// 	if !model.Spec.ModelInfo.UpdatedAt.IsZero() {
+	// 		updatedAt := model.Spec.ModelInfo.UpdatedAt.Format("2006-01-02T15:04:05Z")
+	// 		modelInfo.UpdatedAt = &updatedAt
+	// 	}
+	// 	if !model.Spec.ModelInfo.CreatedAt.IsZero() {
+	// 		createdAt := model.Spec.ModelInfo.CreatedAt.Format("2006-01-02T15:04:05Z")
+	// 		modelInfo.CreatedAt = &createdAt
+	// 	}
 
-		// 	// Handle AdditionalProps
-		// 	if model.Spec.ModelInfo.AdditionalProps.Raw != nil {
-		// 		modelInfo.AdditionalProperties = make(map[string]interface{})
-		// 		// Convert AdditionalProps to map[string]interface{} if needed
-		// 	}
+	// 	// Handle AdditionalProps
+	// 	if model.Spec.ModelInfo.AdditionalProps.Raw != nil {
+	// 		modelInfo.AdditionalProperties = make(map[string]interface{})
+	// 		// Convert AdditionalProps to map[string]interface{} if needed
+	// 	}
 
-		modelRequest.ModelInfo = modelInfo
-	}
+	// 	modelRequest.ModelInfo = modelInfo
+	// }
 
 	return modelRequest, nil
 }

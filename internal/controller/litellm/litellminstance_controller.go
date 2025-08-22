@@ -153,6 +153,7 @@ type ProxyConfig struct {
 	RouterSettings  RouterSettingsYAML  `yaml:"router_settings,omitempty"`
 	GeneralSettings struct {
 		AllowRequestsOnDBUnavailable bool `yaml:"allow_requests_on_db_unavailable"`
+		StoreModelInDB               bool `yaml:"store_model_in_db"` //Needed to be able to store new models created via REST API
 	} `yaml:"general_settings"`
 }
 
@@ -314,6 +315,7 @@ func parseAndAssign(field *string, target *float64, fieldName string) error {
 		if err != nil {
 			return errors.New(fieldName + " not parsable to float")
 		}
+		target := new(float64)
 		*target = value
 	}
 	return nil
@@ -361,37 +363,37 @@ func renderProxyConfig(llm *litellmv1alpha1.LiteLLMInstance, ctx context.Context
 
 			//map all LiteLLMParams to the YAML struct
 			litellmParams := LiteLLMParamsYAML{
-				ApiKey:                         *model.LiteLLMParams.ApiKey,
-				ApiBase:                        *model.LiteLLMParams.ApiBase,
-				AwsAccessKeyID:                 *model.LiteLLMParams.AwsAccessKeyID,
-				AwsSecretAccessKey:             *model.LiteLLMParams.AwsSecretAccessKey,
-				AwsRegionName:                  *model.LiteLLMParams.AwsRegionName,
-				AutoRouterConfigPath:           *model.LiteLLMParams.AutoRouterConfigPath,
-				AutoRouterConfig:               *model.LiteLLMParams.AutoRouterConfig,
-				AutoRouterDefaultModel:         *model.LiteLLMParams.AutoRouterDefaultModel,
-				AutoRouterEmbeddingModel:       *model.LiteLLMParams.AutoRouterEmbeddingModel,
-				ApiVersion:                     *model.LiteLLMParams.ApiVersion,
-				BudgetDuration:                 *model.LiteLLMParams.BudgetDuration,
-				CustomLLMProvider:              *model.LiteLLMParams.CustomLLMProvider,
-				LiteLLMTraceID:                 *model.LiteLLMParams.LiteLLMTraceID,
-				LiteLLMCredentialName:          *model.LiteLLMParams.LiteLLMCredentialName,
-				MergeReasoningContentInChoices: *model.LiteLLMParams.MergeReasoningContentInChoices,
-				MockResponse:                   *model.LiteLLMParams.MockResponse,
-				Model:                          *model.LiteLLMParams.Model,
-				MaxRetries:                     *model.LiteLLMParams.MaxRetries,
-				MaxFileSizeMB:                  *model.LiteLLMParams.MaxFileSizeMB,
-				Organization:                   *model.LiteLLMParams.Organization,
-				RegionName:                     *model.LiteLLMParams.RegionName,
-				RPM:                            *model.LiteLLMParams.RPM,
-				StreamTimeout:                  *model.LiteLLMParams.StreamTimeout,
-				TPM:                            *model.LiteLLMParams.TPM,
-				Timeout:                        *model.LiteLLMParams.Timeout,
-				UseInPassThrough:               *model.LiteLLMParams.UseInPassThrough,
-				UseLiteLLMProxy:                *model.LiteLLMParams.UseLiteLLMProxy,
-				VertexProject:                  *model.LiteLLMParams.VertexProject,
-				VertexLocation:                 *model.LiteLLMParams.VertexLocation,
-				VertexCredentials:              *model.LiteLLMParams.VertexCredentials,
-				WatsonxRegionName:              *model.LiteLLMParams.WatsonXRegionName,
+				ApiKey:                         util.DerefString(model.LiteLLMParams.ApiKey),
+				ApiBase:                        util.DerefString(model.LiteLLMParams.ApiBase),
+				AwsAccessKeyID:                 util.DerefString(model.LiteLLMParams.AwsAccessKeyID),
+				AwsSecretAccessKey:             util.DerefString(model.LiteLLMParams.AwsSecretAccessKey),
+				AwsRegionName:                  util.DerefString(model.LiteLLMParams.AwsRegionName),
+				AutoRouterConfigPath:           util.DerefString(model.LiteLLMParams.AutoRouterConfigPath),
+				AutoRouterConfig:               util.DerefString(model.LiteLLMParams.AutoRouterConfig),
+				AutoRouterDefaultModel:         util.DerefString(model.LiteLLMParams.AutoRouterDefaultModel),
+				AutoRouterEmbeddingModel:       util.DerefString(model.LiteLLMParams.AutoRouterEmbeddingModel),
+				ApiVersion:                     util.DerefString(model.LiteLLMParams.ApiVersion),
+				BudgetDuration:                 util.DerefString(model.LiteLLMParams.BudgetDuration),
+				CustomLLMProvider:              util.DerefString(model.LiteLLMParams.CustomLLMProvider),
+				LiteLLMTraceID:                 util.DerefString(model.LiteLLMParams.LiteLLMTraceID),
+				LiteLLMCredentialName:          util.DerefString(model.LiteLLMParams.LiteLLMCredentialName),
+				MergeReasoningContentInChoices: util.DerefBool(model.LiteLLMParams.MergeReasoningContentInChoices),
+				MockResponse:                   util.DerefString(model.LiteLLMParams.MockResponse),
+				Model:                          util.DerefString(model.LiteLLMParams.Model),
+				MaxRetries:                     util.DerefInt(model.LiteLLMParams.MaxRetries),
+				MaxFileSizeMB:                  util.DerefInt(model.LiteLLMParams.MaxFileSizeMB),
+				Organization:                   util.DerefString(model.LiteLLMParams.Organization),
+				RegionName:                     util.DerefString(model.LiteLLMParams.RegionName),
+				RPM:                            util.DerefInt(model.LiteLLMParams.RPM),
+				StreamTimeout:                  util.DerefInt(model.LiteLLMParams.StreamTimeout),
+				TPM:                            util.DerefInt(model.LiteLLMParams.TPM),
+				Timeout:                        util.DerefInt(model.LiteLLMParams.Timeout),
+				UseInPassThrough:               util.DerefBool(model.LiteLLMParams.UseInPassThrough),
+				UseLiteLLMProxy:                util.DerefBool(model.LiteLLMParams.UseLiteLLMProxy),
+				VertexProject:                  util.DerefString(model.LiteLLMParams.VertexProject),
+				VertexLocation:                 util.DerefString(model.LiteLLMParams.VertexLocation),
+				VertexCredentials:              util.DerefString(model.LiteLLMParams.VertexCredentials),
+				WatsonxRegionName:              util.DerefString(model.LiteLLMParams.WatsonXRegionName),
 			}
 
 			if err := parseAndAssign(model.LiteLLMParams.OutputCostPerToken, &litellmParams.OutputCostPerToken, "OutputCostPerToken"); err != nil {
@@ -613,7 +615,7 @@ func renderProxyConfig(llm *litellmv1alpha1.LiteLLMInstance, ctx context.Context
 
 	cfg := ProxyConfig{ModelList: modelListYAML, RouterSettings: routerSettings}
 	cfg.GeneralSettings.AllowRequestsOnDBUnavailable = true
-	//cfg.GeneralSettings.StoreModelInDB = true
+	cfg.GeneralSettings.StoreModelInDB = true
 
 	b, _ := yaml.Marshal(cfg)
 	return string(b), nil
@@ -1289,7 +1291,14 @@ func buildEnvironmentVariables(llm *litellmv1alpha1.LiteLLMInstance, secretName 
 						LocalObjectReference: corev1.LocalObjectReference{
 							Name: secret.Name,
 						},
-						Key: secret.Name,
+						Key: func() string {
+							for key := range secret.Data {
+								return key // use the first key in the secret data
+							}
+							err := errors.New("failed to retrieve secret key")
+							log.Error(err, "No keys found in secret", "secretName", secret.Name)
+							return ""
+						}(),
 					},
 				},
 			})

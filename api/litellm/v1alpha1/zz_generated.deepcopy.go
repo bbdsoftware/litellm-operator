@@ -544,34 +544,6 @@ func (in *ModelInfo) DeepCopyInto(out *ModelInfo) {
 		*out = new(bool)
 		**out = **in
 	}
-	if in.UpdatedAt != nil {
-		in, out := &in.UpdatedAt, &out.UpdatedAt
-		*out = (*in).DeepCopy()
-	}
-	if in.UpdatedBy != nil {
-		in, out := &in.UpdatedBy, &out.UpdatedBy
-		*out = new(string)
-		**out = **in
-	}
-	if in.CreatedAt != nil {
-		in, out := &in.CreatedAt, &out.CreatedAt
-		*out = (*in).DeepCopy()
-	}
-	if in.CreatedBy != nil {
-		in, out := &in.CreatedBy, &out.CreatedBy
-		*out = new(string)
-		**out = **in
-	}
-	if in.BaseModel != nil {
-		in, out := &in.BaseModel, &out.BaseModel
-		*out = new(string)
-		**out = **in
-	}
-	if in.Tier != nil {
-		in, out := &in.Tier, &out.Tier
-		*out = new(string)
-		**out = **in
-	}
 	if in.TeamID != nil {
 		in, out := &in.TeamID, &out.TeamID
 		*out = new(string)
@@ -674,10 +646,10 @@ func (in *ModelStatus) DeepCopyInto(out *ModelStatus) {
 		*out = new(LiteLLMParams)
 		(*in).DeepCopyInto(*out)
 	}
-	if in.ModelInfo != nil {
-		in, out := &in.ModelInfo, &out.ModelInfo
-		*out = new(ModelInfo)
-		(*in).DeepCopyInto(*out)
+	if in.ModelId != nil {
+		in, out := &in.ModelId, &out.ModelId
+		*out = new(string)
+		**out = **in
 	}
 }
 

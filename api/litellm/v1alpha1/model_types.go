@@ -158,24 +158,6 @@ type ModelInfo struct {
 	// DBModel indicates if this is a database model
 	DBModel *bool `json:"db_model,omitempty"`
 
-	// UpdatedAt is the last update timestamp
-	UpdatedAt *metav1.Time `json:"updated_at,omitempty"`
-
-	// UpdatedBy is who updated the model
-	UpdatedBy *string `json:"updated_by,omitempty"`
-
-	// CreatedAt is the creation timestamp
-	CreatedAt *metav1.Time `json:"created_at,omitempty"`
-
-	// CreatedBy is who created the model
-	CreatedBy *string `json:"created_by,omitempty"`
-
-	// BaseModel is the base model name
-	BaseModel *string `json:"base_model,omitempty"`
-
-	// Tier is the model tier (e.g., "free")
-	Tier *string `json:"tier,omitempty"`
-
 	// TeamID is the team ID
 	TeamID *string `json:"team_id,omitempty"`
 
@@ -218,10 +200,12 @@ type ModelStatus struct {
 
 	// ModelName is the name of the model
 	ModelName *string `json:"model_name,omitempty"`
+
 	// LiteLLMParams contains the LiteLLM parameters
 	LiteLLMParams *LiteLLMParams `json:"litellm_params,omitempty"`
-	// ModelInfo contains the model information
-	ModelInfo *ModelInfo `json:"model_info,omitempty"`
+
+	// ModelId contains the model uuid provided by litellm server
+	ModelId *string `json:"model_id,omitempty"`
 }
 
 // +kubebuilder:object:root=true
