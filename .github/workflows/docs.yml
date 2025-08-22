@@ -115,9 +115,23 @@ jobs:
           echo "🚀 Deploying main branch documentation"
           echo "📝 Strategy: Deploy as 'latest' and 'dev' aliases"
           
+          # Helper function to safely set aliases
+          safe_set_alias() {
+            local alias_name="$1"
+            local version="$2"
+            echo "🔧 Setting alias '$alias_name' to version '$version'"
+            if mike alias --push "$version" "$alias_name" 2>/dev/null; then
+              echo "✅ Successfully set alias '$alias_name' to '$version'"
+            else
+              echo "⚠️  Alias '$alias_name' already exists or failed to set"
+            fi
+          }
+          
           # Deploy main branch as 'latest' and 'dev'
           mike deploy --push --update-aliases dev latest
-          mike set-default --push latest
+          
+          # Set default alias (handles existing alias gracefully)
+          mike set-default --push latest || echo "⚠️  Default alias already set to latest"
           
           echo "✅ Main branch documentation deployed successfully"
           
@@ -135,11 +149,23 @@ jobs:
             exit 1
           fi
           
+          # Helper function to safely set aliases
+          safe_set_alias() {
+            local alias_name="$1"
+            local version="$2"
+            echo "🔧 Setting alias '$alias_name' to version '$version'"
+            if mike alias --push "$version" "$alias_name" 2>/dev/null; then
+              echo "✅ Successfully set alias '$alias_name' to '$version'"
+            else
+              echo "⚠️  Alias '$alias_name' already exists or failed to set"
+            fi
+          }
+          
           # Deploy the tagged version and update 'stable' alias
           mike deploy --push --update-aliases $VERSION stable
           
-          # Set this version as the default
-          mike set-default --push stable
+          # Set this version as the default (handles existing alias gracefully)
+          mike set-default --push stable || echo "⚠️  Default alias already set to stable"
           
           echo "✅ Stable release documentation deployed successfully"
           
@@ -161,11 +187,22 @@ jobs:
           # Deploy the pre-release version
           mike deploy --push $VERSION
           
+          # Helper function to safely set aliases
+          safe_set_alias() {
+            local alias_name="$1"
+            local version="$2"
+            echo "🔧 Setting alias '$alias_name' to version '$version'"
+            if mike alias --push "$version" "$alias_name" 2>/dev/null; then
+              echo "✅ Successfully set alias '$alias_name' to '$version'"
+            else
+              echo "⚠️  Alias '$alias_name' already exists or failed to set"
+            fi
+          }
+          
           # Update appropriate aliases based on pre-release type
           if [[ "$PRERELEASE_TYPE" == "prerelease" ]]; then
             # For alpha/beta/rc releases, update the 'preview' alias
-            mike alias --push $VERSION preview
-            echo "📝 Updated 'preview' alias to $VERSION"
+            safe_set_alias "preview" "$VERSION"
           else
             # For other pre-releases, just deploy without additional aliases
             echo "📝 Deployed without additional aliases"
