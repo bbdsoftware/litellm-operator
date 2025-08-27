@@ -145,6 +145,7 @@ _Appears in:_
 | `redisSecretRef` _[RedisSecretRef](#redissecretref)_ |  |  |  |
 | `ingress` _[Ingress](#ingress)_ |  |  |  |
 | `gateway` _[Gateway](#gateway)_ |  |  |  |
+| `replicas` _integer_ | Number of replicas for the LiteLLM deployment | 1 |  |
 
 
 #### LiteLLMInstanceStatus

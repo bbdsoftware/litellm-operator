@@ -29,7 +29,10 @@ type LiteLLMInstanceSpec struct {
 	RedisSecretRef    RedisSecretRef    `json:"redisSecretRef,omitempty"`
 	Ingress           Ingress           `json:"ingress,omitempty"`
 	Gateway           Gateway           `json:"gateway,omitempty"`
-	Models            []Model           `json:"models,omitempty"`
+
+	// +kubebuilder:default=1
+	Replicas int32   `json:"replicas,omitempty"`
+	Models   []Model `json:"models,omitempty"`
 }
 
 type Model struct {

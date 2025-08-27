@@ -4,6 +4,7 @@ metadata:
   name: litellm-example
   namespace: litellm
 spec:
+  replicas: 1
   redisSecretRef:
     nameRef:  redis-secret
     keys:
