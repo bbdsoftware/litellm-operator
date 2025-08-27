@@ -818,7 +818,7 @@ func (r *LiteLLMInstanceReconciler) createDeployment(ctx context.Context, llm *l
 			Labels:    r.litellmResourceNaming.GetAppLabels(),
 		},
 		Spec: appsv1.DeploymentSpec{
-			Replicas: util.Int32Ptr(1),
+			Replicas: util.Int32Ptr(llm.Spec.Replicas),
 			Selector: &metav1.LabelSelector{
 				MatchLabels: r.litellmResourceNaming.GetAppLabels(),
 			},

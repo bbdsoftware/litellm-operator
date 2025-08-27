@@ -272,6 +272,10 @@ spec:
                 - keys
                 - nameRef
                 type: object
+              replicas:
+                default: 1
+                format: int32
+                type: integer
             required:
             - image
             type: object
