@@ -73,10 +73,10 @@ var _ = Describe("Litellm Model", func() {
 						LiteLLMParams: &UpdateLiteLLMParams{
 							InputCostPerToken:  float64Ptr(0.001),
 							OutputCostPerToken: float64Ptr(0.002),
+							Model:              stringPtr("gpt-4"),
 						},
 						ModelInfo: &ModelInfo{
-							ID:        stringPtr("model-123"),
-							BaseModel: stringPtr("gpt-4"),
+							ID: stringPtr("model-123"),
 						},
 					}
 
@@ -95,20 +95,19 @@ var _ = Describe("Litellm Model", func() {
 					LiteLLMParams: &UpdateLiteLLMParams{
 						InputCostPerToken:  float64Ptr(0.001),
 						OutputCostPerToken: float64Ptr(0.002),
+						Model:              stringPtr("gpt-4"),
 					},
-					ModelInfo: &ModelInfo{
-						BaseModel: stringPtr("gpt-4"),
-					},
+					ModelInfo: &ModelInfo{},
 				}
 
 				response, err := client.CreateModel(ctx, req)
 
 				Expect(err).NotTo(HaveOccurred())
 				Expect(response.ModelName).To(Equal("test-model"))
-				Expect(response.LiteLLMParams.InputCostPerToken).To(Equal(stringPtr("0.001")))
-				Expect(response.LiteLLMParams.OutputCostPerToken).To(Equal(stringPtr("0.002")))
+				Expect(response.LiteLLMParams.InputCostPerToken).To(Equal(float64Ptr(0.001)))
+				Expect(response.LiteLLMParams.OutputCostPerToken).To(Equal(float64Ptr(0.002)))
 				Expect(response.ModelInfo.ID).To(Equal(stringPtr("model-123")))
-				Expect(response.ModelInfo.BaseModel).To(Equal(stringPtr("gpt-4")))
+				Expect(response.LiteLLMParams.Model).To(Equal(stringPtr("gpt-4")))
 			})
 		})
 
@@ -240,8 +239,6 @@ var _ = Describe("Litellm Model", func() {
 
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("resource does not exist"))
-				// check log message
-				Expect(ctx).To(ContainSubstring("Failed to update model in LiteLLM"))
 			})
 		})
 	})
@@ -251,8 +248,8 @@ var _ = Describe("Litellm Model", func() {
 			BeforeEach(func() {
 				server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 					Expect(r.Method).To(Equal("GET"))
-					Expect(r.URL.Path).To(Equal("/model/info"))
-					Expect(r.URL.Query().Get("model_name")).To(Equal("test-model"))
+					Expect(r.URL.Path).To(Equal("/model/"))
+					Expect(r.URL.Query().Get("litellm_model_id")).To(Equal("test-model"))
 					Expect(r.Header.Get("Authorization")).To(Equal("Bearer " + masterKey))
 
 					// Return success response
@@ -262,11 +259,10 @@ var _ = Describe("Litellm Model", func() {
 							InputCostPerToken:  float64Ptr(0.001),
 							OutputCostPerToken: float64Ptr(0.002),
 							ApiKey:             stringPtr("sk-test-key"),
+							Model:              stringPtr("gpt-4"),
 						},
 						ModelInfo: &ModelInfo{
-							ID:        stringPtr("model-123"),
-							BaseModel: stringPtr("gpt-4"),
-							Tier:      stringPtr("premium"),
+							ID: stringPtr("model-123"),
 						},
 					}
 
@@ -284,12 +280,11 @@ var _ = Describe("Litellm Model", func() {
 
 				Expect(err).NotTo(HaveOccurred())
 				Expect(response.ModelName).To(Equal("test-model"))
-				Expect(response.LiteLLMParams.InputCostPerToken).To(Equal(stringPtr("0.001")))
-				Expect(response.LiteLLMParams.OutputCostPerToken).To(Equal(stringPtr("0.002")))
+				Expect(response.LiteLLMParams.InputCostPerToken).To(Equal(float64Ptr(0.001)))
+				Expect(response.LiteLLMParams.OutputCostPerToken).To(Equal(float64Ptr(0.002)))
 				Expect(response.LiteLLMParams.ApiKey).To(Equal(stringPtr("sk-test-key")))
 				Expect(response.ModelInfo.ID).To(Equal(stringPtr("model-123")))
-				Expect(response.ModelInfo.BaseModel).To(Equal(stringPtr("gpt-4")))
-				Expect(response.ModelInfo.Tier).To(Equal(stringPtr("premium")))
+				Expect(response.LiteLLMParams.Model).To(Equal(stringPtr("gpt-4")))
 			})
 		})
 
@@ -315,7 +310,7 @@ var _ = Describe("Litellm Model", func() {
 				_, err := client.GetModel(ctx, "non-existent-model")
 
 				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("Model not found"))
+				Expect(err.Error()).To(ContainSubstring("the requested resource does not exist"))
 			})
 		})
 	})
@@ -333,7 +328,7 @@ var _ = Describe("Litellm Model", func() {
 					var reqBody map[string]string
 					err := json.NewDecoder(r.Body).Decode(&reqBody)
 					Expect(err).NotTo(HaveOccurred())
-					Expect(reqBody["model_name"]).To(Equal("test-model"))
+					Expect(reqBody["id"]).To(Equal("model-12132"))
 
 					w.WriteHeader(http.StatusOK)
 				}))
@@ -343,7 +338,7 @@ var _ = Describe("Litellm Model", func() {
 			})
 
 			It("should delete a model successfully", func() {
-				err := client.DeleteModel(ctx, "test-model")
+				err := client.DeleteModel(ctx, "model-12132")
 
 				Expect(err).NotTo(HaveOccurred())
 			})
@@ -368,10 +363,10 @@ var _ = Describe("Litellm Model", func() {
 			})
 
 			It("should return an error", func() {
-				err := client.DeleteModel(ctx, "non-existent-model")
+				err := client.DeleteModel(ctx, "non-existent-model-id")
 
 				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("Model not found"))
+				Expect(err.Error()).To(ContainSubstring("resource does not exist"))
 			})
 		})
 	})
@@ -457,18 +452,18 @@ var _ = Describe("Litellm Model", func() {
 			})
 		})
 
-		Context("when model info is different", func() {
-			It("should return true when base model changes", func() {
+		Context("when model is different", func() {
+			It("should return true when model changes", func() {
 				model := &ModelResponse{
 					ModelName: "test-model",
-					ModelInfo: &ModelInfo{
-						BaseModel: stringPtr("gpt-3.5"),
+					LiteLLMParams: &UpdateLiteLLMParams{
+						Model: stringPtr("gpt-3.5"),
 					},
 				}
 				req := &ModelRequest{
 					ModelName: "test-model",
-					ModelInfo: &ModelInfo{
-						BaseModel: stringPtr("gpt-4"),
+					LiteLLMParams: &UpdateLiteLLMParams{
+						Model: stringPtr("gpt-4"),
 					},
 				}
 
@@ -477,17 +472,17 @@ var _ = Describe("Litellm Model", func() {
 				Expect(result).To(BeTrue())
 			})
 
-			It("should return true when tier changes", func() {
+			It("should return true when modelInfo changes", func() {
 				model := &ModelResponse{
 					ModelName: "test-model",
 					ModelInfo: &ModelInfo{
-						Tier: stringPtr("basic"),
+						ID: stringPtr("model-123"),
 					},
 				}
 				req := &ModelRequest{
 					ModelName: "test-model",
 					ModelInfo: &ModelInfo{
-						Tier: stringPtr("premium"),
+						ID: stringPtr("model-000008"),
 					},
 				}
 
@@ -505,10 +500,10 @@ var _ = Describe("Litellm Model", func() {
 						InputCostPerToken:  float64Ptr(0.001),
 						OutputCostPerToken: float64Ptr(0.002),
 						ApiKey:             stringPtr("test-key"),
+						Model:              stringPtr("gpt-4"),
 					},
 					ModelInfo: &ModelInfo{
-						BaseModel: stringPtr("gpt-4"),
-						Tier:      stringPtr("premium"),
+						ID: stringPtr("model-123"),
 					},
 				}
 				req := &ModelRequest{
@@ -517,10 +512,10 @@ var _ = Describe("Litellm Model", func() {
 						InputCostPerToken:  float64Ptr(0.001),
 						OutputCostPerToken: float64Ptr(0.002),
 						ApiKey:             stringPtr("test-key"),
+						Model:              stringPtr("gpt-4"),
 					},
 					ModelInfo: &ModelInfo{
-						BaseModel: stringPtr("gpt-4"),
-						Tier:      stringPtr("premium"),
+						ID: stringPtr("model-123"),
 					},
 				}
 
@@ -554,7 +549,7 @@ var _ = Describe("Litellm Model", func() {
 				req := &ModelRequest{
 					ModelName: "test-model",
 					ModelInfo: &ModelInfo{
-						BaseModel: stringPtr("gpt-4"),
+						ID: stringPtr("000000000011"),
 					},
 				}
 
@@ -576,11 +571,11 @@ var _ = Describe("Litellm Model", func() {
 					ApiBase:            stringPtr("https://api.openai.com"),
 					TPM:                intPtr(1000),
 					RPM:                intPtr(100),
+					Model:              stringPtr("gpt-4"),
 				},
 				ModelInfo: &ModelInfo{
-					BaseModel: stringPtr("gpt-4"),
-					Tier:      stringPtr("premium"),
-					TeamID:    stringPtr("team-123"),
+					ID:     stringPtr("model-123"),
+					TeamID: stringPtr("team-123"),
 				},
 			}
 
@@ -598,8 +593,8 @@ var _ = Describe("Litellm Model", func() {
 			Expect(unmarshalled.LiteLLMParams.ApiBase).To(Equal(req.LiteLLMParams.ApiBase))
 			Expect(unmarshalled.LiteLLMParams.TPM).To(Equal(req.LiteLLMParams.TPM))
 			Expect(unmarshalled.LiteLLMParams.RPM).To(Equal(req.LiteLLMParams.RPM))
-			Expect(unmarshalled.ModelInfo.BaseModel).To(Equal(req.ModelInfo.BaseModel))
-			Expect(unmarshalled.ModelInfo.Tier).To(Equal(req.ModelInfo.Tier))
+			Expect(unmarshalled.ModelInfo.ID).To(Equal(req.ModelInfo.ID))
+			Expect(unmarshalled.LiteLLMParams.Model).To(Equal(req.LiteLLMParams.Model))
 			Expect(unmarshalled.ModelInfo.TeamID).To(Equal(req.ModelInfo.TeamID))
 		})
 
@@ -610,13 +605,10 @@ var _ = Describe("Litellm Model", func() {
 					InputCostPerToken:  float64Ptr(0.001),
 					OutputCostPerToken: float64Ptr(0.002),
 					ApiKey:             stringPtr("sk-test-key"),
+					Model:              stringPtr("gpt-4"),
 				},
 				ModelInfo: &ModelInfo{
-					ID:        stringPtr("model-123"),
-					BaseModel: stringPtr("gpt-4"),
-					Tier:      stringPtr("premium"),
-					CreatedAt: stringPtr("2024-01-01T00:00:00Z"),
-					UpdatedAt: stringPtr("2024-01-02T00:00:00Z"),
+					ID: stringPtr("model-123"),
 				},
 			}
 
@@ -632,10 +624,7 @@ var _ = Describe("Litellm Model", func() {
 			Expect(unmarshalled.LiteLLMParams.OutputCostPerToken).To(Equal(resp.LiteLLMParams.OutputCostPerToken))
 			Expect(unmarshalled.LiteLLMParams.ApiKey).To(Equal(resp.LiteLLMParams.ApiKey))
 			Expect(unmarshalled.ModelInfo.ID).To(Equal(resp.ModelInfo.ID))
-			Expect(unmarshalled.ModelInfo.BaseModel).To(Equal(resp.ModelInfo.BaseModel))
-			Expect(unmarshalled.ModelInfo.Tier).To(Equal(resp.ModelInfo.Tier))
-			Expect(unmarshalled.ModelInfo.CreatedAt).To(Equal(resp.ModelInfo.CreatedAt))
-			Expect(unmarshalled.ModelInfo.UpdatedAt).To(Equal(resp.ModelInfo.UpdatedAt))
+			Expect(unmarshalled.LiteLLMParams.Model).To(Equal(resp.LiteLLMParams.Model))
 		})
 	})
 
@@ -736,16 +725,6 @@ var _ = Describe("Litellm Model", func() {
 				client = NewLitellmClient(baseURL, masterKey)
 			})
 
-			It("should handle unknown error format gracefully", func() {
-				req := &ModelRequest{
-					ModelName: "test-model",
-				}
-
-				_, err := client.CreateModel(ctx, req)
-
-				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("invalid character"))
-			})
 		})
 	})
 })

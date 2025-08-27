@@ -39,7 +39,7 @@ import (
 type ModelReconciler struct {
 	client.Client
 	Scheme                *runtime.Scheme
-	LitellmClient         *litellm.LitellmClient
+	LitellmModelClient    litellm.LitellmModel
 	connectionHandler     *common.ConnectionHandler
 	litellmResourceNaming *util.LitellmResourceNaming
 }
@@ -89,8 +89,8 @@ func (r *ModelReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 	}
 
 	// Configure the LiteLLM client with connection details only if not already set (for testing)
-	if r.LitellmClient == nil {
-		r.LitellmClient = common.ConfigureLitellmClient(connectionDetails)
+	if r.LitellmModelClient == nil {
+		r.LitellmModelClient = common.ConfigureLitellmClient(connectionDetails)
 	}
 
 	// Check if the resource is being deleted
@@ -121,7 +121,7 @@ func (r *ModelReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 
 	// Try to get the existing model from LiteLLM service using model ID
 	if model.Status.ModelId != nil && *model.Status.ModelId != "" {
-		existingModel, err := r.LitellmClient.GetModel(ctx, *model.Status.ModelId)
+		existingModel, err := r.LitellmModelClient.GetModel(ctx, *model.Status.ModelId)
 		if err != nil {
 			log.Error(err, "Failed to get existing model from LiteLLM")
 			if _, updateErr := r.updateConditions(ctx, model, metav1.Condition{
@@ -135,7 +135,7 @@ func (r *ModelReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 			return ctrl.Result{}, err
 		}
 		// Model exists, check if update is needed
-		if r.LitellmClient.IsModelUpdateNeeded(ctx, &existingModel, modelRequest) {
+		if r.LitellmModelClient.IsModelUpdateNeeded(ctx, &existingModel, modelRequest) {
 			log.Info("Model needs update, updating in LiteLLM")
 			return r.handleUpdate(ctx, model, modelRequest)
 		}
@@ -149,7 +149,7 @@ func (r *ModelReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 func (r *ModelReconciler) handleCreation(ctx context.Context, model *litellmv1alpha1.Model, modelRequest *litellm.ModelRequest) (ctrl.Result, error) {
 	log := logf.FromContext(ctx)
 
-	modelResponse, err := r.LitellmClient.CreateModel(ctx, modelRequest)
+	modelResponse, err := r.LitellmModelClient.CreateModel(ctx, modelRequest)
 	if err != nil {
 		if _, err := r.updateConditions(ctx, model, metav1.Condition{
 			Type:    "Ready",
@@ -216,7 +216,7 @@ func updateModelStatus(model *litellmv1alpha1.Model, modelResponse *litellm.Mode
 func (r *ModelReconciler) handleUpdate(ctx context.Context, model *litellmv1alpha1.Model, modelRequest *litellm.ModelRequest) (ctrl.Result, error) {
 	log := logf.FromContext(ctx)
 
-	_, err := r.LitellmClient.UpdateModel(ctx, modelRequest)
+	_, err := r.LitellmModelClient.UpdateModel(ctx, modelRequest)
 	if err != nil {
 		log.Error(err, "Failed to update model in LiteLLM", "modelName", model.Spec.ModelName)
 		return ctrl.Result{}, err
@@ -231,7 +231,7 @@ func (r *ModelReconciler) handleDeletion(ctx context.Context, model *litellmv1al
 	log := logf.FromContext(ctx)
 
 	// Try to delete the model from LiteLLM
-	err := r.LitellmClient.DeleteModel(ctx, *model.Status.ModelId)
+	err := r.LitellmModelClient.DeleteModel(ctx, *model.Status.ModelId)
 	if err != nil {
 		log.Error(err, "Failed to delete model from LiteLLM")
 		return ctrl.Result{}, err

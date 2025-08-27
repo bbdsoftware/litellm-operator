@@ -331,8 +331,6 @@ func createModelCR(name, modelName string) *litellmv1alpha1.Model {
 				UseLiteLLMProxy:    boolPtr(true),
 			},
 			ModelInfo: litellmv1alpha1.ModelInfo{
-				BaseModel:           stringPtr("gpt-4"),
-				Tier:                stringPtr("premium"),
 				TeamID:              stringPtr("team-123"),
 				TeamPublicModelName: stringPtr("gpt-4-public"),
 			},

@@ -80,12 +80,6 @@ type UpdateLiteLLMParams struct {
 type ModelInfo struct {
 	ID                   *string                `json:"id,omitempty"`
 	DBModel              *bool                  `json:"db_model,omitempty"`
-	UpdatedAt            *string                `json:"updated_at,omitempty"`
-	UpdatedBy            *string                `json:"updated_by,omitempty"`
-	CreatedAt            *string                `json:"created_at,omitempty"`
-	CreatedBy            *string                `json:"created_by,omitempty"`
-	BaseModel            *string                `json:"base_model,omitempty"`
-	Tier                 *string                `json:"tier,omitempty"`
 	TeamID               *string                `json:"team_id,omitempty"`
 	TeamPublicModelName  *string                `json:"team_public_model_name,omitempty"`
 	AdditionalProperties map[string]interface{} `json:"-"`
@@ -175,7 +169,7 @@ func (l *LitellmClient) DeleteModel(ctx context.Context, modelId string) error {
 
 	if _, err := l.makeRequest(ctx, "POST", "/model/delete", body); err != nil {
 		log.Error(err, "Failed to delete model from LiteLLM")
-		return nil
+		return err
 	}
 
 	return nil

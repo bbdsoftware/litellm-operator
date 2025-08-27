@@ -17,6 +17,7 @@ limitations under the License.
 package v1alpha1
 
 import (
+	"github.com/bbdsoftware/litellm-operator/internal/interfaces"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 )
@@ -287,7 +288,7 @@ func (s SecretRef) GetNamespace() string {
 }
 
 // GetKeys returns NilKeys since litellm SecretRef doesn't have keys structure
-func (s SecretRef) GetKeys() interface{} {
+func (s SecretRef) GetKeys() interfaces.KeysInterface {
 	return NilKeys{}
 }
 
