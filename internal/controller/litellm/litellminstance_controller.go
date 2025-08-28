@@ -23,35 +23,26 @@ package litellm
 import (
 	"context"
 	"errors"
-	"errors"
 	"fmt"
+	"regexp"
 	"strconv"
-	"strconv"
+	"strings"
 	"time"
+
+	"gopkg.in/yaml.v2"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
-	"regexp"
-	"strings"
-	"regexp"
-	"strings"
-
 	litellmv1alpha1 "github.com/bbdsoftware/litellm-operator/api/litellm/v1alpha1"
 	"github.com/bbdsoftware/litellm-operator/internal/util"
 	"github.com/google/uuid"
-	"gopkg.in/yaml.v2"
-	appsv1 "k8s.io/api/apps/v1"
-	corev1 "k8s.io/api/core/v1"
-	networkingv1 "k8s.io/api/networking/v1"
-	"gopkg.in/yaml.v2"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 )
@@ -208,12 +199,6 @@ func (r *LiteLLMInstanceReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		return ctrl.Result{}, err
 	}
 
-	_, err := validateModelListForDuplicates(llm)
-	if err != nil {
-		log.Error(err, "LLM Instance modelList is not valid")
-		return ctrl.Result{}, err
-	}
-
 	// Create or update resources
 	configMap, err := r.createConfigMap(ctx, llm)
 	if err != nil {
@@ -222,9 +207,6 @@ func (r *LiteLLMInstanceReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	}
 
 	secret, err := r.createMasterKeySecret(ctx, llm)
-
-	secret, err := r.createMasterKeySecret(ctx, llm)
-
 	if err != nil {
 		log.Error(err, "Failed to create or update Secret")
 		return util.HandleConflictError(err)
@@ -315,36 +297,14 @@ func parseAndAssign(field *string, target *float64, fieldName string) error {
 		if err != nil {
 			return errors.New(fieldName + " not parsable to float")
 		}
-		target := new(float64)
-		*target = value
+		if target != nil {
+			*target = value
+		}
 	}
 	return nil
 }
 
-func validateModelListForDuplicates(llm *litellmv1alpha1.LiteLLMInstance) (bool, error) {
-	seen := make(map[string]bool)
-
-	for _, model := range llm.Spec.Models {
-		if seen[model.Identifier] {
-			err := fmt.Errorf("LLM Instance model list contains duplicate identifiers %s", model.Identifier)
-			return false, err
-		}
-		seen[model.Identifier] = true
-	}
-
-	return true, nil
-}
-
-func parseAndAssign(field string, target *float64, fieldName string) error {
-	if field != "" {
-		value, err := strconv.ParseFloat(field, 64)
-		if err != nil {
-			return errors.New(fieldName + " not parsable to float")
-		}
-		*target = value
-	}
-	return nil
-}
+// (duplicate functions removed)
 
 // renderProxyConfig generates the YAML configuration for the LiteLLM proxy server.
 // It creates a configuration structure with model list, router settings, and general settings.
@@ -433,132 +393,6 @@ func renderProxyConfig(llm *litellmv1alpha1.LiteLLMInstance, ctx context.Context
 			}
 
 			// If the model requires authentication, create individual secrets for each model
-			if model.RequiresAuth {
-				//get existing modelCredentials secret
-				modelCredentials := &corev1.Secret{}
-				err := k8sClient.Get(ctx, client.ObjectKey{Name: model.ModelCredentials.NameRef, Namespace: llm.Namespace}, modelCredentials)
-				if err != nil {
-					log.Error(err, "Model Credentials not found", "modelIdentifier", model.Identifier)
-					return "", nil
-				}
-
-				//create individual secrets from the ModelCredentials
-				secretNames, err := createAdditionalModelSecrets(ctx, &model, modelCredentials, llm, k8sClient, scheme)
-				if err != nil {
-					log.Error(err, "Failed to create secrets", "modelIdentifier", model.Identifier)
-				}
-
-				secretPrefix := "os.environ/"
-				keys := model.ModelCredentials.Keys
-				//match the secret to its yaml config to populate the yaml template
-				fieldMap := map[string]*string{
-					keys.VertexCredentials:  &litellmParams.VertexCredentials,
-					keys.ApiBase:            &litellmParams.ApiBase,
-					keys.AwsAccessKeyID:     &litellmParams.AwsAccessKeyID,
-					keys.AwsSecretAccessKey: &litellmParams.AwsSecretAccessKey,
-					keys.VertexProject:      &litellmParams.VertexCredentials,
-					keys.ApiKey:             &litellmParams.ApiKey,
-				}
-
-				for key, target := range fieldMap {
-					if key != "" {
-						if secretName, ok := secretNames[key]; ok {
-							*target = secretPrefix + secretName
-						}
-					}
-				}
-
-			}
-
-			modelYAML := ModelListItemYAML{
-				ModelName:     model.ModelName,
-				LitellmParams: litellmParams,
-			}
-			modelListYAML = append(modelListYAML, modelYAML)
-		}
-	}
-func renderProxyConfig(llm *litellmv1alpha1.LiteLLMInstance, ctx context.Context, k8sClient client.Client, scheme *runtime.Scheme) (string, error) {
-	log := logf.FromContext(ctx)
-
-	var modelListYAML []ModelListItemYAML
-	if llm.Spec.Models != nil {
-		for _, model := range llm.Spec.Models {
-
-			if model.LiteLLMParams.Model == "" {
-				err := fmt.Errorf("model name is required for each model in the list")
-				log.Error(err, "Failed to render proxy config")
-				return "", err
-			}
-
-			//map all LiteLLMParams to the YAML struct
-			litellmParams := LiteLLMParamsYAML{
-				ApiKey:                           model.LiteLLMParams.ApiKey,
-				ApiBase:                          model.LiteLLMParams.ApiBase,
-				AwsAccessKeyID:                   model.LiteLLMParams.AwsAccessKeyID,
-				AwsSecretAccessKey:               model.LiteLLMParams.AwsSecretAccessKey,
-				AwsRegionName:                    model.LiteLLMParams.AwsRegionName,
-				AutoRouterConfigPath:             model.LiteLLMParams.AutoRouterConfigPath,
-				AutoRouterConfig:                 model.LiteLLMParams.AutoRouterConfig,
-				AutoRouterDefaultModel:           model.LiteLLMParams.AutoRouterDefaultModel,
-				AutoRouterEmbeddingModel:         model.LiteLLMParams.AutoRouterEmbeddingModel,
-				AdditionalProps:                  model.LiteLLMParams.AdditionalProps,
-				ApiVersion:                       model.LiteLLMParams.ApiVersion,
-				BudgetDuration:                   model.LiteLLMParams.BudgetDuration,
-				ConfigurableClientsideAuthParams: model.LiteLLMParams.ConfigurableClientsideAuthParams,
-				CustomLLMProvider:                model.LiteLLMParams.CustomLLMProvider,
-				LiteLLMTraceID:                   model.LiteLLMParams.LiteLLMTraceID,
-				LiteLLMCredentialName:            model.LiteLLMParams.LiteLLMCredentialName,
-				MergeReasoningContentInChoices:   model.LiteLLMParams.MergeReasoningContentInChoices,
-				MockResponse:                     model.LiteLLMParams.MockResponse,
-				Model:                            model.LiteLLMParams.Model,
-				MaxRetries:                       model.LiteLLMParams.MaxRetries,
-				Organization:                     model.LiteLLMParams.Organization,
-				RegionName:                       model.LiteLLMParams.RegionName,
-				RPM:                              model.LiteLLMParams.RPM,
-				StreamTimeout:                    model.LiteLLMParams.StreamTimeout,
-				TPM:                              model.LiteLLMParams.TPM,
-				Timeout:                          model.LiteLLMParams.Timeout,
-				UseInPassThrough:                 model.LiteLLMParams.UseInPassThrough,
-				UseLiteLLMProxy:                  model.LiteLLMParams.UseLiteLLMProxy,
-				VertexProject:                    model.LiteLLMParams.VertexProject,
-				VertexLocation:                   model.LiteLLMParams.VertexLocation,
-				VertexCredentials:                model.LiteLLMParams.VertexCredentials,
-				WatsonxRegionName:                model.LiteLLMParams.WatsonxRegionName,
-			}
-
-			if err := parseAndAssign(model.LiteLLMParams.OutputCostPerToken, &litellmParams.OutputCostPerToken, "OutputCostPerToken"); err != nil {
-				log.Error(err, "parsing error")
-				return "", err
-			}
-			if err := parseAndAssign(model.LiteLLMParams.OutputCostPerSecond, &litellmParams.OutputCostPerSecond, "OutputCostPerSecond"); err != nil {
-				log.Error(err, "parsing error")
-				return "", err
-			}
-			if err := parseAndAssign(model.LiteLLMParams.OutputCostPerPixel, &litellmParams.OutputCostPerPixel, "OutputCostPerPixel"); err != nil {
-				log.Error(err, "parsing error")
-				return "", err
-			}
-			if err := parseAndAssign(model.LiteLLMParams.InputCostPerPixel, &litellmParams.InputCostPerPixel, "InputCostPerPixel"); err != nil {
-				log.Error(err, "parsing error")
-				return "", err
-			}
-			if err := parseAndAssign(model.LiteLLMParams.InputCostPerSecond, &litellmParams.InputCostPerSecond, "InputCostPerSecond"); err != nil {
-				log.Error(err, "parsing error")
-				return "", err
-			}
-			if err := parseAndAssign(model.LiteLLMParams.InputCostPerToken, &litellmParams.InputCostPerSecond, "InputCostPerToken"); err != nil {
-				log.Error(err, "parsing error")
-				return "", err
-			}
-			if err := parseAndAssign(model.LiteLLMParams.MaxBudget, &litellmParams.MaxBudget, "MaxBudget"); err != nil {
-				log.Error(err, "parsing error")
-				return "", err
-			}
-			if err := parseAndAssign(model.LiteLLMParams.MaxFileSizeMB, &litellmParams.MaxFileSizeMB, "MaxFileSizeMB"); err != nil {
-				log.Error(err, "parsing error")
-				return "", err
-			}
-
 			if model.RequiresAuth {
 				//get existing modelCredentials secret
 				modelCredentials := &corev1.Secret{}
@@ -1309,23 +1143,6 @@ func buildEnvironmentVariables(llm *litellmv1alpha1.LiteLLMInstance, secretName 
 	}
 
 	return envVars
-}
-
-func getAllSecretsByPrefix(ctx context.Context, k8sClient client.Client, namespace string, prefix string) ([]corev1.Secret, error) {
-	var allSecrets corev1.SecretList
-	err := k8sClient.List(ctx, &allSecrets, client.InNamespace(namespace))
-	if err != nil {
-		return nil, err
-	}
-
-	var secrets []corev1.Secret
-	for _, secret := range allSecrets.Items {
-		if strings.HasPrefix(secret.Name, prefix) {
-			secrets = append(secrets, secret)
-		}
-	}
-
-	return secrets, nil
 }
 
 func getAllSecretsByPrefix(ctx context.Context, k8sClient client.Client, namespace string, prefix string) ([]corev1.Secret, error) {

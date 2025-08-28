@@ -32,16 +32,8 @@ type LiteLLMInstanceSpec struct {
 	Gateway           Gateway           `json:"gateway,omitempty"`
 
 	// +kubebuilder:default=1
-	Replicas int32   `json:"replicas,omitempty"`
-	Models   []Model `json:"models,omitempty"`
-}
-
-type Model struct {
-	ModelName        string                   `json:"modelName,omitempty"`
-	RequiresAuth     bool                     `json:"requiresAuth"`
-	Identifier       string                   `json:"identifier"`
-	ModelCredentials ModelCredentialSecretRef `json:"modelCredentials,omitempty"`
-	LiteLLMParams    LiteLLMParams            `json:"liteLLMParams,omitempty"`
+	Replicas int32               `json:"replicas,omitempty"`
+	Models   []InitModelInstance `json:"models,omitempty"`
 }
 
 // model instance used to create proxy server config map
