@@ -81,7 +81,7 @@ func (r *ModelReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 	connectionDetails, err := r.connectionHandler.GetConnectionDetailsFromLitellmRef(ctx, model.Spec.ConnectionRef, model.Namespace)
 	if err != nil {
 		log.Error(err, "Failed to get connection details")
-		if _, updateErr := r.updateConditions(ctx, model, metav1.Condition{
+		if updateErr := r.updateConditions(ctx, model, metav1.Condition{
 			Type:               "Ready",
 			Status:             metav1.ConditionFalse,
 			LastTransitionTime: metav1.Now(),
@@ -113,7 +113,7 @@ func (r *ModelReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 	modelRequest, err := r.convertToModelRequest(ctx, model)
 	if err != nil {
 		log.Error(err, "Failed to convert Model to ModelRequest")
-		if _, err := r.updateConditions(ctx, model, metav1.Condition{
+		if err := r.updateConditions(ctx, model, metav1.Condition{
 			Type:    "Ready",
 			Status:  metav1.ConditionFalse,
 			Reason:  "InvalidSpec",
@@ -143,7 +143,7 @@ func (r *ModelReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 
 				} else {
 					log.Error(err, "Failed to get existing model from LiteLLM")
-					if _, updateErr := r.updateConditions(ctx, model, metav1.Condition{
+					if updateErr := r.updateConditions(ctx, model, metav1.Condition{
 						Type:               "Ready",
 						Status:             metav1.ConditionFalse,
 						LastTransitionTime: metav1.Now(),
@@ -174,7 +174,7 @@ func (r *ModelReconciler) handleCreation(ctx context.Context, model *litellmv1al
 
 	modelResponse, err := r.LitellmModelClient.CreateModel(ctx, modelRequest)
 	if err != nil {
-		if _, err := r.updateConditions(ctx, model, metav1.Condition{
+		if err := r.updateConditions(ctx, model, metav1.Condition{
 			Type:    "Ready",
 			Status:  metav1.ConditionFalse,
 			Reason:  "LitellmError",
@@ -189,7 +189,7 @@ func (r *ModelReconciler) handleCreation(ctx context.Context, model *litellmv1al
 	updateModelStatus(model, &modelResponse)
 
 	// Persist status (ModelId, ModelName, ObservedGeneration, LastUpdated) along with the Ready condition
-	if _, err := r.updateConditions(ctx, model, metav1.Condition{
+	if err := r.updateConditions(ctx, model, metav1.Condition{
 		Type:               "Ready",
 		Status:             metav1.ConditionTrue,
 		Reason:             "LitellmSuccess",
@@ -271,7 +271,7 @@ func (r *ModelReconciler) handleDeletion(ctx context.Context, model *litellmv1al
 			} else {
 				log.Error(err, "Failed to delete model from LiteLLM")
 				// Update condition to surface the deletion failure
-				if _, updateErr := r.updateConditions(ctx, model, metav1.Condition{
+				if updateErr := r.updateConditions(ctx, model, metav1.Condition{
 					Type:               "Ready",
 					Status:             metav1.ConditionFalse,
 					LastTransitionTime: metav1.Now(),
@@ -451,15 +451,15 @@ func (r *ModelReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Complete(r)
 }
 
-func (r *ModelReconciler) updateConditions(ctx context.Context, model *litellmv1alpha1.Model, condition metav1.Condition) (ctrl.Result, error) {
+func (r *ModelReconciler) updateConditions(ctx context.Context, model *litellmv1alpha1.Model, condition metav1.Condition) error {
 	log := logf.FromContext(ctx)
 
 	if meta.SetStatusCondition(&model.Status.Conditions, condition) {
 		if err := r.Status().Update(ctx, model); err != nil {
 			log.Error(err, "unable to update Model status with condition")
-			return ctrl.Result{}, err
+			return err
 		}
 	}
 
-	return ctrl.Result{}, nil
+	return nil
 }

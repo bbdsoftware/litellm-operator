@@ -26,10 +26,10 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	client "sigs.k8s.io/controller-runtime/pkg/client"
 
+	litellmv1alpha1 "github.com/bbdsoftware/litellm-operator/api/litellm/v1alpha1"
+	util "github.com/bbdsoftware/litellm-operator/internal/util"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-
-	litellmv1alpha1 "github.com/bbdsoftware/litellm-operator/api/litellm/v1alpha1"
 )
 
 var _ = Describe("LiteLLMInstance Controller", func() {
@@ -152,11 +152,11 @@ var _ = Describe("LiteLLMInstance Controller", func() {
 								},
 								RequiresAuth: true,
 								LiteLLMParams: litellmv1alpha1.LiteLLMParams{
-									AwsRegionName:     stringPtr("us-east-1"),
-									Model:             stringPtr("amazon.titan-embed-text-v1"),
-									MaxBudget:         stringPtr("1000.988"),
-									UseLiteLLMProxy:   boolPtr(true),
-									InputCostPerToken: stringPtr("0.0001"),
+									AwsRegionName:     util.StringPtrOrNil("us-east-1"),
+									Model:             util.StringPtrOrNil("amazon.titan-embed-text-v1"),
+									MaxBudget:         util.StringPtrOrNil("1000.988"),
+									UseLiteLLMProxy:   util.BoolPtr(true),
+									InputCostPerToken: util.StringPtrOrNil("0.0001"),
 								},
 							}, {
 								ModelName:    "gpt-3.5-turbo",
@@ -170,11 +170,11 @@ var _ = Describe("LiteLLMInstance Controller", func() {
 									},
 								},
 								LiteLLMParams: litellmv1alpha1.LiteLLMParams{
-									Model:             stringPtr("gpt-3.5-turbo"),
-									MaxBudget:         stringPtr("98.0"),
-									Organization:      stringPtr("test-org"),
-									UseLiteLLMProxy:   boolPtr(true),
-									InputCostPerToken: stringPtr("0.000000089"),
+									Model:             util.StringPtrOrNil("gpt-3.5-turbo"),
+									MaxBudget:         util.StringPtrOrNil("98.0"),
+									Organization:      util.StringPtrOrNil("test-org"),
+									UseLiteLLMProxy:   util.BoolPtr(true),
+									InputCostPerToken: util.StringPtrOrNil("0.000000089"),
 								},
 							},
 						},
@@ -246,20 +246,3 @@ var _ = Describe("LiteLLMInstance Controller", func() {
 		})
 	})
 })
-
-// Helper functions for creating pointers to primitive types
-func float64Ptr(v float64) *float64 {
-	return &v
-}
-
-func stringPtr(v string) *string {
-	return &v
-}
-
-func intPtr(v int) *int {
-	return &v
-}
-
-func boolPtr(v bool) *bool {
-	return &v
-}

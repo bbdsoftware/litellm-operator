@@ -37,6 +37,10 @@ func StringPtrOrNil(s string) *string {
 	return &s
 }
 
+func BoolPtr(v bool) *bool {
+	return &v
+}
+
 func IntPtrOrNil(i int) *int {
 	if i == 0 {
 		return nil

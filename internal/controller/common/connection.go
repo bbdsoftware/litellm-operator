@@ -103,30 +103,28 @@ func (h *ConnectionHandler) getConnectionDetailsFromSecretRef(ctx context.Contex
 	if secretRef.HasKeys() {
 		// For SecretRef with Keys structure
 		keys := secretRef.GetKeys()
-		if keysInterface, ok := keys.(interfaces.KeysInterface); ok {
-			masterKeyField := keysInterface.GetMasterKey()
-			urlField := keysInterface.GetURL()
+		// GetKeys already returns a KeysInterface; no need for a type assertion
+		masterKeyField := keys.GetMasterKey()
+		urlField := keys.GetURL()
 
-			if masterKeyField == "" || urlField == "" {
-				return nil, fmt.Errorf("secret %s has invalid keys structure", secretRef.GetSecretName())
-			}
-
-			masterKeyBytes, exists := secret.Data[masterKeyField]
-			if !exists {
-				return nil, fmt.Errorf("secret %s does not contain key %s", secretRef.GetSecretName(), masterKeyField)
-			}
-
-			urlBytes, exists := secret.Data[urlField]
-			if !exists {
-				return nil, fmt.Errorf("secret %s does not contain key %s", secretRef.GetSecretName(), urlField)
-			}
-
-			return &ConnectionDetails{
-				MasterKey: string(masterKeyBytes),
-				URL:       string(urlBytes),
-			}, nil
+		if masterKeyField == "" || urlField == "" {
+			return nil, fmt.Errorf("secret %s has invalid keys structure", secretRef.GetSecretName())
 		}
-		return nil, fmt.Errorf("secret %s has keys but they don't implement KeysInterface", secretRef.GetSecretName())
+
+		masterKeyBytes, exists := secret.Data[masterKeyField]
+		if !exists {
+			return nil, fmt.Errorf("secret %s does not contain key %s", secretRef.GetSecretName(), masterKeyField)
+		}
+
+		urlBytes, exists := secret.Data[urlField]
+		if !exists {
+			return nil, fmt.Errorf("secret %s does not contain key %s", secretRef.GetSecretName(), urlField)
+		}
+
+		return &ConnectionDetails{
+			MasterKey: string(masterKeyBytes),
+			URL:       string(urlBytes),
+		}, nil
 	} else {
 		// For SecretRef with standard key names
 		masterKeyBytes, exists := secret.Data["masterkey"]

@@ -82,7 +82,9 @@ var _ = Describe("Litellm Model", func() {
 
 					w.Header().Set("Content-Type", "application/json")
 					w.WriteHeader(http.StatusOK)
-					json.NewEncoder(w).Encode(response)
+					if err := json.NewEncoder(w).Encode(response); err != nil {
+						Fail("failed to encode response: " + err.Error())
+					}
 				}))
 
 				baseURL = server.URL
@@ -116,13 +118,15 @@ var _ = Describe("Litellm Model", func() {
 				server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 					w.Header().Set("Content-Type", "application/json")
 					w.WriteHeader(http.StatusBadRequest)
-					json.NewEncoder(w).Encode(map[string]interface{}{
+					if err := json.NewEncoder(w).Encode(map[string]interface{}{
 						"error": map[string]interface{}{
 							"message": "Model already exists",
 							"type":    "validation_error",
 							"code":    "MODEL_EXISTS",
 						},
-					})
+					}); err != nil {
+						Fail("failed to encode error response: " + err.Error())
+					}
 				}))
 
 				baseURL = server.URL
@@ -189,7 +193,9 @@ var _ = Describe("Litellm Model", func() {
 
 					w.Header().Set("Content-Type", "application/json")
 					w.WriteHeader(http.StatusOK)
-					json.NewEncoder(w).Encode(response)
+					if err := json.NewEncoder(w).Encode(response); err != nil {
+						Fail("failed to encode response: " + err.Error())
+					}
 				}))
 
 				baseURL = server.URL
@@ -219,11 +225,13 @@ var _ = Describe("Litellm Model", func() {
 				server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 					w.Header().Set("Content-Type", "application/json")
 					w.WriteHeader(http.StatusNotFound)
-					json.NewEncoder(w).Encode(map[string]interface{}{
+					if err := json.NewEncoder(w).Encode(map[string]interface{}{
 						"detail": map[string]interface{}{
 							"error": "Model not found",
 						},
-					})
+					}); err != nil {
+						Fail("failed to encode error response: " + err.Error())
+					}
 				}))
 
 				baseURL = server.URL
@@ -268,7 +276,9 @@ var _ = Describe("Litellm Model", func() {
 
 					w.Header().Set("Content-Type", "application/json")
 					w.WriteHeader(http.StatusOK)
-					json.NewEncoder(w).Encode(response)
+					if err := json.NewEncoder(w).Encode(response); err != nil {
+						Fail("failed to encode response: " + err.Error())
+					}
 				}))
 
 				baseURL = server.URL
@@ -293,13 +303,15 @@ var _ = Describe("Litellm Model", func() {
 				server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 					w.Header().Set("Content-Type", "application/json")
 					w.WriteHeader(http.StatusNotFound)
-					json.NewEncoder(w).Encode(map[string]interface{}{
+					if err := json.NewEncoder(w).Encode(map[string]interface{}{
 						"error": map[string]interface{}{
 							"message": "Model not found",
 							"type":    "not_found",
 							"code":    "MODEL_NOT_FOUND",
 						},
-					})
+					}); err != nil {
+						Fail("failed to encode error response: " + err.Error())
+					}
 				}))
 
 				baseURL = server.URL
@@ -349,13 +361,15 @@ var _ = Describe("Litellm Model", func() {
 				server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 					w.Header().Set("Content-Type", "application/json")
 					w.WriteHeader(http.StatusNotFound)
-					json.NewEncoder(w).Encode(map[string]interface{}{
+					if err := json.NewEncoder(w).Encode(map[string]interface{}{
 						"error": map[string]interface{}{
 							"message": "Model not found",
 							"type":    "not_found",
 							"code":    "MODEL_NOT_FOUND",
 						},
-					})
+					}); err != nil {
+						Fail("failed to encode error response: " + err.Error())
+					}
 				}))
 
 				baseURL = server.URL
@@ -676,7 +690,9 @@ var _ = Describe("Litellm Model", func() {
 				server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 					w.Header().Set("Content-Type", "application/json")
 					w.WriteHeader(http.StatusOK)
-					w.Write([]byte("invalid json"))
+					if _, err := w.Write([]byte("invalid json")); err != nil {
+						Fail("failed to write response: " + err.Error())
+					}
 				}))
 
 				baseURL = server.URL
@@ -718,7 +734,9 @@ var _ = Describe("Litellm Model", func() {
 				server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 					w.Header().Set("Content-Type", "application/json")
 					w.WriteHeader(http.StatusInternalServerError)
-					w.Write([]byte("unknown error format"))
+					if _, err := w.Write([]byte("unknown error format")); err != nil {
+						Fail("failed to write response: " + err.Error())
+					}
 				}))
 
 				baseURL = server.URL
@@ -730,18 +748,15 @@ var _ = Describe("Litellm Model", func() {
 })
 
 // Helper functions for creating pointers to primitive types
-func float64Ptr(v float64) *float64 {
-	return &v
-}
+// Helper functions for creating pointers to primitive types
+// nolint:unused
+func float64Ptr(v float64) *float64 { return &v }
 
-func stringPtr(v string) *string {
-	return &v
-}
+// nolint:unused
+func stringPtr(v string) *string { return &v }
 
-func intPtr(v int) *int {
-	return &v
-}
+// nolint:unused
+func intPtr(v int) *int { return &v }
 
-func boolPtr(v bool) *bool {
-	return &v
-}
+// nolint:unused
+func boolPtr(v bool) *bool { return &v }
