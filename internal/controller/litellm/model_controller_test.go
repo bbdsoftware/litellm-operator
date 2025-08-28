@@ -199,13 +199,19 @@ var _ = Describe("ModelReconciler", func() {
 			model := newModelCR()
 			// set initial status to simulate existing model
 			id := "model-abc"
-			model.Status.ModelId = &id
 			Expect(k8sClient.Create(ctx, model)).To(Succeed())
-			// Need to create the object first, then update its status via client.Status()
-			// In envtest, Create doesn't persist status, so update status explicitly
+
 			created := &litellmv1alpha1.Model{}
 			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: resourceName, Namespace: namespace}, created)).To(Succeed())
+
 			created.Status.ModelId = &id
+			created.Status.Conditions = append(created.Status.Conditions, metav1.Condition{
+				Type:               "Ready",
+				Status:             metav1.ConditionTrue,
+				Reason:             "InitialCreation",
+				Message:            "Model created successfully",
+				LastTransitionTime: metav1.Now(),
+			})
 			Expect(k8sClient.Status().Update(ctx, created)).To(Succeed())
 
 			// fake GetModel and update-needed

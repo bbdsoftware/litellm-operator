@@ -990,6 +990,8 @@ func createSecret(ctx context.Context, k8sClient client.Client, scheme *runtime.
 // createDeployment creates or updates the Deployment for the LiteLLM instance.
 // It creates a Deployment that runs the LiteLLM proxy container with appropriate configuration.
 func (r *LiteLLMInstanceReconciler) createDeployment(ctx context.Context, llm *litellmv1alpha1.LiteLLMInstance, configMap *corev1.ConfigMap, secret *corev1.Secret, serviceAccount *corev1.ServiceAccount) (*appsv1.Deployment, error) {
+	log := logf.FromContext(ctx)
+
 	deployment := &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      r.litellmResourceNaming.GetDeploymentName(),
@@ -1026,8 +1028,9 @@ func (r *LiteLLMInstanceReconciler) createDeployment(ctx context.Context, llm *l
 			},
 		},
 	}
-
+	log.Info("Creating or updating deployment", "deployment", deployment.Name)
 	if _, err := util.CreateOrUpdateWithRetry(ctx, r.Client, r.Scheme, deployment, llm); err != nil {
+		log.Error(err, "Cannot create deployment")
 		return nil, err
 	}
 

@@ -39,10 +39,9 @@ import (
 // ModelReconciler reconciles a Model object
 type ModelReconciler struct {
 	client.Client
-	Scheme                *runtime.Scheme
-	LitellmModelClient    litellm.LitellmModel
-	connectionHandler     *common.ConnectionHandler
-	litellmResourceNaming *util.LitellmResourceNaming
+	Scheme             *runtime.Scheme
+	LitellmModelClient litellm.LitellmModel
+	connectionHandler  *common.ConnectionHandler
 }
 
 // +kubebuilder:rbac:groups=litellm.litellm.ai,resources=models,verbs=get;list;watch;create;update;patch;delete
@@ -120,25 +119,43 @@ func (r *ModelReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 		return ctrl.Result{}, err
 	}
 
-	// Try to get the existing model from LiteLLM service using model ID
+	// Try to get the existing model from LiteLLM service using model ID if model.Status.Conditions contains Ready
 	if model.Status.ModelId != nil && *model.Status.ModelId != "" {
-		existingModel, err := r.LitellmModelClient.GetModel(ctx, *model.Status.ModelId)
-		if err != nil {
-			log.Error(err, "Failed to get existing model from LiteLLM")
-			if _, updateErr := r.updateConditions(ctx, model, metav1.Condition{
-				Type:    "Ready",
-				Status:  metav1.ConditionFalse,
-				Reason:  "UnableToCheckModelExists",
-				Message: err.Error(),
-			}); updateErr != nil {
-				log.Error(updateErr, "Failed to update conditions")
+		readyCond := meta.FindStatusCondition(model.Status.Conditions, "Ready")
+		if readyCond == nil || readyCond.Status != metav1.ConditionTrue {
+			log.Info("Skipping LiteLLM lookup because Ready condition is not true", "model", model.Name)
+		} else {
+			existingModel, err := r.LitellmModelClient.GetModel(ctx, *model.Status.ModelId)
+			if err != nil {
+				// If the remote model is not found, clear the stale ModelId and continue to creation.
+				if errors.IsNotFound(err) {
+					log.Info("Model ID present but model not found in LiteLLM; will create new model", "modelId", *model.Status.ModelId)
+					model.Status.ModelId = nil
+					if err := r.Status().Update(ctx, model); err != nil {
+						log.Error(err, "Failed to clear stale ModelId from status")
+						return ctrl.Result{}, err
+					}
+
+				} else {
+					log.Error(err, "Failed to get existing model from LiteLLM")
+					if _, updateErr := r.updateConditions(ctx, model, metav1.Condition{
+						Type:               "Ready",
+						Status:             metav1.ConditionFalse,
+						LastTransitionTime: metav1.Now(),
+						Reason:             "UnableToCheckModelExists",
+						Message:            err.Error(),
+					}); updateErr != nil {
+						log.Error(updateErr, "Failed to update conditions")
+					}
+					return ctrl.Result{}, err
+				}
+			} else {
+				// Model exists, check if update is needed
+				if r.LitellmModelClient.IsModelUpdateNeeded(ctx, &existingModel, modelRequest) {
+					log.Info("Model needs update, updating in LiteLLM")
+					return r.handleUpdate(ctx, model, modelRequest)
+				}
 			}
-			return ctrl.Result{}, err
-		}
-		// Model exists, check if update is needed
-		if r.LitellmModelClient.IsModelUpdateNeeded(ctx, &existingModel, modelRequest) {
-			log.Info("Model needs update, updating in LiteLLM")
-			return r.handleUpdate(ctx, model, modelRequest)
 		}
 	}
 
@@ -366,38 +383,6 @@ func (r *ModelReconciler) convertToModelRequest(ctx context.Context, model *lite
 		}
 		modelRequest.LiteLLMParams = litellmParams
 	}
-
-	// Convert ModelInfo
-	// if !reflect.DeepEqual(model.Spec.ModelInfo, litellmv1alpha1.ModelInfo{}) {
-	// 	modelInfo := &litellm.ModelInfo{
-	// 		ID:                  model.Spec.ModelInfo.ID,
-	// 		DBModel:             model.Spec.ModelInfo.DBModel,
-	// 		UpdatedBy:           model.Spec.ModelInfo.UpdatedBy,
-	// 		CreatedBy:           model.Spec.ModelInfo.CreatedBy,
-	// 		BaseModel:           model.Spec.ModelInfo.BaseModel,
-	// 		Tier:                model.Spec.ModelInfo.Tier,
-	// 		TeamID:              model.Spec.ModelInfo.TeamID,
-	// 		TeamPublicModelName: model.Spec.ModelInfo.TeamPublicModelName,
-	// 	}
-
-	// 	// Handle timestamp fields
-	// 	if !model.Spec.ModelInfo.UpdatedAt.IsZero() {
-	// 		updatedAt := model.Spec.ModelInfo.UpdatedAt.Format("2006-01-02T15:04:05Z")
-	// 		modelInfo.UpdatedAt = &updatedAt
-	// 	}
-	// 	if !model.Spec.ModelInfo.CreatedAt.IsZero() {
-	// 		createdAt := model.Spec.ModelInfo.CreatedAt.Format("2006-01-02T15:04:05Z")
-	// 		modelInfo.CreatedAt = &createdAt
-	// 	}
-
-	// 	// Handle AdditionalProps
-	// 	if model.Spec.ModelInfo.AdditionalProps.Raw != nil {
-	// 		modelInfo.AdditionalProperties = make(map[string]interface{})
-	// 		// Convert AdditionalProps to map[string]interface{} if needed
-	// 	}
-
-	// 	modelRequest.ModelInfo = modelInfo
-	// }
 
 	return modelRequest, nil
 }

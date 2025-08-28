@@ -19,7 +19,11 @@ package e2e
 import (
 	"context"
 	"fmt"
+	"os"
 	"os/exec"
+	"path/filepath"
+	"runtime"
+	"strings"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -28,6 +32,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/config"
 
 	litellmv1alpha1 "github.com/bbdsoftware/litellm-operator/api/litellm/v1alpha1"
 	"github.com/bbdsoftware/litellm-operator/test/utils"
@@ -51,10 +56,21 @@ func init() {
 
 var _ = Describe("Model E2E Tests", Ordered, func() {
 	BeforeAll(func() {
+		cfg := config.GetConfigOrDie()
+		var err error
+		k8sClient, err = client.New(cfg, client.Options{Scheme: scheme.Scheme})
+		Expect(err).NotTo(HaveOccurred())
 
 		By("creating test namespace")
 		cmd := exec.Command("kubectl", "create", "namespace", modelTestNamespace)
 		_, _ = utils.Run(cmd)
+
+		By("Starting Postgress instance")
+		createPostgresInstance()
+
+		//create postrges-secret in modelTestNamespace
+		By("Creating Postgres Secret")
+		createPostgresSecret()
 
 		By("creating LiteLLM instance")
 		createLiteLLMInstance()
@@ -272,6 +288,84 @@ var _ = Describe("Model E2E Tests", Ordered, func() {
 	})
 })
 
+func mustSamplePath(relParts ...string) string {
+	// determine directory of this source file
+	_, thisFile, _, ok := runtime.Caller(0)
+	if !ok {
+		Fail("unable to determine caller file path")
+	}
+	baseDir := filepath.Dir(thisFile)
+
+	// compose path: ../samples/<file> relative to this test file
+	parts := append([]string{baseDir, "..", "samples"}, relParts...)
+	p := filepath.Clean(filepath.Join(parts...))
+
+	if _, err := os.Stat(p); os.IsNotExist(err) {
+		Fail(fmt.Sprintf("sample file not found: %s (cwd=%s)", p, mustGetwd()))
+	}
+	return p
+}
+
+func mustGetwd() string {
+	wd, _ := os.Getwd()
+	return wd
+}
+
+func createPostgresSecret() {
+	// create postgres secret from yaml
+	path := mustSamplePath("postgres-secret.yaml")
+	cmd := exec.Command("kubectl", "apply", "-f", path)
+	_, err := utils.Run(cmd)
+	if err != nil {
+		Expect(err).To(BeNil())
+	}
+}
+
+func createPostgresInstance() {
+	//install Postges
+	cmd := exec.Command("kubectl", "apply", "-f", "https://raw.githubusercontent.com/cloudnative-pg/cloudnative-pg/release-1.21/releases/cnpg-1.21.0.yaml")
+	_, err := utils.Run(cmd)
+	if err != nil {
+		Expect(err).To(BeNil())
+	}
+	// Deploy PostgreSQL
+	path := mustSamplePath("test-postgres.yaml")
+	cmd = exec.Command("kubectl", "apply", "-f", path)
+	_, err = utils.Run(cmd)
+	if err != nil {
+		Expect(err).To(BeNil())
+	}
+
+	podName, err := waitForPodWithPrefix("litellm-postgres-1", 5*time.Minute)
+	Expect(err).To(BeNil())
+
+	// Wait for the cluster to be ready:
+	cmd = exec.Command("kubectl", "wait", "--for=condition=Ready", "cluster/litellm-postgres", "-n", modelTestNamespace, "--timeout=300s")
+	_, err = utils.Run(cmd)
+	Expect(err).To(BeNil())
+
+	// Wait for all pods to be ready
+	cmd = exec.Command("kubectl", "wait", "--for=condition=Ready", "pod/"+podName, "-n", modelTestNamespace, "--timeout=300s")
+	_, err = utils.Run(cmd)
+	Expect(err).To(BeNil())
+}
+
+func waitForPodWithPrefix(prefix string, timeout time.Duration) (string, error) {
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		cmd := exec.Command("kubectl", "get", "pods", "-n", modelTestNamespace, "-o", "jsonpath={.items[*].metadata.name}")
+		out, _ := utils.Run(cmd)
+		names := strings.Fields(string(out))
+		for _, n := range names {
+			if strings.HasPrefix(n, prefix) && !strings.Contains(n, "initdb") {
+				return n, nil
+			}
+		}
+		time.Sleep(5 * time.Second)
+	}
+	return "", fmt.Errorf("no pod with prefix %q found in namespace %s after %s", prefix, modelTestNamespace, timeout)
+}
+
 func createLiteLLMInstance() {
 	By("creating LiteLLM instance CR")
 	liteLLMInstance := &litellmv1alpha1.LiteLLMInstance{
@@ -280,14 +374,7 @@ func createLiteLLMInstance() {
 			Namespace: modelTestNamespace,
 		},
 		Spec: litellmv1alpha1.LiteLLMInstanceSpec{
-			RedisSecretRef: litellmv1alpha1.RedisSecretRef{
-				NameRef: "redis-secret",
-				Keys: litellmv1alpha1.RedisSecretKeys{
-					HostSecret:     "host",
-					PortSecret:     "6379",
-					PasswordSecret: "password",
-				},
-			},
+			Image: "ghcr.io/berriai/litellm-database:main-v1.74.9.rc.1",
 			DatabaseSecretRef: litellmv1alpha1.DatabaseSecretRef{
 				NameRef: "postgres-secret",
 				Keys: litellmv1alpha1.DatabaseSecretKeys{
@@ -325,14 +412,11 @@ func createModelCR(name, modelName string) *litellmv1alpha1.Model {
 				TPM:                intPtr(10000),
 				RPM:                intPtr(100),
 				Timeout:            intPtr(60),
+				Model:              stringPtr("azure/gpt-4"),
 				MaxRetries:         intPtr(3),
 				Organization:       stringPtr("test-org"),
 				UseInPassThrough:   boolPtr(false),
 				UseLiteLLMProxy:    boolPtr(true),
-			},
-			ModelInfo: litellmv1alpha1.ModelInfo{
-				TeamID:              stringPtr("team-123"),
-				TeamPublicModelName: stringPtr("gpt-4-public"),
 			},
 		},
 	}
@@ -347,7 +431,7 @@ func createInvalidModelCR(name, modelName string) *litellmv1alpha1.Model {
 		Spec: litellmv1alpha1.ModelSpec{
 			ModelName: modelName,
 			LiteLLMParams: litellmv1alpha1.LiteLLMParams{
-				// Missing required API key
+				// Missing model
 				ApiBase:            stringPtr("https://api.openai.com/v1"),
 				InputCostPerToken:  stringPtr("-0.00003"), // Invalid negative cost
 				OutputCostPerToken: stringPtr("0.00006"),
