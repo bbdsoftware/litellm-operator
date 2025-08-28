@@ -39,10 +39,6 @@ spec:
           spec:
             description: ModelSpec defines the desired state of Model.
             properties:
-              additionalProp1:
-                description: AdditionalProps contains additional properties
-                type: object
-                x-kubernetes-preserve-unknown-fields: true
               connectionRef:
                 description: ConnectionRef is the connection reference
                 properties:
@@ -61,115 +57,115 @@ spec:
                         type: string
                     type: object
                 type: object
-              litellm_params:
+              litellmParams:
                 description: LiteLLMParams contains the LiteLLM parameters
                 properties:
                   additionalProp1:
                     description: AdditionalProps contains additional properties
                     type: object
                     x-kubernetes-preserve-unknown-fields: true
-                  api_base:
+                  apiBase:
                     description: APIBase is the base URL for the API
                     type: string
-                  api_key:
+                  apiKey:
                     description: APIKey is the API key for the model
                     type: string
-                  api_version:
+                  apiVersion:
                     description: APIVersion is the version of the API
                     type: string
-                  auto_router_config:
+                  autoRouterConfig:
                     description: AutoRouterConfig is the auto router config
                     type: string
-                  auto_router_config_path:
+                  autoRouterConfigPath:
                     description: AutoRouterConfigPath is the auto router config path
                     type: string
-                  auto_router_default_model:
+                  autoRouterDefaultModel:
                     description: AutoRouterDefaultModel is the auto router default
                       model
                     type: string
-                  auto_router_embedding_model:
+                  autoRouterEmbeddingModel:
                     description: AutoRouterEmbeddingModel is the auto router embedding
                       model
                     type: string
-                  aws_access_key_id:
+                  awsAccessKeyId:
                     description: AWSAccessKeyID is the AWS access key ID
                     type: string
-                  aws_region_name:
+                  awsRegionName:
                     description: AWSRegionName is the AWS region name
                     type: string
-                  aws_secret_access_key:
+                  awsSecretAccessKey:
                     description: AWSSecretAccessKey is the AWS secret access key
                     type: string
-                  budget_duration:
+                  budgetDuration:
                     description: BudgetDuration is the budget duration
                     type: string
-                  configurable_clientside_auth_params:
+                  configurableClientsideAuthParams:
                     description: ConfigurableClientsideAuthParams are configurable
                       client-side auth parameters
                     items:
                       type: object
                       x-kubernetes-preserve-unknown-fields: true
                     type: array
-                  custom_llm_provider:
+                  customLLMProvider:
                     description: CustomLLMProvider is the custom LLM provider
                     type: string
-                  input_cost_per_pixel:
+                  inputCostPerPixel:
                     description: InputCostPerPixel is the cost per pixel for input
                     type: string
-                  input_cost_per_second:
+                  inputCostPerSecond:
                     description: InputCostPerSecond is the cost per second for input
                     type: string
-                  input_cost_per_token:
+                  inputCostPerToken:
                     description: InputCostPerToken is the cost per input token
                     type: string
-                  litellm_credential_name:
+                  litellmCredentialName:
                     description: LiteLLMCredentialName is the LiteLLM credential name
                     type: string
-                  litellm_trace_id:
+                  litellmTraceId:
                     description: LiteLLMTraceID is the LiteLLM trace ID
                     type: string
-                  max_budget:
+                  maxBudget:
                     description: MaxBudget is the maximum budget
                     type: string
-                  max_file_size_mb:
+                  maxFileSizeMb:
                     description: MaxFileSizeMB is the maximum file size in MB
                     type: integer
-                  max_retries:
+                  maxRetries:
                     description: MaxRetries is the maximum number of retries
                     type: integer
-                  merge_reasoning_content_in_choices:
+                  mergeReasoningContentInChoices:
                     description: MergeReasoningContentInChoices indicates if to merge
                       reasoning content in choices
                     type: boolean
-                  mock_response:
+                  mockResponse:
                     description: MockResponse is the mock response
                     type: string
                   model:
                     description: Model is the model name
                     type: string
-                  model_info:
+                  modelInfo:
                     description: ModelInfo contains additional model information
                     type: object
                     x-kubernetes-preserve-unknown-fields: true
                   organization:
                     description: Organization is the organization name
                     type: string
-                  output_cost_per_pixel:
+                  outputCostPerPixel:
                     description: OutputCostPerPixel is the cost per pixel for output
                     type: string
-                  output_cost_per_second:
+                  outputCostPerSecond:
                     description: OutputCostPerSecond is the cost per second for output
                     type: string
-                  output_cost_per_token:
+                  outputCostPerToken:
                     description: OutputCostPerToken is the cost per output token
                     type: string
-                  region_name:
+                  regionName:
                     description: RegionName is the region name for the service
                     type: string
                   rpm:
                     description: RPM is requests per minute
                     type: integer
-                  stream_timeout:
+                  streamTimeout:
                     description: StreamTimeout is the stream timeout in seconds
                     type: integer
                   timeout:
@@ -178,49 +174,59 @@ spec:
                   tpm:
                     description: TPM is tokens per minute
                     type: integer
-                  use_in_pass_through:
+                  useInPassThrough:
                     description: UseInPassThrough indicates if to use in pass through
                     type: boolean
-                  use_litellm_proxy:
+                  useLitellmProxy:
                     description: UseLiteLLMProxy indicates if to use LiteLLM proxy
                     type: boolean
-                  vertex_credentials:
+                  vertexCredentials:
                     description: VertexCredentials is the credentials for Vertex AI
                     type: string
-                  vertex_location:
+                  vertexLocation:
                     description: VertexLocation is the location for Vertex AI
                     type: string
-                  vertex_project:
+                  vertexProject:
                     description: VertexProject is the Google Cloud project for Vertex
                       AI
                     type: string
-                  watsonx_region_name:
+                  watsonxRegionName:
                     description: WatsonXRegionName is the WatsonX region name
                     type: string
                 type: object
-              model_info:
+              modelInfo:
                 description: ModelInfo contains the model information
                 properties:
                   additionalProp1:
                     description: AdditionalProps contains additional properties
                     type: object
                     x-kubernetes-preserve-unknown-fields: true
-                  db_model:
+                  dbModel:
                     description: DBModel indicates if this is a database model
                     type: boolean
                   id:
                     description: ID is the model ID
                     type: string
-                  team_id:
+                  teamId:
                     description: TeamID is the team ID
                     type: string
-                  team_public_model_name:
+                  teamPublicModelName:
                     description: TeamPublicModelName is the team public model name
                     type: string
                 type: object
-              model_name:
+              modelName:
                 description: ModelName is the name of the model
                 type: string
+              modelSecretRef:
+                description: ModelSecretRef is the model secret reference
+                properties:
+                  namespace:
+                    type: string
+                  secretName:
+                    type: string
+                type: object
+            required:
+            - modelSecretRef
             type: object
           status:
             description: ModelStatus defines the observed state of Model.
@@ -287,115 +293,115 @@ spec:
                 description: LastUpdated represents the last time the status was updated
                 format: date-time
                 type: string
-              litellm_params:
+              litellmParams:
                 description: LiteLLMParams contains the LiteLLM parameters
                 properties:
                   additionalProp1:
                     description: AdditionalProps contains additional properties
                     type: object
                     x-kubernetes-preserve-unknown-fields: true
-                  api_base:
+                  apiBase:
                     description: APIBase is the base URL for the API
                     type: string
-                  api_key:
+                  apiKey:
                     description: APIKey is the API key for the model
                     type: string
-                  api_version:
+                  apiVersion:
                     description: APIVersion is the version of the API
                     type: string
-                  auto_router_config:
+                  autoRouterConfig:
                     description: AutoRouterConfig is the auto router config
                     type: string
-                  auto_router_config_path:
+                  autoRouterConfigPath:
                     description: AutoRouterConfigPath is the auto router config path
                     type: string
-                  auto_router_default_model:
+                  autoRouterDefaultModel:
                     description: AutoRouterDefaultModel is the auto router default
                       model
                     type: string
-                  auto_router_embedding_model:
+                  autoRouterEmbeddingModel:
                     description: AutoRouterEmbeddingModel is the auto router embedding
                       model
                     type: string
-                  aws_access_key_id:
+                  awsAccessKeyId:
                     description: AWSAccessKeyID is the AWS access key ID
                     type: string
-                  aws_region_name:
+                  awsRegionName:
                     description: AWSRegionName is the AWS region name
                     type: string
-                  aws_secret_access_key:
+                  awsSecretAccessKey:
                     description: AWSSecretAccessKey is the AWS secret access key
                     type: string
-                  budget_duration:
+                  budgetDuration:
                     description: BudgetDuration is the budget duration
                     type: string
-                  configurable_clientside_auth_params:
+                  configurableClientsideAuthParams:
                     description: ConfigurableClientsideAuthParams are configurable
                       client-side auth parameters
                     items:
                       type: object
                       x-kubernetes-preserve-unknown-fields: true
                     type: array
-                  custom_llm_provider:
+                  customLLMProvider:
                     description: CustomLLMProvider is the custom LLM provider
                     type: string
-                  input_cost_per_pixel:
+                  inputCostPerPixel:
                     description: InputCostPerPixel is the cost per pixel for input
                     type: string
-                  input_cost_per_second:
+                  inputCostPerSecond:
                     description: InputCostPerSecond is the cost per second for input
                     type: string
-                  input_cost_per_token:
+                  inputCostPerToken:
                     description: InputCostPerToken is the cost per input token
                     type: string
-                  litellm_credential_name:
+                  litellmCredentialName:
                     description: LiteLLMCredentialName is the LiteLLM credential name
                     type: string
-                  litellm_trace_id:
+                  litellmTraceId:
                     description: LiteLLMTraceID is the LiteLLM trace ID
                     type: string
-                  max_budget:
+                  maxBudget:
                     description: MaxBudget is the maximum budget
                     type: string
-                  max_file_size_mb:
+                  maxFileSizeMb:
                     description: MaxFileSizeMB is the maximum file size in MB
                     type: integer
-                  max_retries:
+                  maxRetries:
                     description: MaxRetries is the maximum number of retries
                     type: integer
-                  merge_reasoning_content_in_choices:
+                  mergeReasoningContentInChoices:
                     description: MergeReasoningContentInChoices indicates if to merge
                       reasoning content in choices
                     type: boolean
-                  mock_response:
+                  mockResponse:
                     description: MockResponse is the mock response
                     type: string
                   model:
                     description: Model is the model name
                     type: string
-                  model_info:
+                  modelInfo:
                     description: ModelInfo contains additional model information
                     type: object
                     x-kubernetes-preserve-unknown-fields: true
                   organization:
                     description: Organization is the organization name
                     type: string
-                  output_cost_per_pixel:
+                  outputCostPerPixel:
                     description: OutputCostPerPixel is the cost per pixel for output
                     type: string
-                  output_cost_per_second:
+                  outputCostPerSecond:
                     description: OutputCostPerSecond is the cost per second for output
                     type: string
-                  output_cost_per_token:
+                  outputCostPerToken:
                     description: OutputCostPerToken is the cost per output token
                     type: string
-                  region_name:
+                  regionName:
                     description: RegionName is the region name for the service
                     type: string
                   rpm:
                     description: RPM is requests per minute
                     type: integer
-                  stream_timeout:
+                  streamTimeout:
                     description: StreamTimeout is the stream timeout in seconds
                     type: integer
                   timeout:
@@ -404,30 +410,30 @@ spec:
                   tpm:
                     description: TPM is tokens per minute
                     type: integer
-                  use_in_pass_through:
+                  useInPassThrough:
                     description: UseInPassThrough indicates if to use in pass through
                     type: boolean
-                  use_litellm_proxy:
+                  useLitellmProxy:
                     description: UseLiteLLMProxy indicates if to use LiteLLM proxy
                     type: boolean
-                  vertex_credentials:
+                  vertexCredentials:
                     description: VertexCredentials is the credentials for Vertex AI
                     type: string
-                  vertex_location:
+                  vertexLocation:
                     description: VertexLocation is the location for Vertex AI
                     type: string
-                  vertex_project:
+                  vertexProject:
                     description: VertexProject is the Google Cloud project for Vertex
                       AI
                     type: string
-                  watsonx_region_name:
+                  watsonxRegionName:
                     description: WatsonXRegionName is the WatsonX region name
                     type: string
                 type: object
-              model_id:
+              modelId:
                 description: ModelId contains the model uuid provided by litellm server
                 type: string
-              model_name:
+              modelName:
                 description: ModelName is the name of the model
                 type: string
               observedGeneration:

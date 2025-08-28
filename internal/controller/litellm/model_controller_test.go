@@ -69,23 +69,66 @@ func (f *FakeLitellmModelClient) IsModelUpdateNeeded(ctx context.Context, existi
 
 var _ = Describe("ModelReconciler", func() {
 	const (
-		namespace    = "default"
-		resourceName = "test-model"
-		secretName   = "test-secret"
+		namespace       = "default"
+		resourceName    = "test-model"
+		secretName      = "test-secret"
+		modelSecretName = "test-model-secret"
 	)
 
 	createConnectionSecret := func() {
-		secret := &corev1.Secret{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      secretName,
-				Namespace: namespace,
-			},
-			Data: map[string][]byte{
-				"masterkey": []byte("dummy-master-key"),
-				"url":       []byte("http://dummy-url"),
-			},
+		// create or update so tests are idempotent across runs
+		secret := &corev1.Secret{}
+		err := k8sClient.Get(ctx, types.NamespacedName{Name: secretName, Namespace: namespace}, secret)
+		if errors.IsNotFound(err) {
+			secret = &corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      secretName,
+					Namespace: namespace,
+				},
+				Data: map[string][]byte{
+					"masterkey": []byte("dummy-master-key"),
+					"url":       []byte("http://dummy-url"),
+				},
+			}
+			Expect(k8sClient.Create(ctx, secret)).To(Succeed())
+			return
+		} else if err != nil {
+			Fail("unexpected error getting secret: " + err.Error())
 		}
-		Expect(k8sClient.Create(ctx, secret)).To(Succeed())
+		// update existing
+		secret.Data = map[string][]byte{
+			"masterkey": []byte("dummy-master-key"),
+			"url":       []byte("http://dummy-url"),
+		}
+		Expect(k8sClient.Update(ctx, secret)).To(Succeed())
+	}
+
+	createModelSecret := func() {
+		// create or update model secret (Azure-compatible) so tests are idempotent
+		secret := &corev1.Secret{}
+		err := k8sClient.Get(ctx, types.NamespacedName{Name: modelSecretName, Namespace: namespace}, secret)
+		if errors.IsNotFound(err) {
+			secret = &corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      modelSecretName,
+					Namespace: namespace,
+				},
+				Data: map[string][]byte{
+					"apiKey":  []byte("sk-azure-test-123"),
+					"apiBase": []byte("https://my-resource.openai.azure.com"),
+				},
+			}
+			Expect(k8sClient.Create(ctx, secret)).To(Succeed())
+			return
+		} else if err != nil {
+			Fail("unexpected error getting model secret: " + err.Error())
+		}
+		// update existing
+		secret.Data = map[string][]byte{
+			"apiKey":  []byte("sk-azure-test-123"),
+			"apiBase": []byte("https://my-resource.openai.azure.com"),
+		}
+		Expect(k8sClient.Update(ctx, secret)).To(Succeed())
 	}
 
 	cleanupSecret := func() {
@@ -95,6 +138,16 @@ var _ = Describe("ModelReconciler", func() {
 			_ = k8sClient.Delete(ctx, secret)
 		} else if !errors.IsNotFound(err) {
 			Fail("unexpected error getting secret: " + err.Error())
+		}
+	}
+
+	cleanupModelSecret := func() {
+		secret := &corev1.Secret{}
+		err := k8sClient.Get(ctx, types.NamespacedName{Name: modelSecretName, Namespace: namespace}, secret)
+		if err == nil {
+			_ = k8sClient.Delete(ctx, secret)
+		} else if !errors.IsNotFound(err) {
+			Fail("unexpected error getting model secret: " + err.Error())
 		}
 	}
 
@@ -112,6 +165,13 @@ var _ = Describe("ModelReconciler", func() {
 						SecretName: secretName,
 					},
 				},
+				LiteLLMParams: litellmv1alpha1.LiteLLMParams{
+					Model: strPtr("azure/gpt-4"),
+				},
+				ModelSecretRef: litellmv1alpha1.SecretRef{
+					Namespace:  namespace,
+					SecretName: modelSecretName,
+				},
 			},
 		}
 	}
@@ -122,6 +182,7 @@ var _ = Describe("ModelReconciler", func() {
 
 		BeforeEach(func() {
 			createConnectionSecret()
+			createModelSecret()
 			fakeClient = &FakeLitellmModelClient{}
 			reconciler = &ModelReconciler{
 				Client:             k8sClient,
@@ -149,6 +210,7 @@ var _ = Describe("ModelReconciler", func() {
 				Fail("unexpected get error: " + err.Error())
 			}
 			cleanupSecret()
+			cleanupModelSecret()
 		})
 
 		It("creates model via LiteLLM and updates status", func() {

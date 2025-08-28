@@ -25,61 +25,79 @@ import (
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
 
+// ModelSpec defines the desired state of Model.
+type ModelSpec struct {
+	// ConnectionRef is the connection reference
+	ConnectionRef ConnectionRef `json:"connectionRef,omitempty"`
+
+	// ModelName is the name of the model
+	ModelName string `json:"modelName,omitempty"`
+
+	// LiteLLMParams contains the LiteLLM parameters
+	LiteLLMParams LiteLLMParams `json:"litellmParams,omitempty"`
+
+	// ModelInfo contains the model information
+	ModelInfo ModelInfo `json:"modelInfo,omitempty"`
+
+	// ModelSecretRef is the model secret reference
+	ModelSecretRef SecretRef `json:"modelSecretRef"`
+}
+
 // LiteLLMParams defines the LiteLLM parameters for a model.
 type LiteLLMParams struct {
 	// InputCostPerToken is the cost per input token
-	InputCostPerToken *string `json:"input_cost_per_token,omitempty"`
+	InputCostPerToken *string `json:"inputCostPerToken,omitempty"`
 
 	// OutputCostPerToken is the cost per output token
-	OutputCostPerToken *string `json:"output_cost_per_token,omitempty"`
+	OutputCostPerToken *string `json:"outputCostPerToken,omitempty"`
 
 	// InputCostPerSecond is the cost per second for input
-	InputCostPerSecond *string `json:"input_cost_per_second,omitempty"`
+	InputCostPerSecond *string `json:"inputCostPerSecond,omitempty"`
 
 	// OutputCostPerSecond is the cost per second for output
-	OutputCostPerSecond *string `json:"output_cost_per_second,omitempty"`
+	OutputCostPerSecond *string `json:"outputCostPerSecond,omitempty"`
 
 	// InputCostPerPixel is the cost per pixel for input
-	InputCostPerPixel *string `json:"input_cost_per_pixel,omitempty"`
+	InputCostPerPixel *string `json:"inputCostPerPixel,omitempty"`
 
 	// OutputCostPerPixel is the cost per pixel for output
-	OutputCostPerPixel *string `json:"output_cost_per_pixel,omitempty"`
+	OutputCostPerPixel *string `json:"outputCostPerPixel,omitempty"`
 
 	// APIKey is the API key for the model
-	ApiKey *string `json:"api_key,omitempty"`
+	ApiKey *string `json:"apiKey,omitempty"`
 
 	// APIBase is the base URL for the API
-	ApiBase *string `json:"api_base,omitempty"`
+	ApiBase *string `json:"apiBase,omitempty"`
 
 	// APIVersion is the version of the API
-	ApiVersion *string `json:"api_version,omitempty"`
+	ApiVersion *string `json:"apiVersion,omitempty"`
 
 	// VertexProject is the Google Cloud project for Vertex AI
-	VertexProject *string `json:"vertex_project,omitempty"`
+	VertexProject *string `json:"vertexProject,omitempty"`
 
 	// VertexLocation is the location for Vertex AI
-	VertexLocation *string `json:"vertex_location,omitempty"`
+	VertexLocation *string `json:"vertexLocation,omitempty"`
 
 	// VertexCredentials is the credentials for Vertex AI
-	VertexCredentials *string `json:"vertex_credentials,omitempty"`
+	VertexCredentials *string `json:"vertexCredentials,omitempty"`
 
 	// RegionName is the region name for the service
-	RegionName *string `json:"region_name,omitempty"`
+	RegionName *string `json:"regionName,omitempty"`
 
 	// AWSAccessKeyID is the AWS access key ID
-	AwsAccessKeyID *string `json:"aws_access_key_id,omitempty"`
+	AwsAccessKeyID *string `json:"awsAccessKeyId,omitempty"`
 
 	// AWSSecretAccessKey is the AWS secret access key
-	AwsSecretAccessKey *string `json:"aws_secret_access_key,omitempty"`
+	AwsSecretAccessKey *string `json:"awsSecretAccessKey,omitempty"`
 
 	// AWSRegionName is the AWS region name
-	AwsRegionName *string `json:"aws_region_name,omitempty"`
+	AwsRegionName *string `json:"awsRegionName,omitempty"`
 
 	// WatsonXRegionName is the WatsonX region name
-	WatsonXRegionName *string `json:"watsonx_region_name,omitempty"`
+	WatsonXRegionName *string `json:"watsonxRegionName,omitempty"`
 
 	// CustomLLMProvider is the custom LLM provider
-	CustomLLMProvider *string `json:"custom_llm_provider,omitempty"`
+	CustomLLMProvider *string `json:"customLLMProvider,omitempty"`
 
 	// TPM is tokens per minute
 	TPM *int `json:"tpm,omitempty"`
@@ -91,58 +109,58 @@ type LiteLLMParams struct {
 	Timeout *int `json:"timeout,omitempty"`
 
 	// StreamTimeout is the stream timeout in seconds
-	StreamTimeout *int `json:"stream_timeout,omitempty"`
+	StreamTimeout *int `json:"streamTimeout,omitempty"`
 
 	// MaxRetries is the maximum number of retries
-	MaxRetries *int `json:"max_retries,omitempty"`
+	MaxRetries *int `json:"maxRetries,omitempty"`
 
 	// Organization is the organization name
 	Organization *string `json:"organization,omitempty"`
 
 	// ConfigurableClientsideAuthParams are configurable client-side auth parameters
-	ConfigurableClientsideAuthParams *[]runtime.RawExtension `json:"configurable_clientside_auth_params,omitempty"`
+	ConfigurableClientsideAuthParams *[]runtime.RawExtension `json:"configurableClientsideAuthParams,omitempty"`
 
 	// LiteLLMCredentialName is the LiteLLM credential name
-	LiteLLMCredentialName *string `json:"litellm_credential_name,omitempty"`
+	LiteLLMCredentialName *string `json:"litellmCredentialName,omitempty"`
 
 	// LiteLLMTraceID is the LiteLLM trace ID
-	LiteLLMTraceID *string `json:"litellm_trace_id,omitempty"`
+	LiteLLMTraceID *string `json:"litellmTraceId,omitempty"`
 
 	// MaxFileSizeMB is the maximum file size in MB
-	MaxFileSizeMB *int `json:"max_file_size_mb,omitempty"`
+	MaxFileSizeMB *int `json:"maxFileSizeMb,omitempty"`
 
 	// MaxBudget is the maximum budget
-	MaxBudget *string `json:"max_budget,omitempty"`
+	MaxBudget *string `json:"maxBudget,omitempty"`
 
 	// BudgetDuration is the budget duration
-	BudgetDuration *string `json:"budget_duration,omitempty"`
+	BudgetDuration *string `json:"budgetDuration,omitempty"`
 
 	// UseInPassThrough indicates if to use in pass through
-	UseInPassThrough *bool `json:"use_in_pass_through,omitempty"`
+	UseInPassThrough *bool `json:"useInPassThrough,omitempty"`
 
 	// UseLiteLLMProxy indicates if to use LiteLLM proxy
-	UseLiteLLMProxy *bool `json:"use_litellm_proxy,omitempty"`
+	UseLiteLLMProxy *bool `json:"useLitellmProxy,omitempty"`
 
 	// MergeReasoningContentInChoices indicates if to merge reasoning content in choices
-	MergeReasoningContentInChoices *bool `json:"merge_reasoning_content_in_choices,omitempty"`
+	MergeReasoningContentInChoices *bool `json:"mergeReasoningContentInChoices,omitempty"`
 
 	// ModelInfo contains additional model information
-	ModelInfo *runtime.RawExtension `json:"model_info,omitempty"`
+	ModelInfo *runtime.RawExtension `json:"modelInfo,omitempty"`
 
 	// MockResponse is the mock response
-	MockResponse *string `json:"mock_response,omitempty"`
+	MockResponse *string `json:"mockResponse,omitempty"`
 
 	// AutoRouterConfigPath is the auto router config path
-	AutoRouterConfigPath *string `json:"auto_router_config_path,omitempty"`
+	AutoRouterConfigPath *string `json:"autoRouterConfigPath,omitempty"`
 
 	// AutoRouterConfig is the auto router config
-	AutoRouterConfig *string `json:"auto_router_config,omitempty"`
+	AutoRouterConfig *string `json:"autoRouterConfig,omitempty"`
 
 	// AutoRouterDefaultModel is the auto router default model
-	AutoRouterDefaultModel *string `json:"auto_router_default_model,omitempty"`
+	AutoRouterDefaultModel *string `json:"autoRouterDefaultModel,omitempty"`
 
 	// AutoRouterEmbeddingModel is the auto router embedding model
-	AutoRouterEmbeddingModel *string `json:"auto_router_embedding_model,omitempty"`
+	AutoRouterEmbeddingModel *string `json:"autoRouterEmbeddingModel,omitempty"`
 
 	// Model is the model name
 	Model *string `json:"model,omitempty"`
@@ -157,37 +175,16 @@ type ModelInfo struct {
 	ID *string `json:"id,omitempty"`
 
 	// DBModel indicates if this is a database model
-	DBModel *bool `json:"db_model,omitempty"`
+	DBModel *bool `json:"dbModel,omitempty"`
 
 	// TeamID is the team ID
-	TeamID *string `json:"team_id,omitempty"`
+	TeamID *string `json:"teamId,omitempty"`
 
 	// TeamPublicModelName is the team public model name
-	TeamPublicModelName *string `json:"team_public_model_name,omitempty"`
+	TeamPublicModelName *string `json:"teamPublicModelName,omitempty"`
 
 	// AdditionalProps contains additional properties
 	AdditionalProps *runtime.RawExtension `json:"additionalProp1,omitempty"`
-}
-
-// ModelSpec defines the desired state of Model.
-type ModelSpec struct {
-	// ConnectionRef is the connection reference
-	ConnectionRef ConnectionRef `json:"connectionRef,omitempty"`
-
-	// ModelName is the name of the model
-	ModelName string `json:"model_name,omitempty"`
-
-	// LiteLLMParams contains the LiteLLM parameters
-	LiteLLMParams LiteLLMParams `json:"litellm_params,omitempty"`
-
-	// ModelInfo contains the model information
-	ModelInfo ModelInfo `json:"model_info,omitempty"`
-
-	// AdditionalProps contains additional properties
-	AdditionalProps runtime.RawExtension `json:"additionalProp1,omitempty"`
-
-	// ModelSecretRef is the model secret reference
-	ModelSecretRef SecretRef `json:"model_secret_ref,omitempty"`	
 }
 
 // ModelStatus defines the observed state of Model.
@@ -203,13 +200,13 @@ type ModelStatus struct {
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
 
 	// ModelName is the name of the model
-	ModelName *string `json:"model_name,omitempty"`
+	ModelName *string `json:"modelName,omitempty"`
 
 	// LiteLLMParams contains the LiteLLM parameters
-	LiteLLMParams *LiteLLMParams `json:"litellm_params,omitempty"`
+	LiteLLMParams *LiteLLMParams `json:"litellmParams,omitempty"`
 
 	// ModelId contains the model uuid provided by litellm server
-	ModelId *string `json:"model_id,omitempty"`
+	ModelId *string `json:"modelId,omitempty"`
 }
 
 // +kubebuilder:object:root=true

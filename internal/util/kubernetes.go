@@ -32,13 +32,13 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 )
 
-func GetMapFromSecret(ctx context.Context, c client.Client, secretRef client.ObjectKey) (map[string]interface{}, error) {
+func GetMapFromSecret(ctx context.Context, c client.Client, secretRef client.ObjectKey) (map[string]string, error) {
 	secret := &corev1.Secret{}
 	err := c.Get(ctx, secretRef, secret)
 	if err != nil {
 		return nil, err
 	}
-	secretMap := make(map[string]interface{})
+	secretMap := make(map[string]string)
 	for key, value := range secret.Data {
 		secretMap[key] = string(value) // Convert []byte to string
 	}

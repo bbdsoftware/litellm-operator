@@ -30,6 +30,20 @@ func EnsureMetadata(metadata map[string]string) map[string]string {
 	return operatorMetadata
 }
 
+func StringPtrOrNil(s string) *string {
+	if s == "" {
+		return nil
+	}
+	return &s
+}
+
+func IntPtrOrNil(i int) *int {
+	if i == 0 {
+		return nil
+	}
+	return &i
+}
+
 // DerefString returns the value of a *string or "" if nil.
 func DerefString(s *string) string {
 	if s == nil {

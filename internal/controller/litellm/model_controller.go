@@ -18,7 +18,9 @@ package litellm
 
 import (
 	"context"
+	"fmt"
 	"reflect"
+	"strings"
 
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -105,7 +107,7 @@ func (r *ModelReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 	}
 
 	// Convert Kubernetes Model to LiteLLM ModelRequest
-	modelRequest, err := r.convertToModelRequest(model)
+	modelRequest, err := r.convertToModelRequest(ctx, model)
 	if err != nil {
 		log.Error(err, "Failed to convert Model to ModelRequest")
 		if _, err := r.updateConditions(ctx, model, metav1.Condition{
@@ -213,18 +215,8 @@ func updateModelStatus(model *litellmv1alpha1.Model, modelResponse *litellm.Mode
 	model.Status.ModelId = modelResponse.ModelInfo.ID
 	if modelResponse.LiteLLMParams != nil && modelResponse.LiteLLMParams != (&litellm.UpdateLiteLLMParams{}) {
 		model.Status.LiteLLMParams = &litellmv1alpha1.LiteLLMParams{
-
-			ApiBase:                        modelResponse.LiteLLMParams.ApiBase,
-			RegionName:                     modelResponse.LiteLLMParams.RegionName,
-			CustomLLMProvider:              modelResponse.LiteLLMParams.CustomLLMProvider,
-			TPM:                            modelResponse.LiteLLMParams.TPM,
-			RPM:                            modelResponse.LiteLLMParams.RPM,
-			MaxRetries:                     modelResponse.LiteLLMParams.MaxRetries,
-			Organization:                   modelResponse.LiteLLMParams.Organization,
-			UseInPassThrough:               modelResponse.LiteLLMParams.UseInPassThrough,
-			UseLiteLLMProxy:                modelResponse.LiteLLMParams.UseLiteLLMProxy,
-			MergeReasoningContentInChoices: modelResponse.LiteLLMParams.MergeReasoningContentInChoices,
-			Model:                          modelResponse.LiteLLMParams.Model,
+			CustomLLMProvider: modelResponse.LiteLLMParams.CustomLLMProvider,
+			Model:             modelResponse.LiteLLMParams.Model,
 		}
 	}
 
@@ -259,10 +251,27 @@ func (r *ModelReconciler) handleDeletion(ctx context.Context, model *litellmv1al
 	return ctrl.Result{}, nil
 }
 
+// determine model provider from the Model
+func (r *ModelReconciler) determineModelProvider(model *litellmv1alpha1.Model) (*modelProvider.ModelProvider, error) {
+	if model.Spec.LiteLLMParams.CustomLLMProvider != nil {
+		return modelProvider.NewModelProvider(*model.Spec.LiteLLMParams.CustomLLMProvider)
+	}
+
+	if model.Spec.LiteLLMParams.Model != nil {
+		parts := strings.SplitN(*model.Spec.LiteLLMParams.Model, "/", 2)
+		if len(parts) == 2 {
+			return modelProvider.NewModelProvider(parts[0])
+		}
+	}
+
+	return nil, fmt.Errorf("unable to determine model provider for model %s", model.Name)
+}
+
 // convertToModelRequest converts a Kubernetes Model to a LiteLLM ModelRequest
 func (r *ModelReconciler) convertToModelRequest(ctx context.Context, model *litellmv1alpha1.Model) (*litellm.ModelRequest, error) {
-
-	modelProvider, err := modelProvider.NewModelProvider(*model.Spec.LiteLLMParams.CustomLLMProvider)
+	log := logf.FromContext(ctx)
+	//use CustomLLMProvider and if it is null, check if the model.Spec.LiteLLMParams.Model does not contain a provider, this will be in the form "<provider>/<base-model>"
+	llmProvider, err := r.determineModelProvider(model)
 	if err != nil {
 		return nil, err
 	}
@@ -276,8 +285,9 @@ func (r *ModelReconciler) convertToModelRequest(ctx context.Context, model *lite
 		return nil, err
 	}
 
-	err = modelProvider.ValidateConfig(secretMap)
+	err = llmProvider.ValidateConfig(secretMap)
 	if err != nil {
+		log.Error(err, "Failed to validate model provider config secret provided")
 		return nil, err
 	}
 
@@ -285,50 +295,55 @@ func (r *ModelReconciler) convertToModelRequest(ctx context.Context, model *lite
 		ModelName: model.Spec.ModelName,
 	}
 
-	// Convert LiteLLMParams
+	// Convert LiteLLMParams and map ApiKey from the secretMap if it exists
 	if !reflect.DeepEqual(model.Spec.LiteLLMParams, litellmv1alpha1.LiteLLMParams{}) {
 
+		// helper to safely convert optional pointer fields
+		getStrFromPtr := func(s *string) *string {
+			if s == nil || *s == "" {
+				return nil
+			}
+			return util.StringPtrOrNil(*s)
+		}
+		getIntFromPtr := func(i *int) *int {
+			if i == nil {
+				return nil
+			}
+			return util.IntPtrOrNil(*i)
+		}
+
 		litellmParams := &litellm.UpdateLiteLLMParams{
-			ApiKey:                         model.Spec.LiteLLMParams.ApiKey,
-			ApiBase:                        model.Spec.LiteLLMParams.ApiBase,
-			ApiVersion:                     model.Spec.LiteLLMParams.ApiVersion,
-			VertexProject:                  model.Spec.LiteLLMParams.VertexProject,
-			VertexLocation:                 model.Spec.LiteLLMParams.VertexLocation,
-			RegionName:                     model.Spec.LiteLLMParams.RegionName,
-			AwsAccessKeyID:                 model.Spec.LiteLLMParams.AwsAccessKeyID,
-			AwsSecretAccessKey:             model.Spec.LiteLLMParams.AwsSecretAccessKey,
-			AwsRegionName:                  model.Spec.LiteLLMParams.AwsRegionName,
-			WatsonXRegionName:              model.Spec.LiteLLMParams.WatsonXRegionName,
-			CustomLLMProvider:              model.Spec.LiteLLMParams.CustomLLMProvider,
-			TPM:                            model.Spec.LiteLLMParams.TPM,
-			RPM:                            model.Spec.LiteLLMParams.RPM,
-			MaxRetries:                     model.Spec.LiteLLMParams.MaxRetries,
-			Organization:                   model.Spec.LiteLLMParams.Organization,
-			LiteLLMCredentialName:          model.Spec.LiteLLMParams.LiteLLMCredentialName,
-			LiteLLMTraceID:                 model.Spec.LiteLLMParams.LiteLLMTraceID,
-			MaxFileSizeMB:                  model.Spec.LiteLLMParams.MaxFileSizeMB,
-			BudgetDuration:                 model.Spec.LiteLLMParams.BudgetDuration,
+			ApiKey:                         util.StringPtrOrNil(secretMap["apiKey"]),
+			ApiBase:                        util.StringPtrOrNil(secretMap["apiBase"]),
+			ApiVersion:                     getStrFromPtr(model.Spec.LiteLLMParams.ApiVersion),
+			VertexProject:                  getStrFromPtr(model.Spec.LiteLLMParams.VertexProject),
+			VertexLocation:                 getStrFromPtr(model.Spec.LiteLLMParams.VertexLocation),
+			RegionName:                     getStrFromPtr(model.Spec.LiteLLMParams.RegionName),
+			AwsAccessKeyID:                 util.StringPtrOrNil(secretMap["AwsAccessKeyID"]),
+			AwsSecretAccessKey:             util.StringPtrOrNil(secretMap["AwsSecretAccessKey"]),
+			AwsRegionName:                  getStrFromPtr(model.Spec.LiteLLMParams.AwsRegionName),
+			WatsonXRegionName:              getStrFromPtr(model.Spec.LiteLLMParams.WatsonXRegionName),
+			CustomLLMProvider:              getStrFromPtr(model.Spec.LiteLLMParams.CustomLLMProvider),
+			TPM:                            getIntFromPtr(model.Spec.LiteLLMParams.TPM),
+			RPM:                            getIntFromPtr(model.Spec.LiteLLMParams.RPM),
+			MaxRetries:                     getIntFromPtr(model.Spec.LiteLLMParams.MaxRetries),
+			Organization:                   getStrFromPtr(model.Spec.LiteLLMParams.Organization),
+			LiteLLMCredentialName:          getStrFromPtr(model.Spec.LiteLLMParams.LiteLLMCredentialName),
+			LiteLLMTraceID:                 getStrFromPtr(model.Spec.LiteLLMParams.LiteLLMTraceID),
+			MaxFileSizeMB:                  getIntFromPtr(model.Spec.LiteLLMParams.MaxFileSizeMB),
+			BudgetDuration:                 getStrFromPtr(model.Spec.LiteLLMParams.BudgetDuration),
 			UseInPassThrough:               model.Spec.LiteLLMParams.UseInPassThrough,
 			UseLiteLLMProxy:                model.Spec.LiteLLMParams.UseLiteLLMProxy,
 			MergeReasoningContentInChoices: model.Spec.LiteLLMParams.MergeReasoningContentInChoices,
-			AutoRouterConfigPath:           model.Spec.LiteLLMParams.AutoRouterConfigPath,
-			AutoRouterConfig:               model.Spec.LiteLLMParams.AutoRouterConfig,
-			AutoRouterDefaultModel:         model.Spec.LiteLLMParams.AutoRouterDefaultModel,
-			AutoRouterEmbeddingModel:       model.Spec.LiteLLMParams.AutoRouterEmbeddingModel,
-			Model:                          model.Spec.LiteLLMParams.Model,
-		}
-
-		// Handle timeout fields
-		if model.Spec.LiteLLMParams.Timeout != nil && *model.Spec.LiteLLMParams.Timeout != 0 {
-			litellmParams.Timeout = model.Spec.LiteLLMParams.Timeout
-		}
-		if model.Spec.LiteLLMParams.StreamTimeout != nil && *model.Spec.LiteLLMParams.StreamTimeout != 0 {
-			litellmParams.StreamTimeout = model.Spec.LiteLLMParams.StreamTimeout
-		}
-
-		// Handle VertexCredentials
-		if model.Spec.LiteLLMParams.VertexCredentials != nil && *model.Spec.LiteLLMParams.VertexCredentials != "" {
-			litellmParams.VertexCredentials = model.Spec.LiteLLMParams.VertexCredentials
+			AutoRouterConfigPath:           getStrFromPtr(model.Spec.LiteLLMParams.AutoRouterConfigPath),
+			AutoRouterConfig:               getStrFromPtr(model.Spec.LiteLLMParams.AutoRouterConfig),
+			AutoRouterDefaultModel:         getStrFromPtr(model.Spec.LiteLLMParams.AutoRouterDefaultModel),
+			AutoRouterEmbeddingModel:       getStrFromPtr(model.Spec.LiteLLMParams.AutoRouterEmbeddingModel),
+			VertexCredentials:              util.StringPtrOrNil(secretMap["VertexCredentials"]),
+			Timeout:                        getIntFromPtr(model.Spec.LiteLLMParams.Timeout),
+			StreamTimeout:                  getIntFromPtr(model.Spec.LiteLLMParams.StreamTimeout),
+			MockResponse:                   getStrFromPtr(model.Spec.LiteLLMParams.MockResponse),
+			Model:                          getStrFromPtr(model.Spec.LiteLLMParams.Model),
 		}
 
 		// Handle ConfigurableClientsideAuthParams
@@ -338,27 +353,6 @@ func (r *ModelReconciler) convertToModelRequest(ctx context.Context, model *lite
 				litellmParams.ConfigurableClientsideAuthParams[i] = param
 			}
 		}
-
-		// Handle ModelInfo
-		// if model.Spec.ModelInfo != nil && model.Spec.LiteLLMParams.ModelInfo.Raw != nil {
-		// 	litellmParams.ModelInfo = model.Spec.LiteLLMParams.ModelInfo
-		// } else {
-		// 	litellmParams.ModelInfo = litellm.NewModelInfo()
-		// }
-
-		// Handle MockResponse
-		if model.Spec.LiteLLMParams.MockResponse != nil && *model.Spec.LiteLLMParams.MockResponse != "" {
-			litellmParams.MockResponse = model.Spec.LiteLLMParams.MockResponse
-		}
-
-		// Handle AdditionalProps
-		// if model.Spec.LiteLLMParams.AdditionalProps.Raw != nil {
-		// 	litellmParams.AdditionalProperties = make(map[string]interface{})
-		// 	// Convert AdditionalProps to map[string]interface{} if needed
-		// 	for key, value := range model.Spec.LiteLLMParams.AdditionalProps.Raw {
-		// 		litellmParams.AdditionalProperties[key] = value
-		// 	}
-		// }
 
 		if err := parseAndAssign(model.Spec.LiteLLMParams.OutputCostPerToken, litellmParams.OutputCostPerToken, "OutputCostPerToken"); err != nil {
 			return nil, err
@@ -406,19 +400,4 @@ func (r *ModelReconciler) updateConditions(ctx context.Context, model *litellmv1
 	}
 
 	return ctrl.Result{}, nil
-}
-
-// Determine model provider
-func (r *ModelReconciler) determineModelProvider(model *litellmv1alpha1.Model) (string, error) {
-
-	modelProvider := ""
-
-	if model.Spec.LiteLLMParams.CustomLLMProvider != nil && *model.Spec.LiteLLMParams.CustomLLMProvider != "" {
-		modelProvider = *model.Spec.LiteLLMParams.CustomLLMProvider
-	} else {
-		modelProvider = "openai"
-	}
-
-	return modelProvider, nil
-
 }

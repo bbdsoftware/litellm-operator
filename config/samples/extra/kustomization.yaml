@@ -4,3 +4,5 @@ resources:
 - postgres-cluster.yaml
 - redis.yaml
 - namespace.yaml
+- postgres-secret.yaml
+
