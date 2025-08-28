@@ -185,6 +185,9 @@ type ModelSpec struct {
 
 	// AdditionalProps contains additional properties
 	AdditionalProps runtime.RawExtension `json:"additionalProp1,omitempty"`
+
+	// ModelSecretRef is the model secret reference
+	ModelSecretRef SecretRef `json:"model_secret_ref,omitempty"`	
 }
 
 // ModelStatus defines the observed state of Model.

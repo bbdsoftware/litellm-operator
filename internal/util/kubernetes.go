@@ -31,6 +31,19 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
+func GetMapFromSecret(ctx context.Context, c client.Client, secretRef client.ObjectKey) (map[string]interface{}, error) {
+	secret := &corev1.Secret{}
+	err := c.Get(ctx, secretRef, secret)
+	if err != nil {
+		return nil, err
+	}
+	secretMap := make(map[string]interface{})
+	for key, value := range secret.Data {
+		secretMap[key] = string(value) // Convert []byte to string
+	}
+	return secretMap, nil
+}
+
 // CreateOrUpdateWithRetry creates or updates a Kubernetes resource with retry logic.
 // It implements optimistic concurrency control with exponential backoff to handle
 // resource conflicts in high-concurrency environments.

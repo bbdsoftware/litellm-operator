@@ -32,6 +32,7 @@ import (
 	litellmv1alpha1 "github.com/bbdsoftware/litellm-operator/api/litellm/v1alpha1"
 	"github.com/bbdsoftware/litellm-operator/internal/controller/common"
 	"github.com/bbdsoftware/litellm-operator/internal/litellm"
+	modelProvider "github.com/bbdsoftware/litellm-operator/internal/model"
 	"github.com/bbdsoftware/litellm-operator/internal/util"
 )
 
@@ -242,7 +243,27 @@ func (r *ModelReconciler) handleDeletion(ctx context.Context, model *litellmv1al
 }
 
 // convertToModelRequest converts a Kubernetes Model to a LiteLLM ModelRequest
-func (r *ModelReconciler) convertToModelRequest(model *litellmv1alpha1.Model) (*litellm.ModelRequest, error) {
+func (r *ModelReconciler) convertToModelRequest(ctx context.Context, model *litellmv1alpha1.Model) (*litellm.ModelRequest, error) {
+
+	modelProvider, err := modelProvider.NewModelProvider(*model.Spec.LiteLLMParams.CustomLLMProvider)
+	if err != nil {
+		return nil, err
+	}
+
+	// get the secret from the model secret ref and get the map of keys and values
+	secretMap, err := util.GetMapFromSecret(ctx, r.Client, client.ObjectKey{
+		Namespace: model.Spec.ModelSecretRef.Namespace,
+		Name:      model.Spec.ModelSecretRef.SecretName,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	err = modelProvider.ValidateConfig(secretMap)
+	if err != nil {
+		return nil, err
+	}
+
 	modelRequest := &litellm.ModelRequest{
 		ModelName: model.Spec.ModelName,
 	}
@@ -400,4 +421,19 @@ func (r *ModelReconciler) updateConditions(ctx context.Context, model *litellmv1
 	}
 
 	return ctrl.Result{}, nil
+}
+
+// Determine model provider
+func (r *ModelReconciler) determineModelProvider(model *litellmv1alpha1.Model) (string, error) {
+
+	modelProvider := ""
+
+	if model.Spec.LiteLLMParams.CustomLLMProvider != nil && *model.Spec.LiteLLMParams.CustomLLMProvider != "" {
+		modelProvider = *model.Spec.LiteLLMParams.CustomLLMProvider
+	} else {
+		modelProvider = "openai"
+	}
+
+	return modelProvider, nil
+
 }
