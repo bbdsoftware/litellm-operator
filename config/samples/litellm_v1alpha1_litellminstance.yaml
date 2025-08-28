@@ -12,7 +12,7 @@ spec:
       portSecret: port
       passwordSecret: password
   databaseSecretRef:
-    nameRef:  cluster-example-app
+    nameRef:  postgres-secret
     keys:
       hostSecret: host
       passwordSecret: password

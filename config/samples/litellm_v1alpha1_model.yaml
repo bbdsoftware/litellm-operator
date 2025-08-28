@@ -29,7 +29,7 @@ apiVersion: litellm.litellm.ai/v1alpha1
 kind: Model
 metadata:
   name: claude-3-model
-  namespace: default
+  namespace: litellm
 spec:
   modelName: "claude-3-sonnet"
   litellmParams:
@@ -53,32 +53,3 @@ spec:
   modelSecretRef:
     secretName: bedrock-model-credentials
     namespace: litellm
----
-## apiVersion: litellm.litellm.ai/v1alpha1
-## kind: Model
-## metadata:
-##   name: gemini-pro-model
-##   namespace: default
-## spec:
-##   modelName: "gemini-pro"
-##   litellmParams:
-##     apiKey: "your-google-api-key"
-##     apiBase: "https://generativelanguage.googleapis.com"
-##     inputCostPerToken: "0.0000005"
-##     outputCostPerToken: "0.0000015"
-##     tpm: 15000
-##     rpm: 150
-##     timeout: 90
-##     maxRetries: 3
-##     organization: "your-org-id"
-##     useInPassThrough: false
-##     useLitellmProxy: true
-##   modelInfo:
-##     baseModel: "gemini-pro"
-##     tier: "standard"
-##     teamId: "team-123"
-##     teamPublicModelName: "gemini-pro-public"
-##   connectionRef:
-##     instanceRef:
-##       name: litellm-example
-##       namespace: litellm

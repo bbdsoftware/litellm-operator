@@ -6,7 +6,6 @@ resources:
 - auth_v1alpha1_team.yaml
 - auth_v1alpha1_teammemberassociation.yaml
 - litellm_v1alpha1_litellminstance.yaml
-- model-credentials.yaml
 - litellm_v1alpha1_model.yaml
 - model_credentials.yaml
 # +kubebuilder:scaffold:manifestskustomizesamples
