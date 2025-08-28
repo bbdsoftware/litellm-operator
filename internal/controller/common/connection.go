@@ -26,6 +26,7 @@ import (
 
 	authv1alpha1 "github.com/bbdsoftware/litellm-operator/api/auth/v1alpha1"
 	litellmv1alpha1 "github.com/bbdsoftware/litellm-operator/api/litellm/v1alpha1"
+	"github.com/bbdsoftware/litellm-operator/internal/interfaces"
 	"github.com/bbdsoftware/litellm-operator/internal/litellm"
 	corev1 "k8s.io/api/core/v1"
 )
@@ -34,12 +35,6 @@ import (
 type ConnectionDetails struct {
 	MasterKey string
 	URL       string
-}
-
-// KeysInterface defines the interface for different key structures
-type KeysInterface interface {
-	GetMasterKey() string
-	GetURL() string
 }
 
 // NilKeys implements KeysInterface for types that don't have keys
@@ -53,28 +48,6 @@ func (n NilKeys) GetMasterKey() string {
 // GetURL returns empty string for nil keys
 func (n NilKeys) GetURL() string {
 	return ""
-}
-
-// SecretRefInterface defines the interface for different SecretRef types
-type SecretRefInterface interface {
-	GetSecretName() string
-	GetNamespace() string
-	GetKeys() KeysInterface
-	HasKeys() bool
-}
-
-// InstanceRefInterface defines the interface for different InstanceRef types
-type InstanceRefInterface interface {
-	GetInstanceName() string
-	GetNamespace() string
-}
-
-// ConnectionRefInterface defines the interface for different ConnectionRef types
-type ConnectionRefInterface interface {
-	GetSecretRef() interface{}
-	GetInstanceRef() interface{}
-	HasSecretRef() bool
-	HasInstanceRef() bool
 }
 
 // ConnectionHandler provides methods to handle connection references
@@ -91,16 +64,16 @@ func NewConnectionHandler(client client.Client) *ConnectionHandler {
 
 // GetConnectionDetails retrieves connection details from either a secret or LiteLLM instance
 // This is now a generic function that can handle different ConnectionRef types
-func (h *ConnectionHandler) GetConnectionDetails(ctx context.Context, connectionRef ConnectionRefInterface, namespace string) (*ConnectionDetails, error) {
+func (h *ConnectionHandler) GetConnectionDetails(ctx context.Context, connectionRef interfaces.ConnectionRefInterface, namespace string) (*ConnectionDetails, error) {
 	if connectionRef.HasSecretRef() {
 		secretRef := connectionRef.GetSecretRef()
-		if secretRefInterface, ok := secretRef.(SecretRefInterface); ok {
+		if secretRefInterface, ok := secretRef.(interfaces.SecretRefInterface); ok {
 			return h.getConnectionDetailsFromSecretRef(ctx, secretRefInterface, namespace)
 		}
 		return nil, fmt.Errorf("SecretRef does not implement SecretRefInterface")
 	} else if connectionRef.HasInstanceRef() {
 		instanceRef := connectionRef.GetInstanceRef()
-		if instanceRefInterface, ok := instanceRef.(InstanceRefInterface); ok {
+		if instanceRefInterface, ok := instanceRef.(interfaces.InstanceRefInterface); ok {
 			return h.getConnectionDetailsFromInstanceRef(ctx, instanceRefInterface, namespace)
 		}
 		return nil, fmt.Errorf("InstanceRef does not implement InstanceRefInterface")
@@ -110,7 +83,7 @@ func (h *ConnectionHandler) GetConnectionDetails(ctx context.Context, connection
 }
 
 // getConnectionDetailsFromSecretRef handles different SecretRef types
-func (h *ConnectionHandler) getConnectionDetailsFromSecretRef(ctx context.Context, secretRef SecretRefInterface, namespace string) (*ConnectionDetails, error) {
+func (h *ConnectionHandler) getConnectionDetailsFromSecretRef(ctx context.Context, secretRef interfaces.SecretRefInterface, namespace string) (*ConnectionDetails, error) {
 	secret := &corev1.Secret{}
 	secretNamespace := secretRef.GetNamespace()
 	if secretNamespace == "" {
@@ -130,7 +103,7 @@ func (h *ConnectionHandler) getConnectionDetailsFromSecretRef(ctx context.Contex
 	if secretRef.HasKeys() {
 		// For SecretRef with Keys structure
 		keys := secretRef.GetKeys()
-		if keysInterface, ok := keys.(KeysInterface); ok {
+		if keysInterface, ok := keys.(interfaces.KeysInterface); ok {
 			masterKeyField := keysInterface.GetMasterKey()
 			urlField := keysInterface.GetURL()
 
@@ -174,7 +147,7 @@ func (h *ConnectionHandler) getConnectionDetailsFromSecretRef(ctx context.Contex
 }
 
 // getConnectionDetailsFromInstanceRef handles different InstanceRef types
-func (h *ConnectionHandler) getConnectionDetailsFromInstanceRef(ctx context.Context, instanceRef InstanceRefInterface, namespace string) (*ConnectionDetails, error) {
+func (h *ConnectionHandler) getConnectionDetailsFromInstanceRef(ctx context.Context, instanceRef interfaces.InstanceRefInterface, namespace string) (*ConnectionDetails, error) {
 	// Determine namespace for the instance
 	instanceNamespace := instanceRef.GetNamespace()
 	if instanceNamespace == "" {
@@ -221,10 +194,8 @@ func (h *ConnectionHandler) getConnectionDetailsFromInstanceRef(ctx context.Cont
 		return nil, fmt.Errorf("failed to get service %s for LiteLLM instance: %w", serviceName, err)
 	}
 
-	//Override url
 	// Construct the URL
-	//url := fmt.Sprintf("http://%s.%s.svc.cluster.local", service.Name, instanceNamespace)
-	url := "http://litellm-example-service"
+	url := fmt.Sprintf("http://%s.%s.svc.cluster.local", service.Name, instanceNamespace)
 
 	return &ConnectionDetails{
 		MasterKey: strings.TrimSpace(string(masterKeyBytes)),

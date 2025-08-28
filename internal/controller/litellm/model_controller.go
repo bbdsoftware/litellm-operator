@@ -22,7 +22,9 @@ import (
 	"reflect"
 	"strings"
 
-	"k8s.io/apimachinery/pkg/api/errors"
+	"errors"
+
+	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -58,7 +60,7 @@ func (r *ModelReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 	model := &litellmv1alpha1.Model{}
 	err := r.Get(ctx, req.NamespacedName, model)
 	if err != nil {
-		if errors.IsNotFound(err) {
+		if kerrors.IsNotFound(err) {
 			// Request object not found, could have been deleted after reconcile request.
 			// Return and don't requeue
 			log.Info("Model resource not found. Ignoring since object must be deleted")
@@ -130,7 +132,7 @@ func (r *ModelReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 			existingModel, err := r.LitellmModelClient.GetModel(ctx, *model.Status.ModelId)
 			if err != nil {
 				// If the remote model is not found, clear the stale ModelId and continue to creation.
-				if errors.IsNotFound(err) {
+				if errors.Is(err, litellm.ErrNotFound) {
 					log.Info("Model ID present but model not found in LiteLLM; will create new model", "modelId", *model.Status.ModelId)
 					model.Status.ModelId = nil
 					if err := r.Status().Update(ctx, model); err != nil {
@@ -182,27 +184,28 @@ func (r *ModelReconciler) handleCreation(ctx context.Context, model *litellmv1al
 		return ctrl.Result{}, err
 	}
 
+	// Populate status fields (including observed generation and last updated)
 	updateModelStatus(model, &modelResponse)
-	//update status
-	if err := r.Status().Update(ctx, model); err != nil {
-		log.Error(err, "Failed to update Model status")
+
+	// Persist status (ModelId, ModelName, ObservedGeneration, LastUpdated) along with the Ready condition
+	if _, err := r.updateConditions(ctx, model, metav1.Condition{
+		Type:               "Ready",
+		Status:             metav1.ConditionTrue,
+		Reason:             "LitellmSuccess",
+		Message:            "Model created in Litellm",
+		LastTransitionTime: metav1.Now(),
+	}); err != nil {
+		log.Error(err, "Failed to update Model status with Ready condition")
 		return ctrl.Result{}, err
 	}
 
-	_, err = r.updateConditions(ctx, model, metav1.Condition{
-		Type:    "Ready",
-		Status:  metav1.ConditionTrue,
-		Reason:  "LitellmSuccess",
-		Message: "Model created in Litellm",
-	})
-	if err != nil {
-		return ctrl.Result{}, err
-	}
-
-	controllerutil.AddFinalizer(model, util.FinalizerName)
-	if err := r.Update(ctx, model); err != nil {
-		log.Error(err, "Failed to add finalizer")
-		return ctrl.Result{}, err
+	// Ensure finalizer is present after status is persisted
+	if !controllerutil.ContainsFinalizer(model, util.FinalizerName) {
+		controllerutil.AddFinalizer(model, util.FinalizerName)
+		if err := r.Update(ctx, model); err != nil {
+			log.Error(err, "Failed to add finalizer")
+			return ctrl.Result{}, err
+		}
 	}
 
 	log.Info("Successfully created model " + model.Name + " in LiteLLM")
@@ -211,9 +214,26 @@ func (r *ModelReconciler) handleCreation(ctx context.Context, model *litellmv1al
 
 func updateModelStatus(model *litellmv1alpha1.Model, modelResponse *litellm.ModelResponse) {
 
-	model.Status.ModelName = &modelResponse.ModelName
-	model.Status.ModelId = modelResponse.ModelInfo.ID
-	if modelResponse.LiteLLMParams != nil && modelResponse.LiteLLMParams != (&litellm.UpdateLiteLLMParams{}) {
+	// Update observed generation and timestamp
+	model.Status.ObservedGeneration = model.Generation
+	now := metav1.Now()
+	model.Status.LastUpdated = &now
+
+	// ModelName from response
+	if modelResponse != nil && modelResponse.ModelName != "" {
+		model.Status.ModelName = &modelResponse.ModelName
+	} else {
+		model.Status.ModelName = nil
+	}
+
+	// ModelId if present
+	if modelResponse != nil && modelResponse.ModelInfo != nil {
+		model.Status.ModelId = modelResponse.ModelInfo.ID
+	} else {
+		model.Status.ModelId = nil
+	}
+
+	if modelResponse != nil && modelResponse.LiteLLMParams != nil && modelResponse.LiteLLMParams != (&litellm.UpdateLiteLLMParams{}) {
 		model.Status.LiteLLMParams = &litellmv1alpha1.LiteLLMParams{
 			CustomLLMProvider: modelResponse.LiteLLMParams.CustomLLMProvider,
 			Model:             modelResponse.LiteLLMParams.Model,
@@ -240,14 +260,54 @@ func (r *ModelReconciler) handleUpdate(ctx context.Context, model *litellmv1alph
 func (r *ModelReconciler) handleDeletion(ctx context.Context, model *litellmv1alpha1.Model) (ctrl.Result, error) {
 	log := logf.FromContext(ctx)
 
-	// Try to delete the model from LiteLLM
-	err := r.LitellmModelClient.DeleteModel(ctx, *model.Status.ModelId)
-	if err != nil {
-		log.Error(err, "Failed to delete model from LiteLLM")
+	// If there is a remote ModelId attempt to delete it; treat not-found as success
+	if model.Status.ModelId != nil && *model.Status.ModelId != "" {
+		err := r.LitellmModelClient.DeleteModel(ctx, *model.Status.ModelId)
+		if err != nil {
+			// If the remote model is already gone, proceed to remove finalizer
+			if errors.Is(err, litellm.ErrNotFound) {
+				log.Info("Remote model already not found in LiteLLM; proceeding to cleanup", "modelId", *model.Status.ModelId)
+			} else {
+				log.Error(err, "Failed to delete model from LiteLLM")
+				// Update condition to surface the deletion failure
+				if _, updateErr := r.updateConditions(ctx, model, metav1.Condition{
+					Type:               "Ready",
+					Status:             metav1.ConditionFalse,
+					LastTransitionTime: metav1.Now(),
+					Reason:             "DeleteFailed",
+					Message:            err.Error(),
+				}); updateErr != nil {
+					log.Error(updateErr, "Failed to update conditions after deletion failure")
+				}
+				return ctrl.Result{}, err
+			}
+		} else {
+			log.Info("Successfully deleted model from LiteLLM", "modelId", *model.Status.ModelId)
+		}
+	} else {
+		log.Info("No remote ModelId present; skipping remote delete")
+	}
+
+	// Clear ModelId and other status fields
+	model.Status.ModelId = nil
+	model.Status.ModelName = nil
+	now := metav1.Now()
+	model.Status.LastUpdated = &now
+	if err := r.Status().Update(ctx, model); err != nil {
+		log.Error(err, "Failed to update Model status during deletion cleanup")
 		return ctrl.Result{}, err
 	}
 
-	log.Info("Successfully deleted model from LiteLLM")
+	// Remove finalizer and persist
+	if controllerutil.ContainsFinalizer(model, util.FinalizerName) {
+		controllerutil.RemoveFinalizer(model, util.FinalizerName)
+		if err := r.Update(ctx, model); err != nil {
+			log.Error(err, "Failed to remove finalizer from Model")
+			return ctrl.Result{}, err
+		}
+	}
+
+	log.Info("Model resource cleanup complete; finalizer removed")
 	return ctrl.Result{}, nil
 }
 

@@ -18,6 +18,9 @@ type LitellmClient struct {
 	masterKey string
 }
 
+// ErrNotFound is returned when the LiteLLM service responds with a 404
+var ErrNotFound = errors.New("litellm: resource not found")
+
 func NewLitellmClient(baseURL, masterKey string) *LitellmClient {
 	return &LitellmClient{
 		baseURL:   baseURL,
@@ -132,7 +135,7 @@ func (l *LitellmClient) makeRequest(ctx context.Context, method, path string, bo
 		return nil, fmt.Errorf("forbidden: %s", litellmError.Message)
 	case 404:
 		log.V(1).Info("Not found (404)", "statusCode", httpResp.StatusCode)
-		return nil, fmt.Errorf("not found: the requested resource does not exist")
+		return nil, fmt.Errorf("%w: the requested resource does not exist", ErrNotFound)
 	case 409:
 		log.V(1).Info("Conflict (409)", "statusCode", httpResp.StatusCode)
 		litellmError, err := processLitellmError(log, "Conflict", respBody)
