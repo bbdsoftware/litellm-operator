@@ -260,8 +260,12 @@ spec:
                 type: string
               userRole:
                 description: UserRole is the role of the user - one of "proxy_admin",
-                  "proxy_admin_viewer", "internal_user", "internal_user_viewer", "team",
-                  "customer"
+                  "proxy_admin_viewer", "internal_user", "internal_user_viewer"
+                enum:
+                - proxy_admin
+                - proxy_admin_viewer
+                - internal_user
+                - internal_user_viewer
                 type: string
             required:
             - connectionRef

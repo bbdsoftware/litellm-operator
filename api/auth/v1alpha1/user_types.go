@@ -85,7 +85,8 @@ type UserSpec struct {
 	UserEmail string `json:"userEmail,omitempty"`
 	// UserID is the ID of the user. If not set, a unique ID will be generated.
 	UserID string `json:"userID,omitempty"`
-	// UserRole is the role of the user - one of "proxy_admin", "proxy_admin_viewer", "internal_user", "internal_user_viewer", "team", "customer"
+	// UserRole is the role of the user - one of "proxy_admin", "proxy_admin_viewer", "internal_user", "internal_user_viewer"
+	// +kubebuilder:validation:Enum=proxy_admin;proxy_admin_viewer;internal_user;internal_user_viewer
 	UserRole string `json:"userRole,omitempty"`
 }
 
