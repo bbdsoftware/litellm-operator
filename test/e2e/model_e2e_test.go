@@ -45,6 +45,12 @@ const (
 	testInterval       = 5 * time.Second
 )
 
+// Common string constants used when comparing condition statuses in kubectl jsonpath output
+const (
+	condStatusTrue  = "True"
+	condStatusFalse = "False"
+)
+
 var k8sClient client.Client
 
 func init() {
@@ -408,7 +414,7 @@ func waitForLiteLLMInstanceReady() error {
 		return err
 	}
 
-	if string(output) != "True" {
+	if string(output) != condStatusTrue {
 		return fmt.Errorf("LiteLLM instance not ready, status: %s", string(output))
 	}
 
@@ -479,9 +485,9 @@ func verifyModelCRStatusError(modelCRName, expectedStatus string, errorMsg strin
 	var expectedConditionStatus string
 	switch expectedStatus {
 	case "Ready":
-		expectedConditionStatus = "True"
+		expectedConditionStatus = condStatusTrue
 	case "Error":
-		expectedConditionStatus = "False"
+		expectedConditionStatus = condStatusFalse
 	default:
 		expectedConditionStatus = expectedStatus
 	}
@@ -536,9 +542,9 @@ func verifyModelCRStatus(modelCRName, expectedStatus string) error {
 	var expectedConditionStatus string
 	switch expectedStatus {
 	case "Ready":
-		expectedConditionStatus = "True"
+		expectedConditionStatus = condStatusTrue
 	case "Error":
-		expectedConditionStatus = "False"
+		expectedConditionStatus = condStatusFalse
 	default:
 		expectedConditionStatus = expectedStatus
 	}
@@ -551,10 +557,6 @@ func verifyModelCRStatus(modelCRName, expectedStatus string) error {
 }
 
 // Helper functions for creating pointers to primitive types
-// Helper functions for creating pointers to primitive types
-// nolint:unused
-func float64Ptr(v float64) *float64 { return &v }
-
 // nolint:unused
 func stringPtr(v string) *string { return &v }
 
