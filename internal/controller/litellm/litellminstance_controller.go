@@ -430,8 +430,9 @@ func renderProxyConfig(llm *litellmv1alpha1.LiteLLMInstance, ctx context.Context
 
 			}
 
+			// Append a short tag to indicate this model was created from a LiteLLMInstance modelList
 			modelYAML := ModelListItemYAML{
-				ModelName:     model.ModelName,
+				ModelName:     appendModelSourceTag(model.ModelName, ModelTagInst),
 				LitellmParams: litellmParams,
 			}
 			modelListYAML = append(modelListYAML, modelYAML)

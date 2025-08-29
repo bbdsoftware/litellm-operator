@@ -49,6 +49,20 @@ type ModelReconciler struct {
 	connectionHandler  *common.ConnectionHandler
 }
 
+// short tags appended to ModelName to indicate source
+const (
+	ModelTagCRD  = "-[crd]"
+	ModelTagInst = "-[inst]"
+)
+
+// appendModelSourceTag appends a short tag to the provided modelName if not already present
+func appendModelSourceTag(modelName string, tag string) string {
+	if strings.HasSuffix(modelName, tag) {
+		return modelName
+	}
+	return modelName + tag
+}
+
 // +kubebuilder:rbac:groups=litellm.litellm.ai,resources=models,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=litellm.litellm.ai,resources=models/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=litellm.litellm.ai,resources=models/finalizers,verbs=update
@@ -124,48 +138,53 @@ func (r *ModelReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 		return ctrl.Result{}, err
 	}
 
-	// Try to get the existing model from LiteLLM service using model ID if model.Status.Conditions contains Ready
-	if model.Status.ModelId != nil && *model.Status.ModelId != "" {
-		readyCond := meta.FindStatusCondition(model.Status.Conditions, "Ready")
-		if readyCond == nil || readyCond.Status != metav1.ConditionTrue {
-			log.Info("Skipping LiteLLM lookup because Ready condition is not true", "model", model.Name)
-		} else {
-			existingModel, err := r.LitellmModelClient.GetModel(ctx, *model.Status.ModelId)
-			if err != nil {
-				// If the remote model is not found, clear the stale ModelId and continue to creation.
-				if errors.Is(err, litellm.ErrNotFound) {
-					log.Info("Model ID present but model not found in LiteLLM; will create new model", "modelId", *model.Status.ModelId)
-					model.Status.ModelId = nil
-					if err := r.Status().Update(ctx, model); err != nil {
-						log.Error(err, "Failed to clear stale ModelId from status")
-						return ctrl.Result{}, err
-					}
-
-				} else {
-					log.Error(err, "Failed to get existing model from LiteLLM")
-					if updateErr := r.updateConditions(ctx, model, metav1.Condition{
-						Type:               "Ready",
-						Status:             metav1.ConditionFalse,
-						LastTransitionTime: metav1.Now(),
-						Reason:             "UnableToCheckModelExists",
-						Message:            err.Error(),
-					}); updateErr != nil {
-						log.Error(updateErr, "Failed to update conditions")
-					}
-					return ctrl.Result{}, err
-				}
-			} else {
-				// Model exists, check if update is needed
-				if r.LitellmModelClient.IsModelUpdateNeeded(ctx, &existingModel, modelRequest) {
-					log.Info("Model needs update, updating in LiteLLM")
-					return r.handleUpdate(ctx, model, modelRequest)
-				}
-			}
-		}
+	// If there is no remote ModelId recorded, create the model in LiteLLM
+	if model.Status.ModelId == nil || *model.Status.ModelId == "" {
+		log.Info("No ModelId present; creating model in LiteLLM", "model", model.Name)
+		return r.handleCreation(ctx, model, modelRequest)
 	}
 
-	// Model doesn't exist, create it
-	return r.handleCreation(ctx, model, modelRequest)
+	// ModelId present: attempt to fetch the remote model
+	existingModel, err := r.LitellmModelClient.GetModel(ctx, strings.TrimSpace(*model.Status.ModelId))
+	if err != nil {
+		// If remote model is not found, treat as an error and return (do not auto-create)
+		if errors.Is(err, litellm.ErrNotFound) {
+			log.Error(err, "Remote model ID not found in LiteLLM; refusing to auto-create to avoid duplicates", "modelId", *model.Status.ModelId)
+			if updateErr := r.updateConditions(ctx, model, metav1.Condition{
+				Type:               "Ready",
+				Status:             metav1.ConditionFalse,
+				LastTransitionTime: metav1.Now(),
+				Reason:             "RemoteModelMissing",
+				Message:            "Remote model id not found in LiteLLM: " + err.Error(),
+			}); updateErr != nil {
+				log.Error(updateErr, "Failed to update conditions")
+			}
+			return ctrl.Result{}, err
+		}
+
+		// Other errors - surface and mark not ready
+		log.Error(err, "Failed to get existing model from LiteLLM", "modelId", *model.Status.ModelId)
+		if updateErr := r.updateConditions(ctx, model, metav1.Condition{
+			Type:               "Ready",
+			Status:             metav1.ConditionFalse,
+			LastTransitionTime: metav1.Now(),
+			Reason:             "UnableToCheckModelExists",
+			Message:            err.Error(),
+		}); updateErr != nil {
+			log.Error(updateErr, "Failed to update conditions")
+		}
+		return ctrl.Result{}, err
+	}
+
+	// Remote model exists - check whether an update is required
+	if r.LitellmModelClient.IsModelUpdateNeeded(ctx, &existingModel, modelRequest) {
+		log.Info("Model needs update, updating in LiteLLM")
+		return r.handleUpdate(ctx, model, modelRequest)
+	}
+
+	// No action required
+	log.Info("Model exists and is up-to-date", "model", model.Name, "modelId", *model.Status.ModelId)
+	return ctrl.Result{}, nil
 }
 
 // handleCreation handles the creation of a new model
@@ -187,6 +206,12 @@ func (r *ModelReconciler) handleCreation(ctx context.Context, model *litellmv1al
 
 	// Populate status fields (including observed generation and last updated)
 	updateModelStatus(model, &modelResponse)
+
+	//update the crd status
+	if err := r.Status().Update(ctx, model); err != nil {
+		log.Error(err, "Failed to update Model status")
+		return ctrl.Result{}, err
+	}
 
 	// Persist status (ModelId, ModelName, ObservedGeneration, LastUpdated) along with the Ready condition
 	if err := r.updateConditions(ctx, model, metav1.Condition{
@@ -361,8 +386,9 @@ func (r *ModelReconciler) convertToModelRequest(ctx context.Context, model *lite
 		return nil, err
 	}
 
+	// Append a short tag to indicate this model was created from the Model CRD
 	modelRequest := &litellm.ModelRequest{
-		ModelName: model.Spec.ModelName,
+		ModelName: appendModelSourceTag(model.Spec.ModelName, ModelTagCRD),
 	}
 
 	// Convert LiteLLMParams and map ApiKey from the secretMap if it exists

@@ -221,7 +221,7 @@ var _ = Describe("ModelReconciler", func() {
 			// fake create returns ID and params
 			id := "model-123"
 			fakeClient.CreateModelFunc = func(ctx context.Context, req *litellm.ModelRequest) (litellm.ModelResponse, error) {
-				Expect(req.ModelName).To(Equal(resourceName))
+				Expect(req.ModelName).To(Equal(appendModelSourceTag(resourceName, ModelTagCRD)))
 				return litellm.ModelResponse{
 					ModelName: resourceName,
 					LiteLLMParams: &litellm.UpdateLiteLLMParams{
@@ -285,7 +285,7 @@ var _ = Describe("ModelReconciler", func() {
 				return true
 			}
 			fakeClient.UpdateModelFunc = func(ctx context.Context, req *litellm.ModelRequest) (litellm.ModelResponse, error) {
-				Expect(req.ModelName).To(Equal(resourceName))
+				Expect(req.ModelName).To(Equal(appendModelSourceTag(resourceName, ModelTagCRD)))
 				return litellm.ModelResponse{ModelName: resourceName}, nil
 			}
 

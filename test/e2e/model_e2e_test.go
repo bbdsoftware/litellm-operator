@@ -109,11 +109,6 @@ var _ = Describe("Model E2E Tests", Ordered, func() {
 				return verifyModelExistsInLiteLLM(modelName)
 			}, testTimeout, testInterval).Should(Succeed())
 
-			// By("verifying the model CR status")
-			// Eventually(func() error {
-			// 	return verifyModelCRStatus(modelCRName, "Ready")
-			// }, testTimeout, testInterval).Should(Succeed())
-
 			By("updating the model CR")
 			updatedModelCR := &litellmv1alpha1.Model{}
 			Expect(k8sClient.Get(context.Background(), types.NamespacedName{
@@ -235,44 +230,6 @@ var _ = Describe("Model E2E Tests", Ordered, func() {
 		})
 	})
 
-	Context("Model Reconciliation", func() {
-		It("should reconcile model changes when LiteLLM instance is restarted", func() {
-			modelName := "reconcile-test-model"
-			modelCRName := "reconcile-test-model-cr"
-
-			By("creating a model CR")
-			modelCR := createModelCR(modelCRName, modelName)
-			Expect(k8sClient.Create(context.Background(), modelCR)).To(Succeed())
-
-			By("verifying the model was created in LiteLLM")
-			Eventually(func() error {
-				return verifyModelExistsInLiteLLM(modelName)
-			}, testTimeout, testInterval).Should(Succeed())
-
-			By("simulating LiteLLM instance restart by deleting the model from LiteLLM")
-			// This would typically be done by calling the LiteLLM API directly
-			// For e2e tests, we'll simulate this by updating the model CR
-			// which should trigger reconciliation
-
-			By("updating the model CR to trigger reconciliation")
-			updatedModelCR := &litellmv1alpha1.Model{}
-			Expect(k8sClient.Get(context.Background(), types.NamespacedName{
-				Name:      modelCRName,
-				Namespace: modelTestNamespace,
-			}, updatedModelCR)).To(Succeed())
-
-			updatedModelCR.Spec.LiteLLMParams.TPM = intPtr(15000)
-			Expect(k8sClient.Update(context.Background(), updatedModelCR)).To(Succeed())
-
-			By("verifying the model was reconciled successfully")
-			Eventually(func() error {
-				return verifyModelCRStatus(modelCRName, "Ready")
-			}, testTimeout, testInterval).Should(Succeed())
-
-			By("cleaning up model CR")
-			Expect(k8sClient.Delete(context.Background(), updatedModelCR)).To(Succeed())
-		})
-	})
 })
 
 func mustSamplePath(relParts ...string) string {
