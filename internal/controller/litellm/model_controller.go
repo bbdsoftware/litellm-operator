@@ -220,25 +220,30 @@ func updateModelStatus(model *litellmv1alpha1.Model, modelResponse *litellm.Mode
 	now := metav1.Now()
 	model.Status.LastUpdated = &now
 
-	// ModelName from response
-	if modelResponse != nil && modelResponse.ModelName != "" {
-		model.Status.ModelName = &modelResponse.ModelName
+	if modelResponse != nil {
+		// ModelName from response
+		if modelResponse.ModelName != "" {
+			model.Status.ModelName = &modelResponse.ModelName
+		} else {
+			model.Status.ModelName = nil
+		}
+
+		// ModelId if present
+		if modelResponse.ModelInfo != nil {
+			model.Status.ModelId = modelResponse.ModelInfo.ID
+		} else {
+			model.Status.ModelId = nil
+		}
+
+		if modelResponse.LiteLLMParams != nil && modelResponse.LiteLLMParams != (&litellm.UpdateLiteLLMParams{}) {
+			model.Status.LiteLLMParams = &litellmv1alpha1.LiteLLMParams{
+				CustomLLMProvider: modelResponse.LiteLLMParams.CustomLLMProvider,
+				Model:             modelResponse.LiteLLMParams.Model,
+			}
+		}
 	} else {
 		model.Status.ModelName = nil
-	}
-
-	// ModelId if present
-	if modelResponse != nil && modelResponse.ModelInfo != nil {
-		model.Status.ModelId = modelResponse.ModelInfo.ID
-	} else {
 		model.Status.ModelId = nil
-	}
-
-	if modelResponse != nil && modelResponse.LiteLLMParams != nil && modelResponse.LiteLLMParams != (&litellm.UpdateLiteLLMParams{}) {
-		model.Status.LiteLLMParams = &litellmv1alpha1.LiteLLMParams{
-			CustomLLMProvider: modelResponse.LiteLLMParams.CustomLLMProvider,
-			Model:             modelResponse.LiteLLMParams.Model,
-		}
 	}
 
 }
@@ -331,7 +336,11 @@ func (r *ModelReconciler) determineModelProvider(model *litellmv1alpha1.Model) (
 // convertToModelRequest converts a Kubernetes Model to a LiteLLM ModelRequest
 func (r *ModelReconciler) convertToModelRequest(ctx context.Context, model *litellmv1alpha1.Model) (*litellm.ModelRequest, error) {
 	log := logf.FromContext(ctx)
-	//use CustomLLMProvider and if it is null, check if the model.Spec.LiteLLMParams.Model does not contain a provider, this will be in the form "<provider>/<base-model>"
+
+	if model.Spec.LiteLLMParams.Model == nil {
+		return nil, fmt.Errorf("LiteLLMParams.Model is not set")
+	}
+
 	llmProvider, err := r.determineModelProvider(model)
 	if err != nil {
 		return nil, err
