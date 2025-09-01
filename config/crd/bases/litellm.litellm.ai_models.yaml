@@ -27,10 +27,6 @@ spec:
       jsonPath: .spec.litellmParams.customLLMProvider
       name: Provider
       type: string
-    - description: Ready status
-      jsonPath: .status.conditions[?(@.type=='Ready')].status
-      name: Status
-      type: string
     - description: Age of the model
       jsonPath: .metadata.creationTimestamp
       name: Age
@@ -38,6 +34,10 @@ spec:
     - description: Model UUID from LiteLLM server
       jsonPath: .status.modelId
       name: Model ID
+      type: string
+    - description: Ready status
+      jsonPath: .status.conditions[?(@.type=='Ready')].status
+      name: Ready
       type: string
     name: v1alpha1
     schema:

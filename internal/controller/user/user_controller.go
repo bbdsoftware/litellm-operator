@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package controller
+package user
 
 import (
 	"context"
@@ -45,6 +45,7 @@ type UserReconciler struct {
 	litellm.LitellmUser
 	connectionHandler     *common.ConnectionHandler
 	litellmResourceNaming *util.LitellmResourceNaming
+	OverrideLiteLLMURL    string
 }
 
 // +kubebuilder:rbac:groups=auth.litellm.ai,resources=users,verbs=get;list;watch;create;update;patch;delete

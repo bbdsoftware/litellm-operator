@@ -25,7 +25,6 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
-	"strconv"
 	"strings"
 	"time"
 
@@ -37,6 +36,7 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
 	litellmv1alpha1 "github.com/bbdsoftware/litellm-operator/api/litellm/v1alpha1"
+	"github.com/bbdsoftware/litellm-operator/internal/controller/common"
 	"github.com/bbdsoftware/litellm-operator/internal/util"
 	"github.com/google/uuid"
 	appsv1 "k8s.io/api/apps/v1"
@@ -291,20 +291,7 @@ func validateModelListForDuplicates(llm *litellmv1alpha1.LiteLLMInstance) (bool,
 	return true, nil
 }
 
-func parseAndAssign(field *string, target *float64, fieldName string) error {
-	if field != nil && *field != "" {
-		value, err := strconv.ParseFloat(*field, 64)
-		if err != nil {
-			return errors.New(fieldName + " not parsable to float")
-		}
-		if target != nil {
-			*target = value
-		}
-	}
-	return nil
-}
-
-// (duplicate functions removed)
+// Shared function parseAndAssign moved to controller.go
 
 // renderProxyConfig generates the YAML configuration for the LiteLLM proxy server.
 // It creates a configuration structure with model list, router settings, and general settings.
@@ -356,31 +343,31 @@ func renderProxyConfig(llm *litellmv1alpha1.LiteLLMInstance, ctx context.Context
 				WatsonxRegionName:              util.DerefString(model.LiteLLMParams.WatsonXRegionName),
 			}
 
-			if err := parseAndAssign(model.LiteLLMParams.OutputCostPerToken, &litellmParams.OutputCostPerToken, "OutputCostPerToken"); err != nil {
+			if err := common.ParseAndAssign(model.LiteLLMParams.OutputCostPerToken, &litellmParams.OutputCostPerToken, "OutputCostPerToken"); err != nil {
 				log.Error(err, "parsing error")
 				return "", err
 			}
-			if err := parseAndAssign(model.LiteLLMParams.OutputCostPerSecond, &litellmParams.OutputCostPerSecond, "OutputCostPerSecond"); err != nil {
+			if err := common.ParseAndAssign(model.LiteLLMParams.OutputCostPerSecond, &litellmParams.OutputCostPerSecond, "OutputCostPerSecond"); err != nil {
 				log.Error(err, "parsing error")
 				return "", err
 			}
-			if err := parseAndAssign(model.LiteLLMParams.OutputCostPerPixel, &litellmParams.OutputCostPerPixel, "OutputCostPerPixel"); err != nil {
+			if err := common.ParseAndAssign(model.LiteLLMParams.OutputCostPerPixel, &litellmParams.OutputCostPerPixel, "OutputCostPerPixel"); err != nil {
 				log.Error(err, "parsing error")
 				return "", err
 			}
-			if err := parseAndAssign(model.LiteLLMParams.InputCostPerPixel, &litellmParams.InputCostPerPixel, "InputCostPerPixel"); err != nil {
+			if err := common.ParseAndAssign(model.LiteLLMParams.InputCostPerPixel, &litellmParams.InputCostPerPixel, "InputCostPerPixel"); err != nil {
 				log.Error(err, "parsing error")
 				return "", err
 			}
-			if err := parseAndAssign(model.LiteLLMParams.InputCostPerSecond, &litellmParams.InputCostPerSecond, "InputCostPerSecond"); err != nil {
+			if err := common.ParseAndAssign(model.LiteLLMParams.InputCostPerSecond, &litellmParams.InputCostPerSecond, "InputCostPerSecond"); err != nil {
 				log.Error(err, "parsing error")
 				return "", err
 			}
-			if err := parseAndAssign(model.LiteLLMParams.InputCostPerToken, &litellmParams.InputCostPerSecond, "InputCostPerToken"); err != nil {
+			if err := common.ParseAndAssign(model.LiteLLMParams.InputCostPerToken, &litellmParams.InputCostPerToken, "InputCostPerToken"); err != nil {
 				log.Error(err, "parsing error")
 				return "", err
 			}
-			if err := parseAndAssign(model.LiteLLMParams.MaxBudget, &litellmParams.MaxBudget, "MaxBudget"); err != nil {
+			if err := common.ParseAndAssign(model.LiteLLMParams.MaxBudget, &litellmParams.MaxBudget, "MaxBudget"); err != nil {
 				log.Error(err, "parsing error")
 				return "", err
 			}
@@ -432,7 +419,7 @@ func renderProxyConfig(llm *litellmv1alpha1.LiteLLMInstance, ctx context.Context
 
 			// Append a short tag to indicate this model was created from a LiteLLMInstance modelList
 			modelYAML := ModelListItemYAML{
-				ModelName:     appendModelSourceTag(model.ModelName, ModelTagInst),
+				ModelName:     common.AppendModelSourceTag(model.ModelName, common.ModelTagInst),
 				LitellmParams: litellmParams,
 			}
 			modelListYAML = append(modelListYAML, modelYAML)

@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package controller
+package association
 
 import (
 	"context"
@@ -41,7 +41,8 @@ type TeamMemberAssociationReconciler struct {
 	client.Client
 	Scheme *runtime.Scheme
 	litellm.LitellmTeamMemberAssociation
-	connectionHandler *common.ConnectionHandler
+	connectionHandler  *common.ConnectionHandler
+	OverrideLiteLLMURL string
 }
 
 // +kubebuilder:rbac:groups=auth.litellm.ai,resources=teammemberassociations,verbs=get;list;watch;create;update;patch;delete

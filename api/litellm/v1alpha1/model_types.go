@@ -214,9 +214,9 @@ type ModelStatus struct {
 // +kubebuilder:printcolumn:name="Model Name",type="string",JSONPath=".spec.modelName",description="Name of the model"
 // +kubebuilder:printcolumn:name="Connection",type="string",JSONPath=".spec.connectionRef.secretRef.secretName",description="Connection secret name"
 // +kubebuilder:printcolumn:name="Provider",type="string",JSONPath=".spec.litellmParams.customLLMProvider",description="LLM provider"
-// +kubebuilder:printcolumn:name="Status",type="string",JSONPath=".status.conditions[?(@.type=='Ready')].status",description="Ready status"
 // +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp",description="Age of the model"
 // +kubebuilder:printcolumn:name="Model ID",type="string",JSONPath=".status.modelId",description="Model UUID from LiteLLM server"
+// +kubebuilder:printcolumn:name="Ready",type="string",JSONPath=".status.conditions[?(@.type=='Ready')].status",description="Ready status"
 
 // Model is the Schema for the models API.
 type Model struct {

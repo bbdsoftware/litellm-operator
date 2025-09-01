@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package litellm
+package model
 
 import (
 	"context"
@@ -30,6 +30,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	litellmv1alpha1 "github.com/bbdsoftware/litellm-operator/api/litellm/v1alpha1"
+	"github.com/bbdsoftware/litellm-operator/internal/controller/common"
 	"github.com/bbdsoftware/litellm-operator/internal/litellm"
 	"github.com/bbdsoftware/litellm-operator/internal/util"
 )
@@ -221,7 +222,7 @@ var _ = Describe("ModelReconciler", func() {
 			// fake create returns ID and params
 			id := "model-123"
 			fakeClient.CreateModelFunc = func(ctx context.Context, req *litellm.ModelRequest) (litellm.ModelResponse, error) {
-				Expect(req.ModelName).To(Equal(appendModelSourceTag(resourceName, ModelTagCRD)))
+				Expect(req.ModelName).To(Equal(common.AppendModelSourceTag(resourceName, common.ModelTagCRD)))
 				return litellm.ModelResponse{
 					ModelName: resourceName,
 					LiteLLMParams: &litellm.UpdateLiteLLMParams{
@@ -285,7 +286,7 @@ var _ = Describe("ModelReconciler", func() {
 				return true
 			}
 			fakeClient.UpdateModelFunc = func(ctx context.Context, req *litellm.ModelRequest) (litellm.ModelResponse, error) {
-				Expect(req.ModelName).To(Equal(appendModelSourceTag(resourceName, ModelTagCRD)))
+				Expect(req.ModelName).To(Equal(common.AppendModelSourceTag(resourceName, common.ModelTagCRD)))
 				return litellm.ModelResponse{ModelName: resourceName}, nil
 			}
 

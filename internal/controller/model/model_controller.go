@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package litellm
+package model
 
 import (
 	"context"
@@ -48,13 +48,10 @@ type ModelReconciler struct {
 	Scheme             *runtime.Scheme
 	LitellmModelClient litellm.LitellmModel
 	connectionHandler  *common.ConnectionHandler
+	OverrideLiteLLMURL string
 }
 
-// short tags appended to ModelName to indicate source
-const (
-	ModelTagCRD  = "-[crd]"
-	ModelTagInst = "-[inst]"
-)
+// Constants moved to controller.go
 
 const (
 	CondReady       = "Ready"       // Overall health indicator
@@ -182,7 +179,15 @@ func (r *ModelReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 		}
 	}
 
-	// No action required
+	// Model exists and is up-to-date - ensure conditions reflect healthy state
+	r.setCond(model, CondProgressing, metav1.ConditionFalse, ReasonReady, "Model is up-to-date")
+	r.setCond(model, CondReady, metav1.ConditionTrue, ReasonReady, "Model is up-to-date")
+	r.setCond(model, CondDegraded, metav1.ConditionFalse, ReasonReady, "Model is up-to-date")
+	if updateErr := r.patchStatus(ctx, model, req); updateErr != nil {
+		log.Error(updateErr, "Failed to update conditions for up-to-date model")
+		return ctrl.Result{RequeueAfter: time.Second * 30}, updateErr
+	}
+
 	log.Info("Model exists and is up-to-date", "model", model.Name, "modelId", *model.Status.ModelId)
 	return ctrl.Result{}, nil
 
@@ -260,7 +265,9 @@ func (r *ModelReconciler) handleCreation(ctx context.Context, model *litellmv1al
 
 	modelResponse, err := r.LitellmModelClient.CreateModel(ctx, modelRequest)
 	if err != nil {
-		r.setCond(model, CondDegraded, metav1.ConditionTrue, ReasonReconciling, "Creating model in LiteLLM")
+		r.setCond(model, CondProgressing, metav1.ConditionFalse, ReasonCreateFailed, err.Error())
+		r.setCond(model, CondReady, metav1.ConditionFalse, ReasonCreateFailed, err.Error())
+		r.setCond(model, CondDegraded, metav1.ConditionTrue, ReasonCreateFailed, err.Error())
 		updateErr := r.patchStatus(ctx, model, req)
 		if updateErr != nil {
 			log.Error(updateErr, "Failed to update conditions")
@@ -273,8 +280,9 @@ func (r *ModelReconciler) handleCreation(ctx context.Context, model *litellmv1al
 	updateModelStatus(model, &modelResponse)
 
 	//update the crd status
-	r.setCond(model, CondProgressing, metav1.ConditionFalse, ReasonReconciling, "Creating model in LiteLLM")
-	r.setCond(model, CondReady, metav1.ConditionTrue, ReasonReconciling, "Creating model in LiteLLM")
+	r.setCond(model, CondProgressing, metav1.ConditionFalse, ReasonReady, "Model successfully created in LiteLLM")
+	r.setCond(model, CondReady, metav1.ConditionTrue, ReasonReady, "Model successfully created in LiteLLM")
+	r.setCond(model, CondDegraded, metav1.ConditionFalse, ReasonReady, "Model successfully created in LiteLLM")
 	if updateErr := r.patchStatus(ctx, model, req); updateErr != nil {
 		log.Error(updateErr, "Failed to update conditions")
 		return updateErr
@@ -305,6 +313,15 @@ func (r *ModelReconciler) handleUpdate(ctx context.Context, model *litellmv1alph
 			return updateErr
 		}
 		return err
+	}
+
+	// Clear any error conditions and set ready
+	r.setCond(model, CondProgressing, metav1.ConditionFalse, ReasonReady, "Model successfully updated in LiteLLM")
+	r.setCond(model, CondReady, metav1.ConditionTrue, ReasonReady, "Model successfully updated in LiteLLM")
+	r.setCond(model, CondDegraded, metav1.ConditionFalse, ReasonReady, "Model successfully updated in LiteLLM")
+	if updateErr := r.patchStatus(ctx, model, req); updateErr != nil {
+		log.Error(updateErr, "Failed to update conditions after successful update")
+		return updateErr
 	}
 
 	log.Info("Successfully updated model in LiteLLM", "modelName", model.Spec.ModelName)
@@ -411,7 +428,7 @@ func (r *ModelReconciler) convertToModelRequest(ctx context.Context, model *lite
 
 	// Append a short tag to indicate this model was created from the Model CRD
 	modelRequest := &litellm.ModelRequest{
-		ModelName: appendModelSourceTag(model.Spec.ModelName, ModelTagCRD),
+		ModelName: common.AppendModelSourceTag(model.Spec.ModelName, common.ModelTagCRD),
 	}
 
 	// Convert LiteLLMParams and map ApiKey from the secretMap if it exists
@@ -473,25 +490,25 @@ func (r *ModelReconciler) convertToModelRequest(ctx context.Context, model *lite
 			}
 		}
 
-		if err := parseAndAssign(model.Spec.LiteLLMParams.OutputCostPerToken, litellmParams.OutputCostPerToken, "OutputCostPerToken"); err != nil {
+		if err := common.ParseAndAssign(model.Spec.LiteLLMParams.OutputCostPerToken, litellmParams.OutputCostPerToken, "OutputCostPerToken"); err != nil {
 			return nil, err
 		}
-		if err := parseAndAssign(model.Spec.LiteLLMParams.OutputCostPerSecond, litellmParams.OutputCostPerSecond, "OutputCostPerSecond"); err != nil {
+		if err := common.ParseAndAssign(model.Spec.LiteLLMParams.OutputCostPerSecond, litellmParams.OutputCostPerSecond, "OutputCostPerSecond"); err != nil {
 			return nil, err
 		}
-		if err := parseAndAssign(model.Spec.LiteLLMParams.OutputCostPerPixel, litellmParams.OutputCostPerPixel, "OutputCostPerPixel"); err != nil {
+		if err := common.ParseAndAssign(model.Spec.LiteLLMParams.OutputCostPerPixel, litellmParams.OutputCostPerPixel, "OutputCostPerPixel"); err != nil {
 			return nil, err
 		}
-		if err := parseAndAssign(model.Spec.LiteLLMParams.InputCostPerPixel, litellmParams.InputCostPerPixel, "InputCostPerPixel"); err != nil {
+		if err := common.ParseAndAssign(model.Spec.LiteLLMParams.InputCostPerPixel, litellmParams.InputCostPerPixel, "InputCostPerPixel"); err != nil {
 			return nil, err
 		}
-		if err := parseAndAssign(model.Spec.LiteLLMParams.InputCostPerSecond, litellmParams.InputCostPerSecond, "InputCostPerSecond"); err != nil {
+		if err := common.ParseAndAssign(model.Spec.LiteLLMParams.InputCostPerSecond, litellmParams.InputCostPerSecond, "InputCostPerSecond"); err != nil {
 			return nil, err
 		}
-		if err := parseAndAssign(model.Spec.LiteLLMParams.InputCostPerToken, litellmParams.InputCostPerToken, "InputCostPerToken"); err != nil {
+		if err := common.ParseAndAssign(model.Spec.LiteLLMParams.InputCostPerToken, litellmParams.InputCostPerToken, "InputCostPerToken"); err != nil {
 			return nil, err
 		}
-		if err := parseAndAssign(model.Spec.LiteLLMParams.MaxBudget, litellmParams.MaxBudget, "MaxBudget"); err != nil {
+		if err := common.ParseAndAssign(model.Spec.LiteLLMParams.MaxBudget, litellmParams.MaxBudget, "MaxBudget"); err != nil {
 			return nil, err
 		}
 		modelRequest.LiteLLMParams = litellmParams
@@ -539,17 +556,8 @@ func updateModelStatus(model *litellmv1alpha1.Model, modelResponse *litellm.Mode
 // Utility Functions
 // ============================================================================
 
-// appendModelSourceTag appends a short tag to the provided modelName if not already present
-func appendModelSourceTag(modelName string, tag string) string {
-	if strings.HasSuffix(modelName, tag) {
-		return modelName
-	}
-	return modelName + tag
-}
-
 // patchStatus updates the status subresource
 func (r *ModelReconciler) patchStatus(ctx context.Context, cr *litellmv1alpha1.Model, req ctrl.Request) error {
-	// Use Status().Update instead of Patch since we're updating the entire status
 	return r.Status().Update(ctx, cr)
 }
 

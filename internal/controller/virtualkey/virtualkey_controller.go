@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package controller
+package virtualkey
 
 import (
 	"context"
@@ -46,6 +46,7 @@ type VirtualKeyReconciler struct {
 	litellm.LitellmVirtualKey
 	connectionHandler     *common.ConnectionHandler
 	litellmResourceNaming *util.LitellmResourceNaming
+	OverrideLiteLLMURL    string
 }
 
 // +kubebuilder:rbac:groups=auth.litellm.ai,resources=virtualkeys,verbs=get;list;watch;create;update;patch;delete
