@@ -498,6 +498,7 @@ func (r *ModelReconciler) convertToModelRequest(ctx context.Context, model *lite
 			return nil, err
 		}
 		modelRequest.LiteLLMParams = litellmParams
+		modelRequest.ModelInfo = litellm.NewModelInfo()
 	}
 
 	return modelRequest, nil
