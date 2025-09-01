@@ -68,13 +68,12 @@ type TeamMemberAssociationStatus struct {
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
-// +kubebuilder:printcolumn:name="Team Alias",type="string",JSONPath=".spec.teamAlias",description="The team alias"
-// +kubebuilder:printcolumn:name="Team ID",type="string",JSONPath=".status.teamID",description="The team identifier"
-// +kubebuilder:printcolumn:name="User Email",type="string",JSONPath=".spec.userEmail",description="The user's email address"
-// +kubebuilder:printcolumn:name="User ID",type="string",JSONPath=".status.userID",description="The user identifier"
+// +kubebuilder:printcolumn:name="Ready",type="string",JSONPath=".status.conditions[?(@.type=='Ready')].status",description="The ready status of the association"
+// +kubebuilder:printcolumn:name="Team",type="string",JSONPath=".spec.teamAlias",description="The team alias"
+// +kubebuilder:printcolumn:name="User",type="string",JSONPath=".spec.userEmail",description="The user's email address"
 // +kubebuilder:printcolumn:name="Role",type="string",JSONPath=".spec.role",description="The user's role in the team"
-// +kubebuilder:printcolumn:name="Max Budget",type="string",JSONPath=".spec.maxBudgetInTeam",description="Maximum budget for user in team"
-// +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp",description="Age of the team member association"
+// +kubebuilder:printcolumn:name="Budget",type="string",JSONPath=".spec.maxBudgetInTeam",description="Maximum budget for user in team"
+// +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp",description="Time since creation"
 
 // TeamMemberAssociation is the Schema for the teammemberassociations API
 type TeamMemberAssociation struct {

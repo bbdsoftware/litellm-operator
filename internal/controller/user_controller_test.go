@@ -67,8 +67,17 @@ func (l *FakeLitellmUserClient) GetTeam(ctx context.Context, teamID string) (lit
 	}, nil
 }
 
-func (l *FakeLitellmUserClient) IsUserUpdateNeeded(ctx context.Context, userResponse *litellm.UserResponse, userRequest *litellm.UserRequest) bool {
-	return false
+func (l *FakeLitellmUserClient) IsUserUpdateNeeded(ctx context.Context, userResponse *litellm.UserResponse, userRequest *litellm.UserRequest) (litellm.UserUpdateNeeded, error) {
+	return litellm.UserUpdateNeeded{
+		NeedsUpdate: false,
+		ChangedFields: []litellm.FieldChange{
+			{
+				FieldName:     "User is up to date",
+				CurrentValue:  "User is up to date",
+				ExpectedValue: "User is up to date",
+			},
+		},
+	}, nil
 }
 
 func (l *FakeLitellmUserClient) UpdateUser(ctx context.Context, req *litellm.UserRequest) (litellm.UserResponse, error) {

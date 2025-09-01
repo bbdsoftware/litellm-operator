@@ -15,21 +15,17 @@ spec:
   scope: Namespaced
   versions:
   - additionalPrinterColumns:
+    - description: The ready status of the association
+      jsonPath: .status.conditions[?(@.type=='Ready')].status
+      name: Ready
+      type: string
     - description: The team alias
       jsonPath: .spec.teamAlias
-      name: Team Alias
-      type: string
-    - description: The team identifier
-      jsonPath: .status.teamID
-      name: Team ID
+      name: Team
       type: string
     - description: The user's email address
       jsonPath: .spec.userEmail
-      name: User Email
-      type: string
-    - description: The user identifier
-      jsonPath: .status.userID
-      name: User ID
+      name: User
       type: string
     - description: The user's role in the team
       jsonPath: .spec.role
@@ -37,9 +33,9 @@ spec:
       type: string
     - description: Maximum budget for user in team
       jsonPath: .spec.maxBudgetInTeam
-      name: Max Budget
+      name: Budget
       type: string
-    - description: Age of the team member association
+    - description: Time since creation
       jsonPath: .metadata.creationTimestamp
       name: Age
       type: date

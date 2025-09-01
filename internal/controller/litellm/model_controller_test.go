@@ -227,7 +227,7 @@ var _ = Describe("ModelReconciler", func() {
 					LiteLLMParams: &litellm.UpdateLiteLLMParams{
 						Model: strPtr("gpt-4"),
 					},
-					ModelInfo: &litellm.ModelInfo{ID: &id},
+					ModelInfo: &litellm.ModelInfo{ID: strPtr(id)},
 				}, nil
 			}
 

@@ -220,18 +220,14 @@ type TeamStatus struct {
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
-// +kubebuilder:printcolumn:name="Team ID",type="string",JSONPath=".spec.teamID",description="The unique team identifier"
-// +kubebuilder:printcolumn:name="Team Alias",type="string",JSONPath=".spec.teamAlias",description="The team alias"
-// +kubebuilder:printcolumn:name="Organization",type="string",JSONPath=".spec.organizationID",description="The organisation ID"
+// +kubebuilder:printcolumn:name="Ready",type="string",JSONPath=".status.conditions[?(@.type=='Ready')].status",description="The ready status of the team"
+// +kubebuilder:printcolumn:name="Alias",type="string",JSONPath=".spec.teamAlias",description="The team alias"
+// +kubebuilder:printcolumn:name="Organisation",type="string",JSONPath=".spec.organizationID",description="The organisation ID"
 // +kubebuilder:printcolumn:name="Blocked",type="boolean",JSONPath=".spec.blocked",description="Whether the team is blocked"
-// +kubebuilder:printcolumn:name="Max Budget",type="string",JSONPath=".spec.maxBudget",description="Maximum budget for the team"
-// +kubebuilder:printcolumn:name="RPM Limit",type="integer",JSONPath=".spec.rpmLimit",description="Requests per minute limit"
-// +kubebuilder:printcolumn:name="TPM Limit",type="integer",JSONPath=".spec.tpmLimit",description="Tokens per minute limit"
-// +kubebuilder:printcolumn:name="Models",type="string",JSONPath=".spec.models",description="Allowed models for the team"
-// +kubebuilder:printcolumn:name="Members",type="integer",JSONPath=".status.membersWithRole",description="Number of team members"
+// +kubebuilder:printcolumn:name="Members",type="integer",JSONPath=".status.membersWithRole[*]",description="Number of team members"
+// +kubebuilder:printcolumn:name="Budget",type="string",JSONPath=".spec.maxBudget",description="Maximum budget for the team"
 // +kubebuilder:printcolumn:name="Spend",type="string",JSONPath=".status.spend",description="Current team spend"
-// +kubebuilder:printcolumn:name="Created",type="string",JSONPath=".status.createdAt",description="Team creation date"
-// +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp",description="Age of the team"
+// +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp",description="Time since creation"
 
 // Team is the Schema for the teams API
 type Team struct {

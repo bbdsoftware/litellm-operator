@@ -15,39 +15,27 @@ spec:
   scope: Namespaced
   versions:
   - additionalPrinterColumns:
+    - description: The ready status of the instance
+      jsonPath: .status.conditions[?(@.type=='Ready')].status
+      name: Ready
+      type: string
+    - description: Number of replicas
+      jsonPath: .spec.replicas
+      name: Replicas
+      type: integer
     - description: The LiteLLM image being used
       jsonPath: .spec.image
       name: Image
       type: string
-    - description: Redis secret reference
-      jsonPath: .spec.redisSecretRef.nameRef
-      name: Redis
+    - description: Database secret reference
+      jsonPath: .spec.databaseSecretRef.nameRef
+      name: Database
       type: string
     - description: Whether ingress is enabled
       jsonPath: .spec.ingress.enabled
       name: Ingress
-      type: string
-    - description: Whether gateway is enabled
-      jsonPath: .spec.gateway.enabled
-      name: Gateway
-      type: string
-    - description: Secret creation status
-      jsonPath: .status.secretCreated
-      name: Secret
-      type: string
-    - description: Deployment creation status
-      jsonPath: .status.deploymentCreated
-      name: Deployment
-      type: string
-    - description: Service creation status
-      jsonPath: .status.serviceCreated
-      name: Service
-      type: string
-    - description: Ingress creation status
-      jsonPath: .status.ingressCreated
-      name: Ingress Created
-      type: string
-    - description: Age of the LiteLLM instance
+      type: boolean
+    - description: Time since creation
       jsonPath: .metadata.creationTimestamp
       name: Age
       type: date

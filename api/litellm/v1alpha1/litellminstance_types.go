@@ -115,15 +115,12 @@ type LiteLLMInstanceStatus struct {
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
+// +kubebuilder:printcolumn:name="Ready",type="string",JSONPath=".status.conditions[?(@.type=='Ready')].status",description="The ready status of the instance"
+// +kubebuilder:printcolumn:name="Replicas",type="integer",JSONPath=".spec.replicas",description="Number of replicas"
 // +kubebuilder:printcolumn:name="Image",type="string",JSONPath=".spec.image",description="The LiteLLM image being used"
-// +kubebuilder:printcolumn:name="Redis",type="string",JSONPath=".spec.redisSecretRef.nameRef",description="Redis secret reference"
-// +kubebuilder:printcolumn:name="Ingress",type="string",JSONPath=".spec.ingress.enabled",description="Whether ingress is enabled"
-// +kubebuilder:printcolumn:name="Gateway",type="string",JSONPath=".spec.gateway.enabled",description="Whether gateway is enabled"
-// +kubebuilder:printcolumn:name="Secret",type="string",JSONPath=".status.secretCreated",description="Secret creation status"
-// +kubebuilder:printcolumn:name="Deployment",type="string",JSONPath=".status.deploymentCreated",description="Deployment creation status"
-// +kubebuilder:printcolumn:name="Service",type="string",JSONPath=".status.serviceCreated",description="Service creation status"
-// +kubebuilder:printcolumn:name="Ingress Created",type="string",JSONPath=".status.ingressCreated",description="Ingress creation status"
-// +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp",description="Age of the LiteLLM instance"
+// +kubebuilder:printcolumn:name="Database",type="string",JSONPath=".spec.databaseSecretRef.nameRef",description="Database secret reference"
+// +kubebuilder:printcolumn:name="Ingress",type="boolean",JSONPath=".spec.ingress.enabled",description="Whether ingress is enabled"
+// +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp",description="Time since creation"
 
 // LiteLLMInstance is the Schema for the litellminstances API.
 type LiteLLMInstance struct {

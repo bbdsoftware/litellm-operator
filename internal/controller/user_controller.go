@@ -312,8 +312,13 @@ func (r *UserReconciler) syncUser(ctx context.Context, user *authv1alpha1.User) 
 		return err
 	}
 
-	if r.IsUserUpdateNeeded(ctx, &userResponse, &userRequest) {
-		log.Info("Updating User: " + user.Spec.UserAlias + " in litellm")
+	userUpdateNeeded, err := r.IsUserUpdateNeeded(ctx, &userResponse, &userRequest)
+	if err != nil {
+		log.Error(err, "Failed to check if user needs to be updated")
+		return err
+	}
+	if userUpdateNeeded.NeedsUpdate {
+		log.Info("Updating User: "+user.Spec.UserAlias+" in litellm", "Fields changed", userUpdateNeeded.ChangedFields)
 		updatedResponse, err := r.UpdateUser(ctx, &userRequest)
 		if err != nil {
 			log.Error(err, "Failed to update user in litellm")

@@ -174,20 +174,13 @@ type UserStatus struct {
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
-// +kubebuilder:printcolumn:name="User ID",type="string",JSONPath=".spec.userID",description="The unique user identifier"
-// +kubebuilder:printcolumn:name="User Email",type="string",JSONPath=".spec.userEmail",description="The user's email address"
-// +kubebuilder:printcolumn:name="User Alias",type="string",JSONPath=".spec.userAlias",description="The user alias"
-// +kubebuilder:printcolumn:name="User Role",type="string",JSONPath=".spec.userRole",description="The user's role"
+// +kubebuilder:printcolumn:name="Ready",type="string",JSONPath=".status.conditions[?(@.type=='Ready')].status",description="The ready status of the user"
+// +kubebuilder:printcolumn:name="Email",type="string",JSONPath=".spec.userEmail",description="The user's email address"
+// +kubebuilder:printcolumn:name="Role",type="string",JSONPath=".spec.userRole",description="The user's role"
 // +kubebuilder:printcolumn:name="Blocked",type="boolean",JSONPath=".spec.blocked",description="Whether the user is blocked"
-// +kubebuilder:printcolumn:name="Max Budget",type="string",JSONPath=".spec.maxBudget",description="Maximum budget for the user"
-// +kubebuilder:printcolumn:name="RPM Limit",type="integer",JSONPath=".spec.rpmLimit",description="Requests per minute limit"
-// +kubebuilder:printcolumn:name="TPM Limit",type="integer",JSONPath=".spec.tpmLimit",description="Tokens per minute limit"
-// +kubebuilder:printcolumn:name="Models",type="string",JSONPath=".spec.models",description="Allowed models for the user"
-// +kubebuilder:printcolumn:name="Teams",type="string",JSONPath=".spec.teams",description="Teams the user belongs to"
-// +kubebuilder:printcolumn:name="Auto Create Key",type="boolean",JSONPath=".spec.autoCreateKey",description="Whether to auto-create a key"
+// +kubebuilder:printcolumn:name="Budget",type="string",JSONPath=".spec.maxBudget",description="Maximum budget for the user"
 // +kubebuilder:printcolumn:name="Spend",type="string",JSONPath=".status.spend",description="Current user spend"
-// +kubebuilder:printcolumn:name="Created",type="string",JSONPath=".status.createdAt",description="User creation date"
-// +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp",description="Age of the user"
+// +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp",description="Time since creation"
 
 // User is the Schema for the users API
 type User struct {
