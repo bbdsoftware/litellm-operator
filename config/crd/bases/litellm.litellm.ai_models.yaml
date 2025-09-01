@@ -14,7 +14,32 @@ spec:
     singular: model
   scope: Namespaced
   versions:
-  - name: v1alpha1
+  - additionalPrinterColumns:
+    - description: Name of the model
+      jsonPath: .spec.modelName
+      name: Model Name
+      type: string
+    - description: Connection secret name
+      jsonPath: .spec.connectionRef.secretRef.secretName
+      name: Connection
+      type: string
+    - description: LLM provider
+      jsonPath: .spec.litellmParams.customLLMProvider
+      name: Provider
+      type: string
+    - description: Ready status
+      jsonPath: .status.conditions[?(@.type=='Ready')].status
+      name: Status
+      type: string
+    - description: Age of the model
+      jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    - description: Model UUID from LiteLLM server
+      jsonPath: .status.modelId
+      name: Model ID
+      type: string
+    name: v1alpha1
     schema:
       openAPIV3Schema:
         description: Model is the Schema for the models API.
