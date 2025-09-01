@@ -17,6 +17,7 @@ limitations under the License.
 package v1alpha1
 
 import (
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 )
@@ -32,8 +33,9 @@ type LiteLLMInstanceSpec struct {
 	Gateway           Gateway           `json:"gateway,omitempty"`
 
 	// +kubebuilder:default=1
-	Replicas int32               `json:"replicas,omitempty"`
-	Models   []InitModelInstance `json:"models,omitempty"`
+	Replicas     int32               `json:"replicas,omitempty"`
+	Models       []InitModelInstance `json:"models,omitempty"`
+	ExtraEnvVars []corev1.EnvVar     `json:"extraEnvVars,omitempty"`
 }
 
 // model instance used to create proxy server config map

@@ -5,6 +5,9 @@ metadata:
   namespace: litellm
 spec:
   replicas: 1
+  extraEnvVars:
+    - name: PROXY_BASE_URL
+      value: http://proxy.litellm.litellm.ai
   redisSecretRef:
     nameRef:  redis-secret
     keys:
