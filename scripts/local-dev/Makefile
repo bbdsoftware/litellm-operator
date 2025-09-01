@@ -28,8 +28,9 @@ install-samples-extra: ## Install extra samples into the K8s cluster specified i
 
 ## Deploy and patch the image pull policy to Never for the controller image. Wait for pods to be ready.
 .PHONY: deploy-dev
-deploy-dev: deploy
-	$(KUBECTL) patch deployment litellm-operator-controller-manager -n litellm-operator-system --type=json -p='[{"op": "replace", "path": "/spec/template/spec/containers/0/imagePullPolicy", "value": "Never"}]'
+deploy-dev: manifests kustomize
+	$(KUSTOMIZE) build config/default | $(KUBECTL) apply -f -
+	$(KUBECTL) patch deployment litellm-operator-controller-manager -n litellm-operator-system --type=json -p='[{"op": "replace", "path": "/spec/template/spec/containers/0/imagePullPolicy", "value": "Never"},{"op": "replace", "path": "/spec/template/spec/containers/0/image", "value": "controller:dev"}]'
 	$(KUBECTL) apply -k config/samples/extra/cnpg
 	sleep 10
 	$(KUBECTL) wait --for=condition=Ready --timeout=120s -n cnpg-system pod -l app.kubernetes.io/name=cloudnative-pg
