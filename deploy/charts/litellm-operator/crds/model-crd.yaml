@@ -1,0 +1,474 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.16.1
+  name: models.litellm.litellm.ai
+spec:
+  group: litellm.litellm.ai
+  names:
+    kind: Model
+    listKind: ModelList
+    plural: models
+    singular: model
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns:
+    - description: Name of the model
+      jsonPath: .spec.modelName
+      name: Model Name
+      type: string
+    - description: Connection secret name
+      jsonPath: .spec.connectionRef.secretRef.secretName
+      name: Connection
+      type: string
+    - description: LLM provider
+      jsonPath: .spec.litellmParams.customLLMProvider
+      name: Provider
+      type: string
+    - description: Age of the model
+      jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    - description: Model UUID from LiteLLM server
+      jsonPath: .status.modelId
+      name: Model ID
+      type: string
+    - description: Ready status
+      jsonPath: .status.conditions[?(@.type=='Ready')].status
+      name: Ready
+      type: string
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: Model is the Schema for the models API.
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: ModelSpec defines the desired state of Model.
+            properties:
+              connectionRef:
+                description: ConnectionRef is the connection reference
+                properties:
+                  instanceRef:
+                    properties:
+                      name:
+                        type: string
+                      namespace:
+                        type: string
+                    type: object
+                  secretRef:
+                    properties:
+                      namespace:
+                        type: string
+                      secretName:
+                        type: string
+                    type: object
+                type: object
+              litellmParams:
+                description: LiteLLMParams contains the LiteLLM parameters
+                properties:
+                  additionalProp1:
+                    description: AdditionalProps contains additional properties
+                    type: object
+                    x-kubernetes-preserve-unknown-fields: true
+                  apiBase:
+                    description: APIBase is the base URL for the API
+                    type: string
+                  apiKey:
+                    description: APIKey is the API key for the model
+                    type: string
+                  apiVersion:
+                    description: APIVersion is the version of the API
+                    type: string
+                  autoRouterConfig:
+                    description: AutoRouterConfig is the auto router config
+                    type: string
+                  autoRouterConfigPath:
+                    description: AutoRouterConfigPath is the auto router config path
+                    type: string
+                  autoRouterDefaultModel:
+                    description: AutoRouterDefaultModel is the auto router default
+                      model
+                    type: string
+                  autoRouterEmbeddingModel:
+                    description: AutoRouterEmbeddingModel is the auto router embedding
+                      model
+                    type: string
+                  awsAccessKeyId:
+                    description: AWSAccessKeyID is the AWS access key ID
+                    type: string
+                  awsRegionName:
+                    description: AWSRegionName is the AWS region name
+                    type: string
+                  awsSecretAccessKey:
+                    description: AWSSecretAccessKey is the AWS secret access key
+                    type: string
+                  budgetDuration:
+                    description: BudgetDuration is the budget duration
+                    type: string
+                  configurableClientsideAuthParams:
+                    description: ConfigurableClientsideAuthParams are configurable
+                      client-side auth parameters
+                    items:
+                      type: object
+                      x-kubernetes-preserve-unknown-fields: true
+                    type: array
+                  customLLMProvider:
+                    description: CustomLLMProvider is the custom LLM provider
+                    type: string
+                  inputCostPerPixel:
+                    description: InputCostPerPixel is the cost per pixel for input
+                    type: string
+                  inputCostPerSecond:
+                    description: InputCostPerSecond is the cost per second for input
+                    type: string
+                  inputCostPerToken:
+                    description: InputCostPerToken is the cost per input token
+                    type: string
+                  litellmCredentialName:
+                    description: LiteLLMCredentialName is the LiteLLM credential name
+                    type: string
+                  litellmTraceId:
+                    description: LiteLLMTraceID is the LiteLLM trace ID
+                    type: string
+                  maxBudget:
+                    description: MaxBudget is the maximum budget
+                    type: string
+                  maxFileSizeMb:
+                    description: MaxFileSizeMB is the maximum file size in MB
+                    type: integer
+                  maxRetries:
+                    description: MaxRetries is the maximum number of retries
+                    type: integer
+                  mergeReasoningContentInChoices:
+                    description: MergeReasoningContentInChoices indicates if to merge
+                      reasoning content in choices
+                    type: boolean
+                  mockResponse:
+                    description: MockResponse is the mock response
+                    type: string
+                  model:
+                    description: Model is the model name
+                    type: string
+                  modelInfo:
+                    description: ModelInfo contains additional model information
+                    type: object
+                    x-kubernetes-preserve-unknown-fields: true
+                  organization:
+                    description: Organization is the organization name
+                    type: string
+                  outputCostPerPixel:
+                    description: OutputCostPerPixel is the cost per pixel for output
+                    type: string
+                  outputCostPerSecond:
+                    description: OutputCostPerSecond is the cost per second for output
+                    type: string
+                  outputCostPerToken:
+                    description: OutputCostPerToken is the cost per output token
+                    type: string
+                  regionName:
+                    description: RegionName is the region name for the service
+                    type: string
+                  rpm:
+                    description: RPM is requests per minute
+                    type: integer
+                  streamTimeout:
+                    description: StreamTimeout is the stream timeout in seconds
+                    type: integer
+                  timeout:
+                    description: Timeout is the timeout in seconds
+                    type: integer
+                  tpm:
+                    description: TPM is tokens per minute
+                    type: integer
+                  useInPassThrough:
+                    description: UseInPassThrough indicates if to use in pass through
+                    type: boolean
+                  useLitellmProxy:
+                    description: UseLiteLLMProxy indicates if to use LiteLLM proxy
+                    type: boolean
+                  vertexCredentials:
+                    description: VertexCredentials is the credentials for Vertex AI
+                    type: string
+                  vertexLocation:
+                    description: VertexLocation is the location for Vertex AI
+                    type: string
+                  vertexProject:
+                    description: VertexProject is the Google Cloud project for Vertex
+                      AI
+                    type: string
+                  watsonxRegionName:
+                    description: WatsonXRegionName is the WatsonX region name
+                    type: string
+                type: object
+              modelInfo:
+                description: ModelInfo contains the model information
+                properties:
+                  additionalProp1:
+                    description: AdditionalProps contains additional properties
+                    type: object
+                    x-kubernetes-preserve-unknown-fields: true
+                  dbModel:
+                    description: DBModel indicates if this is a database model
+                    type: boolean
+                  id:
+                    description: ID is the model ID
+                    type: string
+                  teamId:
+                    description: TeamID is the team ID
+                    type: string
+                  teamPublicModelName:
+                    description: TeamPublicModelName is the team public model name
+                    type: string
+                type: object
+              modelName:
+                description: ModelName is the name of the model
+                type: string
+              modelSecretRef:
+                description: ModelSecretRef is the model secret reference
+                properties:
+                  namespace:
+                    type: string
+                  secretName:
+                    type: string
+                type: object
+            required:
+            - modelSecretRef
+            type: object
+          status:
+            description: ModelStatus defines the observed state of Model.
+            properties:
+              conditions:
+                description: Conditions represent the latest available observations
+                  of a LiteLLM instance's state
+                items:
+                  description: Condition contains details for one aspect of the current
+                    state of this API Resource.
+                  properties:
+                    lastTransitionTime:
+                      description: |-
+                        lastTransitionTime is the last time the condition transitioned from one status to another.
+                        This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                      format: date-time
+                      type: string
+                    message:
+                      description: |-
+                        message is a human readable message indicating details about the transition.
+                        This may be an empty string.
+                      maxLength: 32768
+                      type: string
+                    observedGeneration:
+                      description: |-
+                        observedGeneration represents the .metadata.generation that the condition was set based upon.
+                        For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                        with respect to the current state of the instance.
+                      format: int64
+                      minimum: 0
+                      type: integer
+                    reason:
+                      description: |-
+                        reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                        Producers of specific condition types may define expected values and meanings for this field,
+                        and whether the values are considered a guaranteed API.
+                        The value should be a CamelCase string.
+                        This field may not be empty.
+                      maxLength: 1024
+                      minLength: 1
+                      pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                      type: string
+                    status:
+                      description: status of the condition, one of True, False, Unknown.
+                      enum:
+                      - "True"
+                      - "False"
+                      - Unknown
+                      type: string
+                    type:
+                      description: type of condition in CamelCase or in foo.example.com/CamelCase.
+                      maxLength: 316
+                      pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                      type: string
+                  required:
+                  - lastTransitionTime
+                  - message
+                  - reason
+                  - status
+                  - type
+                  type: object
+                type: array
+              lastUpdated:
+                description: LastUpdated represents the last time the status was updated
+                format: date-time
+                type: string
+              litellmParams:
+                description: LiteLLMParams contains the LiteLLM parameters
+                properties:
+                  additionalProp1:
+                    description: AdditionalProps contains additional properties
+                    type: object
+                    x-kubernetes-preserve-unknown-fields: true
+                  apiBase:
+                    description: APIBase is the base URL for the API
+                    type: string
+                  apiKey:
+                    description: APIKey is the API key for the model
+                    type: string
+                  apiVersion:
+                    description: APIVersion is the version of the API
+                    type: string
+                  autoRouterConfig:
+                    description: AutoRouterConfig is the auto router config
+                    type: string
+                  autoRouterConfigPath:
+                    description: AutoRouterConfigPath is the auto router config path
+                    type: string
+                  autoRouterDefaultModel:
+                    description: AutoRouterDefaultModel is the auto router default
+                      model
+                    type: string
+                  autoRouterEmbeddingModel:
+                    description: AutoRouterEmbeddingModel is the auto router embedding
+                      model
+                    type: string
+                  awsAccessKeyId:
+                    description: AWSAccessKeyID is the AWS access key ID
+                    type: string
+                  awsRegionName:
+                    description: AWSRegionName is the AWS region name
+                    type: string
+                  awsSecretAccessKey:
+                    description: AWSSecretAccessKey is the AWS secret access key
+                    type: string
+                  budgetDuration:
+                    description: BudgetDuration is the budget duration
+                    type: string
+                  configurableClientsideAuthParams:
+                    description: ConfigurableClientsideAuthParams are configurable
+                      client-side auth parameters
+                    items:
+                      type: object
+                      x-kubernetes-preserve-unknown-fields: true
+                    type: array
+                  customLLMProvider:
+                    description: CustomLLMProvider is the custom LLM provider
+                    type: string
+                  inputCostPerPixel:
+                    description: InputCostPerPixel is the cost per pixel for input
+                    type: string
+                  inputCostPerSecond:
+                    description: InputCostPerSecond is the cost per second for input
+                    type: string
+                  inputCostPerToken:
+                    description: InputCostPerToken is the cost per input token
+                    type: string
+                  litellmCredentialName:
+                    description: LiteLLMCredentialName is the LiteLLM credential name
+                    type: string
+                  litellmTraceId:
+                    description: LiteLLMTraceID is the LiteLLM trace ID
+                    type: string
+                  maxBudget:
+                    description: MaxBudget is the maximum budget
+                    type: string
+                  maxFileSizeMb:
+                    description: MaxFileSizeMB is the maximum file size in MB
+                    type: integer
+                  maxRetries:
+                    description: MaxRetries is the maximum number of retries
+                    type: integer
+                  mergeReasoningContentInChoices:
+                    description: MergeReasoningContentInChoices indicates if to merge
+                      reasoning content in choices
+                    type: boolean
+                  mockResponse:
+                    description: MockResponse is the mock response
+                    type: string
+                  model:
+                    description: Model is the model name
+                    type: string
+                  modelInfo:
+                    description: ModelInfo contains additional model information
+                    type: object
+                    x-kubernetes-preserve-unknown-fields: true
+                  organization:
+                    description: Organization is the organization name
+                    type: string
+                  outputCostPerPixel:
+                    description: OutputCostPerPixel is the cost per pixel for output
+                    type: string
+                  outputCostPerSecond:
+                    description: OutputCostPerSecond is the cost per second for output
+                    type: string
+                  outputCostPerToken:
+                    description: OutputCostPerToken is the cost per output token
+                    type: string
+                  regionName:
+                    description: RegionName is the region name for the service
+                    type: string
+                  rpm:
+                    description: RPM is requests per minute
+                    type: integer
+                  streamTimeout:
+                    description: StreamTimeout is the stream timeout in seconds
+                    type: integer
+                  timeout:
+                    description: Timeout is the timeout in seconds
+                    type: integer
+                  tpm:
+                    description: TPM is tokens per minute
+                    type: integer
+                  useInPassThrough:
+                    description: UseInPassThrough indicates if to use in pass through
+                    type: boolean
+                  useLitellmProxy:
+                    description: UseLiteLLMProxy indicates if to use LiteLLM proxy
+                    type: boolean
+                  vertexCredentials:
+                    description: VertexCredentials is the credentials for Vertex AI
+                    type: string
+                  vertexLocation:
+                    description: VertexLocation is the location for Vertex AI
+                    type: string
+                  vertexProject:
+                    description: VertexProject is the Google Cloud project for Vertex
+                      AI
+                    type: string
+                  watsonxRegionName:
+                    description: WatsonXRegionName is the WatsonX region name
+                    type: string
+                type: object
+              modelId:
+                description: ModelId contains the model uuid provided by litellm server
+                type: string
+              modelName:
+                description: ModelName is the name of the model
+                type: string
+              observedGeneration:
+                description: ObservedGeneration represents the .metadata.generation
+                  that the condition was set based upon
+                format: int64
+                type: integer
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
+
