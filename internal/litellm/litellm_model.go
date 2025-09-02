@@ -51,7 +51,7 @@ type UpdateLiteLLMParams struct {
 	ApiVersion                       *string                `json:"api_version,omitempty"`
 	VertexProject                    *string                `json:"vertex_project,omitempty"`
 	VertexLocation                   *string                `json:"vertex_location,omitempty"`
-	VertexCredentials                interface{}            `json:"vertex_credentials,omitempty"`
+	VertexCredentials                *string                `json:"vertex_credentials,omitempty"`
 	RegionName                       *string                `json:"region_name,omitempty"`
 	AwsAccessKeyID                   *string                `json:"aws_access_key_id,omitempty"`
 	AwsSecretAccessKey               *string                `json:"aws_secret_access_key,omitempty"`
@@ -60,8 +60,8 @@ type UpdateLiteLLMParams struct {
 	CustomLLMProvider                *string                `json:"custom_llm_provider,omitempty"`
 	TPM                              *int                   `json:"tpm,omitempty"`
 	RPM                              *int                   `json:"rpm,omitempty"`
-	Timeout                          interface{}            `json:"timeout,omitempty"`
-	StreamTimeout                    interface{}            `json:"stream_timeout,omitempty"`
+	Timeout                          *float64               `json:"timeout,omitempty"`
+	StreamTimeout                    *float64               `json:"stream_timeout,omitempty"`
 	MaxRetries                       *int                   `json:"max_retries,omitempty"`
 	Organization                     *string                `json:"organization,omitempty"`
 	ConfigurableClientsideAuthParams []interface{}          `json:"configurable_clientside_auth_params,omitempty"`
@@ -134,7 +134,8 @@ func (l *LitellmClient) UpdateModel(ctx context.Context, req *ModelRequest) (Mod
 		return ModelResponse{}, err
 	}
 
-	response, err := l.makeRequest(ctx, "POST", "/model/update", body)
+	path := "/model/" + *req.ModelInfo.ID + "/update"
+	response, err := l.makeRequest(ctx, "PATCH", path, body)
 	if err != nil {
 		log.Error(err, "Failed to update model in LiteLLM")
 		return ModelResponse{}, err
@@ -232,17 +233,70 @@ func (l *LitellmClient) IsModelUpdateNeeded(ctx context.Context, model *ModelRes
 	}
 
 	checkField("model_name", "Model name", model.ModelName, req.ModelName, true, true)
-	checkField("litellm_params", "LiteLLM params", model.LiteLLMParams, req.LiteLLMParams, true, true)
-	checkField("model_info", "Model info", model.ModelInfo, req.ModelInfo, true, true)
 
-	// Example of more granular LiteLLMParams field checking
-	if model.LiteLLMParams != nil && req.LiteLLMParams != nil {
-		checkField("input_cost_per_token", "Input cost per token", model.LiteLLMParams.InputCostPerToken, req.LiteLLMParams.InputCostPerToken, true, true)
-		checkField("output_cost_per_token", "Output cost per token", model.LiteLLMParams.OutputCostPerToken, req.LiteLLMParams.OutputCostPerToken, true, true)
-
+	// If one of the LiteLLMParams is nil and the other is not, consider this a change.
+	if (model.LiteLLMParams == nil) != (req.LiteLLMParams == nil) {
+		checkField("litellm_params", "LiteLLM params", model.LiteLLMParams, req.LiteLLMParams, true, true)
 	}
 
-	// Example of more granular ModelInfo field checking
+	// More concise granular LiteLLMParams checking using descriptor list.
+	if model.LiteLLMParams != nil && req.LiteLLMParams != nil {
+		type paramCheck struct {
+			fieldName   string
+			logName     string
+			modelVal    func(*UpdateLiteLLMParams) interface{}
+			reqVal      func(*UpdateLiteLLMParams) interface{}
+			equateEmpty bool
+			needsUpdate bool
+		}
+
+		checks := []paramCheck{
+			{"input_cost_per_token", "Input cost per token", func(p *UpdateLiteLLMParams) interface{} { return p.InputCostPerToken }, func(p *UpdateLiteLLMParams) interface{} { return p.InputCostPerToken }, true, true},
+			{"output_cost_per_token", "Output cost per token", func(p *UpdateLiteLLMParams) interface{} { return p.OutputCostPerToken }, func(p *UpdateLiteLLMParams) interface{} { return p.OutputCostPerToken }, true, true},
+			{"input_cost_per_second", "Input cost per second", func(p *UpdateLiteLLMParams) interface{} { return p.InputCostPerSecond }, func(p *UpdateLiteLLMParams) interface{} { return p.InputCostPerSecond }, true, true},
+			{"output_cost_per_second", "Output cost per second", func(p *UpdateLiteLLMParams) interface{} { return p.OutputCostPerSecond }, func(p *UpdateLiteLLMParams) interface{} { return p.OutputCostPerSecond }, true, true},
+			{"input_cost_per_pixel", "Input cost per pixel", func(p *UpdateLiteLLMParams) interface{} { return p.InputCostPerPixel }, func(p *UpdateLiteLLMParams) interface{} { return p.InputCostPerPixel }, true, true},
+			{"output_cost_per_pixel", "Output cost per pixel", func(p *UpdateLiteLLMParams) interface{} { return p.OutputCostPerPixel }, func(p *UpdateLiteLLMParams) interface{} { return p.OutputCostPerPixel }, true, true},
+			{"api_base", "API base", func(p *UpdateLiteLLMParams) interface{} { return p.ApiBase }, func(p *UpdateLiteLLMParams) interface{} { return p.ApiBase }, true, true},
+			{"api_version", "API version", func(p *UpdateLiteLLMParams) interface{} { return p.ApiVersion }, func(p *UpdateLiteLLMParams) interface{} { return p.ApiVersion }, true, true},
+			{"vertex_project", "Vertex project", func(p *UpdateLiteLLMParams) interface{} { return p.VertexProject }, func(p *UpdateLiteLLMParams) interface{} { return p.VertexProject }, true, true},
+			{"vertex_location", "Vertex location", func(p *UpdateLiteLLMParams) interface{} { return p.VertexLocation }, func(p *UpdateLiteLLMParams) interface{} { return p.VertexLocation }, true, true},
+			{"region_name", "Region name", func(p *UpdateLiteLLMParams) interface{} { return p.RegionName }, func(p *UpdateLiteLLMParams) interface{} { return p.RegionName }, true, true},
+			{"aws_region_name", "AWS region name", func(p *UpdateLiteLLMParams) interface{} { return p.AwsRegionName }, func(p *UpdateLiteLLMParams) interface{} { return p.AwsRegionName }, true, true},
+			{"watsonx_region_name", "WatsonX region name", func(p *UpdateLiteLLMParams) interface{} { return p.WatsonXRegionName }, func(p *UpdateLiteLLMParams) interface{} { return p.WatsonXRegionName }, true, true},
+			{"custom_llm_provider", "Custom LLM provider", func(p *UpdateLiteLLMParams) interface{} { return p.CustomLLMProvider }, func(p *UpdateLiteLLMParams) interface{} { return p.CustomLLMProvider }, true, true},
+			{"tpm", "TPM", func(p *UpdateLiteLLMParams) interface{} { return p.TPM }, func(p *UpdateLiteLLMParams) interface{} { return p.TPM }, true, true},
+			{"rpm", "RPM", func(p *UpdateLiteLLMParams) interface{} { return p.RPM }, func(p *UpdateLiteLLMParams) interface{} { return p.RPM }, true, true},
+			{"timeout", "Timeout", func(p *UpdateLiteLLMParams) interface{} { return p.Timeout }, func(p *UpdateLiteLLMParams) interface{} { return p.Timeout }, true, true},
+			{"stream_timeout", "Stream timeout", func(p *UpdateLiteLLMParams) interface{} { return p.StreamTimeout }, func(p *UpdateLiteLLMParams) interface{} { return p.StreamTimeout }, true, true},
+			{"max_retries", "Max retries", func(p *UpdateLiteLLMParams) interface{} { return p.MaxRetries }, func(p *UpdateLiteLLMParams) interface{} { return p.MaxRetries }, true, true},
+			{"organization", "Organization", func(p *UpdateLiteLLMParams) interface{} { return p.Organization }, func(p *UpdateLiteLLMParams) interface{} { return p.Organization }, true, true},
+			{"litellm_credential_name", "LiteLLM credential name", func(p *UpdateLiteLLMParams) interface{} { return p.LiteLLMCredentialName }, func(p *UpdateLiteLLMParams) interface{} { return p.LiteLLMCredentialName }, true, true},
+			{"litellm_trace_id", "LiteLLM trace ID", func(p *UpdateLiteLLMParams) interface{} { return p.LiteLLMTraceID }, func(p *UpdateLiteLLMParams) interface{} { return p.LiteLLMTraceID }, true, true},
+			{"max_file_size_mb", "Max file size MB", func(p *UpdateLiteLLMParams) interface{} { return p.MaxFileSizeMB }, func(p *UpdateLiteLLMParams) interface{} { return p.MaxFileSizeMB }, true, true},
+			{"max_budget", "Max budget", func(p *UpdateLiteLLMParams) interface{} { return p.MaxBudget }, func(p *UpdateLiteLLMParams) interface{} { return p.MaxBudget }, true, true},
+			{"budget_duration", "Budget duration", func(p *UpdateLiteLLMParams) interface{} { return p.BudgetDuration }, func(p *UpdateLiteLLMParams) interface{} { return p.BudgetDuration }, true, true},
+			{"use_in_pass_through", "Use in pass-through", func(p *UpdateLiteLLMParams) interface{} { return p.UseInPassThrough }, func(p *UpdateLiteLLMParams) interface{} { return p.UseInPassThrough }, true, true},
+			{"use_litellm_proxy", "Use LiteLLM proxy", func(p *UpdateLiteLLMParams) interface{} { return p.UseLiteLLMProxy }, func(p *UpdateLiteLLMParams) interface{} { return p.UseLiteLLMProxy }, true, true},
+			{"merge_reasoning_content_in_choices", "Merge reasoning content in choices", func(p *UpdateLiteLLMParams) interface{} { return p.MergeReasoningContentInChoices }, func(p *UpdateLiteLLMParams) interface{} { return p.MergeReasoningContentInChoices }, true, true},
+			{"auto_router_config_path", "Auto router config path", func(p *UpdateLiteLLMParams) interface{} { return p.AutoRouterConfigPath }, func(p *UpdateLiteLLMParams) interface{} { return p.AutoRouterConfigPath }, true, true},
+			{"auto_router_config", "Auto router config", func(p *UpdateLiteLLMParams) interface{} { return p.AutoRouterConfig }, func(p *UpdateLiteLLMParams) interface{} { return p.AutoRouterConfig }, true, true},
+			{"auto_router_default_model", "Auto router default model", func(p *UpdateLiteLLMParams) interface{} { return p.AutoRouterDefaultModel }, func(p *UpdateLiteLLMParams) interface{} { return p.AutoRouterDefaultModel }, true, true},
+			{"auto_router_embedding_model", "Auto router embedding model", func(p *UpdateLiteLLMParams) interface{} { return p.AutoRouterEmbeddingModel }, func(p *UpdateLiteLLMParams) interface{} { return p.AutoRouterEmbeddingModel }, true, true},
+			{"model", "Model", func(p *UpdateLiteLLMParams) interface{} { return p.Model }, func(p *UpdateLiteLLMParams) interface{} { return p.Model }, true, true},
+		}
+
+		for _, c := range checks {
+			checkField(c.fieldName, c.logName, c.modelVal(model.LiteLLMParams), c.reqVal(req.LiteLLMParams), c.equateEmpty, c.needsUpdate)
+		}
+	}
+
+	// If one of the ModelInfo is nil and the other is not, consider this a change.
+	if (model.ModelInfo == nil) != (req.ModelInfo == nil) {
+		checkField("model_info", "Model info", model.ModelInfo, req.ModelInfo, true, true)
+	}
+
+	// Example of more granular ModelInfo field checking when both are present
 	if model.ModelInfo != nil && req.ModelInfo != nil {
 		checkField("model_info_id", "Model info ID", model.ModelInfo.ID, req.ModelInfo.ID, true, true)
 		checkField("team_id", "Team ID", model.ModelInfo.TeamID, req.ModelInfo.TeamID, true, true)

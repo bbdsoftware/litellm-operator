@@ -434,38 +434,46 @@ func (r *ModelReconciler) convertToModelRequest(ctx context.Context, model *lite
 			return util.IntPtrOrNil(*i)
 		}
 
+		// convert an *int (from CRD) to *float64 expected by LiteLLM params (for timeout fields)
+		getFloatFromIntPtr := func(i *int) *float64 {
+			if i == nil {
+				return nil
+			}
+			f := float64(*i)
+			return &f
+		}
+
 		litellmParams := &litellm.UpdateLiteLLMParams{
-			ApiKey:                         util.StringPtrOrNil(secretMap["apiKey"]),
-			ApiBase:                        util.StringPtrOrNil(secretMap["apiBase"]),
-			ApiVersion:                     getStrFromPtr(model.Spec.LiteLLMParams.ApiVersion),
-			VertexProject:                  getStrFromPtr(model.Spec.LiteLLMParams.VertexProject),
-			VertexLocation:                 getStrFromPtr(model.Spec.LiteLLMParams.VertexLocation),
-			RegionName:                     getStrFromPtr(model.Spec.LiteLLMParams.RegionName),
-			AwsAccessKeyID:                 util.StringPtrOrNil(secretMap["AwsAccessKeyID"]),
-			AwsSecretAccessKey:             util.StringPtrOrNil(secretMap["AwsSecretAccessKey"]),
-			AwsRegionName:                  getStrFromPtr(model.Spec.LiteLLMParams.AwsRegionName),
-			WatsonXRegionName:              getStrFromPtr(model.Spec.LiteLLMParams.WatsonXRegionName),
-			CustomLLMProvider:              getStrFromPtr(model.Spec.LiteLLMParams.CustomLLMProvider),
-			TPM:                            getIntFromPtr(model.Spec.LiteLLMParams.TPM),
-			RPM:                            getIntFromPtr(model.Spec.LiteLLMParams.RPM),
-			MaxRetries:                     getIntFromPtr(model.Spec.LiteLLMParams.MaxRetries),
-			Organization:                   getStrFromPtr(model.Spec.LiteLLMParams.Organization),
-			LiteLLMCredentialName:          getStrFromPtr(model.Spec.LiteLLMParams.LiteLLMCredentialName),
-			LiteLLMTraceID:                 getStrFromPtr(model.Spec.LiteLLMParams.LiteLLMTraceID),
-			MaxFileSizeMB:                  getIntFromPtr(model.Spec.LiteLLMParams.MaxFileSizeMB),
-			BudgetDuration:                 getStrFromPtr(model.Spec.LiteLLMParams.BudgetDuration),
-			UseInPassThrough:               model.Spec.LiteLLMParams.UseInPassThrough,
-			UseLiteLLMProxy:                model.Spec.LiteLLMParams.UseLiteLLMProxy,
-			MergeReasoningContentInChoices: model.Spec.LiteLLMParams.MergeReasoningContentInChoices,
-			AutoRouterConfigPath:           getStrFromPtr(model.Spec.LiteLLMParams.AutoRouterConfigPath),
-			AutoRouterConfig:               getStrFromPtr(model.Spec.LiteLLMParams.AutoRouterConfig),
-			AutoRouterDefaultModel:         getStrFromPtr(model.Spec.LiteLLMParams.AutoRouterDefaultModel),
-			AutoRouterEmbeddingModel:       getStrFromPtr(model.Spec.LiteLLMParams.AutoRouterEmbeddingModel),
-			VertexCredentials:              util.StringPtrOrNil(secretMap["VertexCredentials"]),
-			Timeout:                        getIntFromPtr(model.Spec.LiteLLMParams.Timeout),
-			StreamTimeout:                  getIntFromPtr(model.Spec.LiteLLMParams.StreamTimeout),
-			MockResponse:                   getStrFromPtr(model.Spec.LiteLLMParams.MockResponse),
-			Model:                          getStrFromPtr(model.Spec.LiteLLMParams.Model),
+			ApiKey:                   util.StringPtrOrNil(secretMap["apiKey"]),
+			ApiBase:                  util.StringPtrOrNil(secretMap["apiBase"]),
+			ApiVersion:               getStrFromPtr(model.Spec.LiteLLMParams.ApiVersion),
+			VertexProject:            getStrFromPtr(model.Spec.LiteLLMParams.VertexProject),
+			VertexLocation:           getStrFromPtr(model.Spec.LiteLLMParams.VertexLocation),
+			RegionName:               getStrFromPtr(model.Spec.LiteLLMParams.RegionName),
+			AwsAccessKeyID:           util.StringPtrOrNil(secretMap["AwsAccessKeyID"]),
+			AwsSecretAccessKey:       util.StringPtrOrNil(secretMap["AwsSecretAccessKey"]),
+			AwsRegionName:            getStrFromPtr(model.Spec.LiteLLMParams.AwsRegionName),
+			WatsonXRegionName:        getStrFromPtr(model.Spec.LiteLLMParams.WatsonXRegionName),
+			CustomLLMProvider:        getStrFromPtr(model.Spec.LiteLLMParams.CustomLLMProvider),
+			TPM:                      getIntFromPtr(model.Spec.LiteLLMParams.TPM),
+			RPM:                      getIntFromPtr(model.Spec.LiteLLMParams.RPM),
+			MaxRetries:               getIntFromPtr(model.Spec.LiteLLMParams.MaxRetries),
+			Organization:             getStrFromPtr(model.Spec.LiteLLMParams.Organization),
+			LiteLLMCredentialName:    getStrFromPtr(model.Spec.LiteLLMParams.LiteLLMCredentialName),
+			LiteLLMTraceID:           getStrFromPtr(model.Spec.LiteLLMParams.LiteLLMTraceID),
+			MaxFileSizeMB:            getIntFromPtr(model.Spec.LiteLLMParams.MaxFileSizeMB),
+			BudgetDuration:           getStrFromPtr(model.Spec.LiteLLMParams.BudgetDuration),
+			UseInPassThrough:         model.Spec.LiteLLMParams.UseInPassThrough,
+			UseLiteLLMProxy:          model.Spec.LiteLLMParams.UseLiteLLMProxy,
+			AutoRouterConfigPath:     getStrFromPtr(model.Spec.LiteLLMParams.AutoRouterConfigPath),
+			AutoRouterConfig:         getStrFromPtr(model.Spec.LiteLLMParams.AutoRouterConfig),
+			AutoRouterDefaultModel:   getStrFromPtr(model.Spec.LiteLLMParams.AutoRouterDefaultModel),
+			AutoRouterEmbeddingModel: getStrFromPtr(model.Spec.LiteLLMParams.AutoRouterEmbeddingModel),
+			VertexCredentials:        util.StringPtrOrNil(secretMap["VertexCredentials"]),
+			Timeout:                  getFloatFromIntPtr(model.Spec.LiteLLMParams.Timeout),
+			StreamTimeout:            getFloatFromIntPtr(model.Spec.LiteLLMParams.StreamTimeout),
+			MockResponse:             getStrFromPtr(model.Spec.LiteLLMParams.MockResponse),
+			Model:                    getStrFromPtr(model.Spec.LiteLLMParams.Model),
 		}
 
 		// Handle ConfigurableClientsideAuthParams
@@ -474,6 +482,14 @@ func (r *ModelReconciler) convertToModelRequest(ctx context.Context, model *lite
 			for i, param := range *model.Spec.LiteLLMParams.ConfigurableClientsideAuthParams {
 				litellmParams.ConfigurableClientsideAuthParams[i] = param
 			}
+		}
+
+		if model.Spec.LiteLLMParams.MergeReasoningContentInChoices != nil {
+			litellmParams.MergeReasoningContentInChoices = model.Spec.LiteLLMParams.MergeReasoningContentInChoices
+		} else {
+			// default to false
+			falseVal := false
+			litellmParams.MergeReasoningContentInChoices = &falseVal
 		}
 
 		if err := common.ParseAndAssign(model.Spec.LiteLLMParams.OutputCostPerToken, litellmParams.OutputCostPerToken, "OutputCostPerToken"); err != nil {
@@ -499,6 +515,9 @@ func (r *ModelReconciler) convertToModelRequest(ctx context.Context, model *lite
 		}
 		modelRequest.LiteLLMParams = litellmParams
 		modelRequest.ModelInfo = litellm.NewModelInfo()
+		if model.Status.ModelId != nil && *model.Status.ModelId != "" {
+			modelRequest.ModelInfo.ID = model.Status.ModelId
+		}
 	}
 
 	return modelRequest, nil

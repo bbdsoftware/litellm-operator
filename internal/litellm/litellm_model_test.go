@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"testing"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -155,7 +156,8 @@ var _ = Describe("Litellm Model", func() {
 				req := &ModelRequest{
 					ModelName: "test-model",
 					LiteLLMParams: &UpdateLiteLLMParams{
-						VertexCredentials: make(chan int), // This cannot be marshalled
+						// use a slice with an unsupported element (channel) so json.Marshal fails at runtime
+						ConfigurableClientsideAuthParams: []interface{}{make(chan int)}, // This cannot be marshalled
 					},
 				}
 
@@ -171,8 +173,9 @@ var _ = Describe("Litellm Model", func() {
 		Context("when the request is successful", func() {
 			BeforeEach(func() {
 				server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-					Expect(r.Method).To(Equal("POST"))
-					Expect(r.URL.Path).To(Equal("/model/update"))
+					modelID := "model-123"
+					Expect(r.Method).To(Equal("PATCH"))
+					Expect(r.URL.Path).To(Equal("/model/" + modelID + "/update"))
 					Expect(r.Header.Get("Authorization")).To(Equal("Bearer " + masterKey))
 					Expect(r.Header.Get("Content-Type")).To(Equal("application/json"))
 
@@ -209,6 +212,7 @@ var _ = Describe("Litellm Model", func() {
 						InputCostPerToken:  float64Ptr(0.002),
 						OutputCostPerToken: float64Ptr(0.003),
 					},
+					ModelInfo: &ModelInfo{ID: stringPtr("model-123")},
 				}
 
 				response, err := client.UpdateModel(ctx, req)
@@ -241,6 +245,7 @@ var _ = Describe("Litellm Model", func() {
 			It("should return an error", func() {
 				req := &ModelRequest{
 					ModelName: "non-existent-model",
+					ModelInfo: &ModelInfo{ID: stringPtr("non-existent-model")},
 				}
 
 				_, err := client.UpdateModel(ctx, req)
@@ -256,7 +261,7 @@ var _ = Describe("Litellm Model", func() {
 			BeforeEach(func() {
 				server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 					Expect(r.Method).To(Equal("GET"))
-					Expect(r.URL.Path).To(Equal("/model/"))
+					Expect(r.URL.Path).To(Equal("/model"))
 					Expect(r.URL.Query().Get("litellm_model_id")).To(Equal("test-model"))
 					Expect(r.Header.Get("Authorization")).To(Equal("Bearer " + masterKey))
 
@@ -404,7 +409,7 @@ var _ = Describe("Litellm Model", func() {
 				result, err := client.IsModelUpdateNeeded(ctx, model, req)
 				Expect(err).NotTo(HaveOccurred())
 
-				Expect(result).To(BeTrue())
+				Expect(result.NeedsUpdate).To(BeTrue())
 			})
 		})
 
@@ -426,7 +431,7 @@ var _ = Describe("Litellm Model", func() {
 				result, err := client.IsModelUpdateNeeded(ctx, model, req)
 				Expect(err).NotTo(HaveOccurred())
 
-				Expect(result).To(BeTrue())
+				Expect(result.NeedsUpdate).To(BeTrue())
 			})
 
 			It("should return true when output cost changes", func() {
@@ -450,7 +455,7 @@ var _ = Describe("Litellm Model", func() {
 
 			})
 
-			It("should return true when API key changes", func() {
+			It("should not consider API key changes as requiring an update (sensitive)", func() {
 				model := &ModelResponse{
 					ModelName: "test-model",
 					LiteLLMParams: &UpdateLiteLLMParams{
@@ -466,7 +471,8 @@ var _ = Describe("Litellm Model", func() {
 
 				result, err := client.IsModelUpdateNeeded(ctx, model, req)
 				Expect(err).NotTo(HaveOccurred())
-				Expect(result.NeedsUpdate).To(BeTrue())
+				// API keys are treated as sensitive and should not trigger an update
+				Expect(result.NeedsUpdate).To(BeFalse())
 
 			})
 		})
@@ -579,8 +585,6 @@ var _ = Describe("Litellm Model", func() {
 				result, err := client.IsModelUpdateNeeded(ctx, model, req)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(result.NeedsUpdate).To(BeTrue())
-
-				Expect(result).To(BeTrue())
 			})
 		})
 	})
@@ -673,6 +677,7 @@ var _ = Describe("Litellm Model", func() {
 			It("should return a connection error for UpdateModel", func() {
 				req := &ModelRequest{
 					ModelName: "test-model",
+					ModelInfo: &ModelInfo{ID: stringPtr("model-000")},
 				}
 
 				_, err := client.UpdateModel(ctx, req)
@@ -724,6 +729,7 @@ var _ = Describe("Litellm Model", func() {
 			It("should return an unmarshalling error for UpdateModel", func() {
 				req := &ModelRequest{
 					ModelName: "test-model",
+					ModelInfo: &ModelInfo{ID: stringPtr("model-000")},
 				}
 
 				_, err := client.UpdateModel(ctx, req)
@@ -759,15 +765,111 @@ var _ = Describe("Litellm Model", func() {
 })
 
 // Helper functions for creating pointers to primitive types
-// Helper functions for creating pointers to primitive types
-// nolint:unused
+
 func float64Ptr(v float64) *float64 { return &v }
 
-// nolint:unused
 func stringPtr(v string) *string { return &v }
 
-// nolint:unused
 func intPtr(v int) *int { return &v }
 
-// nolint:unused
-func boolPtr(v bool) *bool { return &v }
+func TestIsModelUpdateNeeded_NoChange(t *testing.T) {
+	client := NewLitellmClient("", "")
+
+	model := &ModelResponse{
+		ModelName: "m1",
+		LiteLLMParams: &UpdateLiteLLMParams{
+			InputCostPerToken: float64Ptr(0.001),
+			ApiBase:           stringPtr("https://api"),
+		},
+		ModelInfo: &ModelInfo{ID: stringPtr("id1")},
+	}
+
+	req := &ModelRequest{
+		ModelName: "m1",
+		LiteLLMParams: &UpdateLiteLLMParams{
+			InputCostPerToken: float64Ptr(0.001),
+			ApiBase:           stringPtr("https://api"),
+		},
+		ModelInfo: &ModelInfo{ID: stringPtr("id1")},
+	}
+
+	res, err := client.IsModelUpdateNeeded(context.Background(), model, req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if res.NeedsUpdate {
+		t.Fatalf("expected no update, got NeedsUpdate=true")
+	}
+	if len(res.ChangedFields) != 0 {
+		t.Fatalf("expected 0 changed fields, got %d: %+v", len(res.ChangedFields), res.ChangedFields)
+	}
+}
+
+func TestIsModelUpdateNeeded_LiteParamsChanged(t *testing.T) {
+	client := NewLitellmClient("", "")
+
+	model := &ModelResponse{
+		ModelName: "m1",
+		LiteLLMParams: &UpdateLiteLLMParams{
+			InputCostPerToken: float64Ptr(0.001),
+			ApiBase:           stringPtr("https://api"),
+		},
+	}
+
+	req := &ModelRequest{
+		ModelName: "m1",
+		LiteLLMParams: &UpdateLiteLLMParams{
+			InputCostPerToken: float64Ptr(0.002),
+			ApiBase:           stringPtr("https://api2"),
+		},
+	}
+
+	res, err := client.IsModelUpdateNeeded(context.Background(), model, req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if !res.NeedsUpdate {
+		t.Fatalf("expected update needed, got NeedsUpdate=false")
+	}
+
+	gotNames := make([]string, 0, len(res.ChangedFields))
+	for _, c := range res.ChangedFields {
+		gotNames = append(gotNames, c.FieldName)
+	}
+
+	// order is deterministic based on the checks table in code
+	wantNames := []string{"input_cost_per_token", "api_base"}
+	if !reflect.DeepEqual(gotNames, wantNames) {
+		t.Fatalf("changed field names = %v, want %v", gotNames, wantNames)
+	}
+}
+
+func TestIsModelUpdateNeeded_SensitiveFieldsIgnored(t *testing.T) {
+	client := NewLitellmClient("", "")
+
+	model := &ModelResponse{
+		LiteLLMParams: &UpdateLiteLLMParams{
+			ApiKey: stringPtr("old-key"),
+		},
+	}
+
+	req := &ModelRequest{
+		LiteLLMParams: &UpdateLiteLLMParams{
+			ApiKey: stringPtr("new-key"),
+		},
+	}
+
+	res, err := client.IsModelUpdateNeeded(context.Background(), model, req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if res.NeedsUpdate {
+		t.Fatalf("expected no update when only a sensitive field changed")
+	}
+	if len(res.ChangedFields) != 0 {
+		t.Fatalf("expected 0 changed fields, got %d: %+v", len(res.ChangedFields), res.ChangedFields)
+	}
+}

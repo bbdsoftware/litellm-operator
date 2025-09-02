@@ -292,7 +292,7 @@ var _ = Describe("ModelReconciler", func() {
 			}
 			fakeClient.UpdateModelFunc = func(ctx context.Context, req *litellm.ModelRequest) (litellm.ModelResponse, error) {
 				Expect(req.ModelName).To(Equal(common.AppendModelSourceTag(resourceName, common.ModelTagCRD)))
-				return litellm.ModelResponse{ModelName: resourceName}, nil
+				return litellm.ModelResponse{ModelName: common.AppendModelSourceTag(resourceName, common.ModelTagCRD)}, nil
 			}
 
 			// Act
