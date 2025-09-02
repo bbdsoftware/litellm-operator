@@ -204,8 +204,7 @@ func (r *VirtualKeyReconciler) generateVirtualKey(ctx context.Context, virtualKe
 		})
 	}
 
-	resourceNaming := util.NewLitellmResourceNaming(&virtualKey.Spec.ConnectionRef)
-	secretName := resourceNaming.GenerateSecretName(virtualKeyResponse.KeyAlias)
+	secretName := r.litellmResourceNaming.GenerateSecretName(virtualKeyResponse.KeyAlias)
 
 	updateVirtualKeyStatus(virtualKey, virtualKeyResponse, secretName)
 	_, err = r.updateConditions(ctx, virtualKey, metav1.Condition{

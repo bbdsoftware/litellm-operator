@@ -121,6 +121,10 @@ func (r *UserReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 		r.LitellmClient = litellmConnectionHandler.GetLitellmClient()
 	}
 
+	if r.litellmResourceNaming == nil {
+		r.litellmResourceNaming = util.NewLitellmResourceNaming(&user.Spec.ConnectionRef)
+	}
+
 	// If the User is being deleted, delete the user from litellm
 	if user.GetDeletionTimestamp() != nil {
 		if controllerutil.ContainsFinalizer(user, util.FinalizerName) {
@@ -233,8 +237,7 @@ func (r *UserReconciler) createUser(ctx context.Context, user *authv1alpha1.User
 		return ctrl.Result{}, err
 	}
 
-	resourceNaming := util.NewLitellmResourceNaming(&user.Spec.ConnectionRef)
-	secretName := resourceNaming.GenerateSecretName(userResponse.UserAlias)
+	secretName := r.litellmResourceNaming.GenerateSecretName(userResponse.UserAlias)
 
 	updateUserStatus(user, userResponse, secretName)
 
