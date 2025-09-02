@@ -3,7 +3,11 @@ package litellm
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"reflect"
 
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
@@ -12,7 +16,7 @@ type LitellmModel interface {
 	DeleteModel(ctx context.Context, modelName string) error
 	GetModel(ctx context.Context, modelName string) (ModelResponse, error)
 	GetModelInfo(ctx context.Context, modelID string) (ModelResponse, error)
-	IsModelUpdateNeeded(ctx context.Context, model *ModelResponse, req *ModelRequest) bool
+	IsModelUpdateNeeded(ctx context.Context, model *ModelResponse, req *ModelRequest) (ModelUpdateNeeded, error)
 	UpdateModel(ctx context.Context, req *ModelRequest) (ModelResponse, error)
 }
 
@@ -196,15 +200,62 @@ func (l *LitellmClient) DeleteModel(ctx context.Context, modelId string) error {
 	return nil
 }
 
-// IsModelUpdateNeeded checks if the model needs to be updated
-func (l *LitellmClient) IsModelUpdateNeeded(ctx context.Context, model *ModelResponse, req *ModelRequest) bool {
-	log := log.FromContext(ctx)
+type ModelUpdateNeeded struct {
+	NeedsUpdate   bool
+	ChangedFields []FieldChange
+}
 
-	// Compare model names
-	if model.ModelName != req.ModelName {
-		log.Info("Model name changed")
-		return true
+// IsModelUpdateNeeded checks if the model needs to be updated
+func (l *LitellmClient) IsModelUpdateNeeded(ctx context.Context, model *ModelResponse, req *ModelRequest) (ModelUpdateNeeded, error) {
+	log := log.FromContext(ctx)
+	var changedFields ModelUpdateNeeded
+	// Helper function to check field changes
+	checkField := func(fieldName, logName string, current, expected interface{}, equateEmpty bool, needsUpdate bool) {
+		var changed bool
+		if equateEmpty {
+			changed = !cmp.Equal(current, expected, cmpopts.EquateEmpty())
+		} else {
+			changed = !reflect.DeepEqual(current, expected)
+		}
+
+		if changed {
+			log.Info(fmt.Sprintf("%s changed", logName))
+			if needsUpdate {
+				changedFields.NeedsUpdate = true
+			}
+			changedFields.ChangedFields = append(changedFields.ChangedFields, FieldChange{
+				FieldName:     fieldName,
+				CurrentValue:  current,
+				ExpectedValue: expected,
+			})
+		}
 	}
 
-	return false
+	checkField("model_name", "Model name", model.ModelName, req.ModelName, true, true)
+	checkField("litellm_params", "LiteLLM params", model.LiteLLMParams, req.LiteLLMParams, true, true)
+	checkField("model_info", "Model info", model.ModelInfo, req.ModelInfo, true, true)
+
+	// Example of more granular LiteLLMParams field checking
+	if model.LiteLLMParams != nil && req.LiteLLMParams != nil {
+		checkField("input_cost_per_token", "Input cost per token", model.LiteLLMParams.InputCostPerToken, req.LiteLLMParams.InputCostPerToken, true, true)
+		checkField("output_cost_per_token", "Output cost per token", model.LiteLLMParams.OutputCostPerToken, req.LiteLLMParams.OutputCostPerToken, true, true)
+
+	}
+
+	// Example of more granular ModelInfo field checking
+	if model.ModelInfo != nil && req.ModelInfo != nil {
+		checkField("model_info_id", "Model info ID", model.ModelInfo.ID, req.ModelInfo.ID, true, true)
+		checkField("team_id", "Team ID", model.ModelInfo.TeamID, req.ModelInfo.TeamID, true, true)
+		checkField("team_public_model_name", "Team public model name", model.ModelInfo.TeamPublicModelName, req.ModelInfo.TeamPublicModelName, true, true)
+	}
+
+	if changedFields.NeedsUpdate {
+		log.Info("Model update needed")
+		for _, field := range changedFields.ChangedFields {
+			log.Info(fmt.Sprintf("Field changed: %s", field.FieldName), "current", field.CurrentValue, "expected", field.ExpectedValue)
+		}
+
+	}
+
+	return changedFields, nil
 }

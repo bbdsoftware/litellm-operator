@@ -41,7 +41,8 @@ type FakeLitellmModelClient struct {
 	GetModelFunc            func(ctx context.Context, id string) (litellm.ModelResponse, error)
 	UpdateModelFunc         func(ctx context.Context, req *litellm.ModelRequest) (litellm.ModelResponse, error)
 	DeleteModelFunc         func(ctx context.Context, id string) error
-	IsModelUpdateNeededFunc func(ctx context.Context, existing *litellm.ModelResponse, req *litellm.ModelRequest) bool
+	IsModelUpdateNeededFunc func(ctx context.Context, existing *litellm.ModelResponse, req *litellm.ModelRequest) (litellm.ModelUpdateNeeded, error)
+	GetModelInfoFunc        func(ctx context.Context, id string) (litellm.ModelResponse, error)
 
 	// call tracking
 	CreateCalled bool
@@ -64,8 +65,12 @@ func (f *FakeLitellmModelClient) DeleteModel(ctx context.Context, id string) err
 	f.DeleteCalled = true
 	return f.DeleteModelFunc(ctx, id)
 }
-func (f *FakeLitellmModelClient) IsModelUpdateNeeded(ctx context.Context, existing *litellm.ModelResponse, req *litellm.ModelRequest) bool {
+func (f *FakeLitellmModelClient) IsModelUpdateNeeded(ctx context.Context, existing *litellm.ModelResponse, req *litellm.ModelRequest) (litellm.ModelUpdateNeeded, error) {
 	return f.IsModelUpdateNeededFunc(ctx, existing, req)
+}
+
+func (f *FakeLitellmModelClient) GetModelInfo(ctx context.Context, id string) (litellm.ModelResponse, error) {
+	return f.GetModelInfoFunc(ctx, id)
 }
 
 var _ = Describe("ModelReconciler", func() {
@@ -282,8 +287,8 @@ var _ = Describe("ModelReconciler", func() {
 				Expect(gotID).To(Equal(id))
 				return litellm.ModelResponse{ModelName: resourceName}, nil
 			}
-			fakeClient.IsModelUpdateNeededFunc = func(ctx context.Context, existing *litellm.ModelResponse, req *litellm.ModelRequest) bool {
-				return true
+			fakeClient.IsModelUpdateNeededFunc = func(ctx context.Context, existing *litellm.ModelResponse, req *litellm.ModelRequest) (litellm.ModelUpdateNeeded, error) {
+				return litellm.ModelUpdateNeeded{NeedsUpdate: true}, nil
 			}
 			fakeClient.UpdateModelFunc = func(ctx context.Context, req *litellm.ModelRequest) (litellm.ModelResponse, error) {
 				Expect(req.ModelName).To(Equal(common.AppendModelSourceTag(resourceName, common.ModelTagCRD)))

@@ -54,4 +54,4 @@ dev-cluster-bootstrap-full-recreate: kind-cluster-delete dev-cluster-bootstrap-f
 dev-cluster-bootstrap-debug-recreate: kind-cluster-delete dev-cluster-bootstrap-debug ## Recreate the Kind cluster and bootstrap
 
 dev-port-forward-litellm:
-	$(KUBECTL) port-forward svc/litellm-example-service 8000:80 -n litellm
+	$(KUBECTL) port-forward svc/litellm-example-service 8000:80 -n litellm > /dev/null 2>&1 &

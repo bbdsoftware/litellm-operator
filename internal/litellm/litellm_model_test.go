@@ -401,7 +401,8 @@ var _ = Describe("Litellm Model", func() {
 					ModelName: "new-model",
 				}
 
-				result := client.IsModelUpdateNeeded(ctx, model, req)
+				result, err := client.IsModelUpdateNeeded(ctx, model, req)
+				Expect(err).NotTo(HaveOccurred())
 
 				Expect(result).To(BeTrue())
 			})
@@ -422,7 +423,8 @@ var _ = Describe("Litellm Model", func() {
 					},
 				}
 
-				result := client.IsModelUpdateNeeded(ctx, model, req)
+				result, err := client.IsModelUpdateNeeded(ctx, model, req)
+				Expect(err).NotTo(HaveOccurred())
 
 				Expect(result).To(BeTrue())
 			})
@@ -441,9 +443,11 @@ var _ = Describe("Litellm Model", func() {
 					},
 				}
 
-				result := client.IsModelUpdateNeeded(ctx, model, req)
+				result, err := client.IsModelUpdateNeeded(ctx, model, req)
 
-				Expect(result).To(BeTrue())
+				Expect(err).NotTo(HaveOccurred())
+				Expect(result.NeedsUpdate).To(BeTrue())
+
 			})
 
 			It("should return true when API key changes", func() {
@@ -460,9 +464,10 @@ var _ = Describe("Litellm Model", func() {
 					},
 				}
 
-				result := client.IsModelUpdateNeeded(ctx, model, req)
+				result, err := client.IsModelUpdateNeeded(ctx, model, req)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(result.NeedsUpdate).To(BeTrue())
 
-				Expect(result).To(BeTrue())
 			})
 		})
 
@@ -481,9 +486,10 @@ var _ = Describe("Litellm Model", func() {
 					},
 				}
 
-				result := client.IsModelUpdateNeeded(ctx, model, req)
+				result, err := client.IsModelUpdateNeeded(ctx, model, req)
 
-				Expect(result).To(BeTrue())
+				Expect(err).NotTo(HaveOccurred())
+				Expect(result.NeedsUpdate).To(BeTrue())
 			})
 
 			It("should return true when modelInfo changes", func() {
@@ -500,9 +506,10 @@ var _ = Describe("Litellm Model", func() {
 					},
 				}
 
-				result := client.IsModelUpdateNeeded(ctx, model, req)
+				result, err := client.IsModelUpdateNeeded(ctx, model, req)
 
-				Expect(result).To(BeTrue())
+				Expect(err).NotTo(HaveOccurred())
+				Expect(result.NeedsUpdate).To(BeTrue())
 			})
 		})
 
@@ -533,9 +540,10 @@ var _ = Describe("Litellm Model", func() {
 					},
 				}
 
-				result := client.IsModelUpdateNeeded(ctx, model, req)
+				result, err := client.IsModelUpdateNeeded(ctx, model, req)
 
-				Expect(result).To(BeFalse())
+				Expect(err).NotTo(HaveOccurred())
+				Expect(result.NeedsUpdate).To(BeFalse())
 			})
 		})
 
@@ -551,9 +559,10 @@ var _ = Describe("Litellm Model", func() {
 					},
 				}
 
-				result := client.IsModelUpdateNeeded(ctx, model, req)
+				result, err := client.IsModelUpdateNeeded(ctx, model, req)
 
-				Expect(result).To(BeTrue())
+				Expect(err).NotTo(HaveOccurred())
+				Expect(result.NeedsUpdate).To(BeTrue())
 			})
 
 			It("should handle nil ModelInfo", func() {
@@ -567,7 +576,9 @@ var _ = Describe("Litellm Model", func() {
 					},
 				}
 
-				result := client.IsModelUpdateNeeded(ctx, model, req)
+				result, err := client.IsModelUpdateNeeded(ctx, model, req)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(result.NeedsUpdate).To(BeTrue())
 
 				Expect(result).To(BeTrue())
 			})

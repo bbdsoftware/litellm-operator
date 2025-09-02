@@ -166,7 +166,16 @@ func (r *ModelReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 	}
 
 	// Remote model exists - check whether an update is required
-	if r.LitellmModelClient.IsModelUpdateNeeded(ctx, &existingModel, modelRequest) {
+	modelUpdateNeeded, err := r.LitellmModelClient.IsModelUpdateNeeded(ctx, &existingModel, modelRequest)
+	if err != nil {
+		log.Error(err, "Failed to check if model needs update")
+		r.setCond(model, CondDegraded, metav1.ConditionTrue, ReasonUpdateFailed, err.Error())
+		if updateErr := r.patchStatus(ctx, model, req); updateErr != nil {
+			return ctrl.Result{RequeueAfter: time.Second * 30}, updateErr
+		}
+		return ctrl.Result{RequeueAfter: time.Second * 30}, err
+	}
+	if modelUpdateNeeded.NeedsUpdate {
 		log.Info("Model needs update, updating in LiteLLM")
 		if err := r.handleUpdate(ctx, model, modelRequest, req); err != nil {
 			r.setCond(model, CondDegraded, metav1.ConditionTrue, ReasonUpdateFailed, err.Error())
