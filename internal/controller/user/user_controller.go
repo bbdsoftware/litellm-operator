@@ -233,7 +233,8 @@ func (r *UserReconciler) createUser(ctx context.Context, user *authv1alpha1.User
 		return ctrl.Result{}, err
 	}
 
-	secretName := r.litellmResourceNaming.GenerateSecretName(userResponse.UserAlias)
+	resourceNaming := util.NewLitellmResourceNaming(&user.Spec.ConnectionRef)
+	secretName := resourceNaming.GenerateSecretName(userResponse.UserAlias)
 
 	updateUserStatus(user, userResponse, secretName)
 
