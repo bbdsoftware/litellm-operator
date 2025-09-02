@@ -238,6 +238,9 @@ func (r *ModelReconciler) handleCreation(ctx context.Context, model *litellmv1al
 
 	log := logf.FromContext(ctx)
 
+	r.setCond(model, CondProgressing, metav1.ConditionTrue, ReasonReconciling, "Creating model in LiteLLM")
+	r.setCond(model, CondReady, metav1.ConditionFalse, ReasonReconciling, "Creating model in LiteLLM")
+
 	modelRequest, err := r.convertToModelRequest(ctx, model)
 	if err != nil {
 		r.setCond(model, CondProgressing, metav1.ConditionTrue, ReasonReconciling, "Creating model in LiteLLM")
@@ -248,9 +251,6 @@ func (r *ModelReconciler) handleCreation(ctx context.Context, model *litellmv1al
 		return err
 
 	}
-
-	r.setCond(model, CondProgressing, metav1.ConditionTrue, ReasonReconciling, "Creating model in LiteLLM")
-	r.setCond(model, CondReady, metav1.ConditionFalse, ReasonReconciling, "Creating model in LiteLLM")
 
 	modelResponse, err := r.LitellmModelClient.CreateModel(ctx, modelRequest)
 	if err != nil {

@@ -140,16 +140,12 @@ func (r *UserReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 
 	// Phase 3: Handle deletion if resource is being deleted
 	if user.GetDeletionTimestamp() != nil {
-		return r.handleDeletion(ctx, user, req)
+		return r.handleDeletion(ctx, user)
 	}
 
 	// Phase 4: Handle creation/update (normal reconciliation)
-	return r.handleCreateOrUpdateUser(ctx, user, req)
+	return r.handleCreateOrUpdateUser(ctx, user)
 
-}
-
-func shouldSyncUser(user *authv1alpha1.User) bool {
-	return user.Status.UserID != "" && user.Status.UserID != user.Spec.UserID
 }
 
 func (r *UserReconciler) userExistsInLitellm(ctx context.Context, user *authv1alpha1.User) (bool, error) {
@@ -170,7 +166,7 @@ func (r *UserReconciler) SetupWithManager(mgr ctrl.Manager) error {
 }
 
 // handleDeletion manages the user deletion process with proper finalizer handling
-func (r *UserReconciler) handleDeletion(ctx context.Context, user *authv1alpha1.User, req ctrl.Request) (ctrl.Result, error) {
+func (r *UserReconciler) handleDeletion(ctx context.Context, user *authv1alpha1.User) (ctrl.Result, error) {
 	log := log.FromContext(ctx)
 
 	if !controllerutil.ContainsFinalizer(user, util.FinalizerName) {
@@ -211,7 +207,7 @@ func (r *UserReconciler) deleteUserFromLitellm(ctx context.Context, user *authv1
 }
 
 // handleCreateOrUpdateUser manages the complete user lifecycle (creation and updates)
-func (r *UserReconciler) handleCreateOrUpdateUser(ctx context.Context, user *authv1alpha1.User, req ctrl.Request) (ctrl.Result, error) {
+func (r *UserReconciler) handleCreateOrUpdateUser(ctx context.Context, user *authv1alpha1.User) (ctrl.Result, error) {
 	log := log.FromContext(ctx)
 
 	// Ensure finalizer is present
@@ -259,28 +255,6 @@ func (r *UserReconciler) handleCreateOrUpdateUser(ctx context.Context, user *aut
 		return r.handleUpdateUser(ctx, user)
 	}
 
-	return ctrl.Result{}, nil
-}
-
-// deleteUserz handles the deletion of a user from the litellm service
-func (r *UserReconciler) handleDeleteUser(ctx context.Context, user *authv1alpha1.User) (ctrl.Result, error) {
-	log := log.FromContext(ctx)
-
-	if err := r.LitellmClient.DeleteUser(ctx, user.Status.UserID); err != nil {
-		r.setCond(user, CondDegraded, metav1.ConditionTrue, ReasonDeleteFailed, err.Error())
-		r.setCond(user, CondReady, metav1.ConditionFalse, ReasonDeleteFailed, err.Error())
-		if err := r.patchStatus(ctx, user); err != nil {
-			log.Error(err, "Failed to update conditions")
-		}
-		return ctrl.Result{}, err
-	}
-
-	controllerutil.RemoveFinalizer(user, util.FinalizerName)
-	if err := r.Update(ctx, user); err != nil {
-		log.Error(err, "Failed to remove finalizer")
-		return ctrl.Result{}, err
-	}
-	log.Info("Deleted User: " + user.Status.UserAlias + " from litellm")
 	return ctrl.Result{}, nil
 }
 
