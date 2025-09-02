@@ -52,17 +52,29 @@ type FakeLitellmModelClient struct {
 
 func (f *FakeLitellmModelClient) CreateModel(ctx context.Context, req *litellm.ModelRequest) (litellm.ModelResponse, error) {
 	f.CreateCalled = true
+	if f.CreateModelFunc == nil {
+		return litellm.ModelResponse{}, nil
+	}
 	return f.CreateModelFunc(ctx, req)
 }
 func (f *FakeLitellmModelClient) GetModel(ctx context.Context, id string) (litellm.ModelResponse, error) {
+	if f.GetModelFunc == nil {
+		return litellm.ModelResponse{}, nil
+	}
 	return f.GetModelFunc(ctx, id)
 }
 func (f *FakeLitellmModelClient) UpdateModel(ctx context.Context, req *litellm.ModelRequest) (litellm.ModelResponse, error) {
 	f.UpdateCalled = true
+	if f.UpdateModelFunc == nil {
+		return litellm.ModelResponse{}, nil
+	}
 	return f.UpdateModelFunc(ctx, req)
 }
 func (f *FakeLitellmModelClient) DeleteModel(ctx context.Context, id string) error {
 	f.DeleteCalled = true
+	if f.DeleteModelFunc == nil {
+		return nil
+	}
 	return f.DeleteModelFunc(ctx, id)
 }
 func (f *FakeLitellmModelClient) IsModelUpdateNeeded(ctx context.Context, existing *litellm.ModelResponse, req *litellm.ModelRequest) (litellm.ModelUpdateNeeded, error) {
@@ -70,6 +82,9 @@ func (f *FakeLitellmModelClient) IsModelUpdateNeeded(ctx context.Context, existi
 }
 
 func (f *FakeLitellmModelClient) GetModelInfo(ctx context.Context, id string) (litellm.ModelResponse, error) {
+	if f.GetModelInfoFunc == nil {
+		return litellm.ModelResponse{}, nil
+	}
 	return f.GetModelInfoFunc(ctx, id)
 }
 

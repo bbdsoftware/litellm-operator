@@ -73,9 +73,8 @@ func NewLitellmConnectionHandler(client client.Client, ctx context.Context, conn
 	}
 
 	h.litellmClient = litellm.NewLitellmClient(connectionDetails.URL, connectionDetails.MasterKey)
-	h.litellmClient.TestConnection(ctx)
-	if err != nil {
-		return h, err
+	if err := h.litellmClient.TestConnection(ctx); err != nil {
+		return nil, fmt.Errorf("failed to test LiteLLM connection: %w", err)
 	}
 
 	return h, nil

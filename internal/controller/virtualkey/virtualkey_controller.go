@@ -81,11 +81,14 @@ func (r *VirtualKeyReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	}
 
 	// Initialize connection handler if not already done
-	litellmConnectionHandler, err := common.NewLitellmConnectionHandler(r.Client, ctx, virtualKey.Spec.ConnectionRef, virtualKey.Namespace)
-	if err != nil {
-		return ctrl.Result{RequeueAfter: time.Second * 30}, err
+	// If a LitellmClient was injected (tests), reuse it; otherwise create one from connection details
+	if r.LitellmClient == nil {
+		litellmConnectionHandler, err := common.NewLitellmConnectionHandler(r.Client, ctx, virtualKey.Spec.ConnectionRef, virtualKey.Namespace)
+		if err != nil {
+			return ctrl.Result{RequeueAfter: time.Second * 30}, err
+		}
+		r.LitellmClient = litellmConnectionHandler.GetLitellmClient()
 	}
-	r.LitellmClient = litellmConnectionHandler.GetLitellmClient()
 
 	if r.litellmResourceNaming == nil {
 		r.litellmResourceNaming = util.NewLitellmResourceNaming(&virtualKey.Spec.ConnectionRef)

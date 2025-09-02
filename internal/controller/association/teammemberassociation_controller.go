@@ -75,11 +75,14 @@ func (r *TeamMemberAssociationReconciler) Reconcile(ctx context.Context, req ctr
 		return ctrl.Result{}, err
 	}
 
-	litellmConnectionHandler, err := common.NewLitellmConnectionHandler(r.Client, ctx, teamMemberAssociation.Spec.ConnectionRef, teamMemberAssociation.Namespace)
-	if err != nil {
-		return ctrl.Result{RequeueAfter: time.Second * 30}, err
+	// If a LitellmClient was injected (tests), reuse it; otherwise create one from connection details
+	if r.LitellmClient == nil {
+		litellmConnectionHandler, err := common.NewLitellmConnectionHandler(r.Client, ctx, teamMemberAssociation.Spec.ConnectionRef, teamMemberAssociation.Namespace)
+		if err != nil {
+			return ctrl.Result{RequeueAfter: time.Second * 30}, err
+		}
+		r.LitellmClient = litellmConnectionHandler.GetLitellmClient()
 	}
-	r.LitellmClient = litellmConnectionHandler.GetLitellmClient()
 
 	// If the TeamMemberAssociation is being deleted, delete the team member association from litellm
 	if teamMemberAssociation.GetDeletionTimestamp() != nil {

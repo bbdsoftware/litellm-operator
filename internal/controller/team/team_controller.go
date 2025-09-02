@@ -76,11 +76,14 @@ func (r *TeamReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 		return ctrl.Result{}, err
 	}
 
-	litellmConnectionHandler, err := common.NewLitellmConnectionHandler(r.Client, ctx, team.Spec.ConnectionRef, team.Namespace)
-	if err != nil {
-		return ctrl.Result{RequeueAfter: time.Second * 30}, err
+	// If a LitellmClient was injected (tests), reuse it; otherwise create one from connection details
+	if r.LitellmClient == nil {
+		litellmConnectionHandler, err := common.NewLitellmConnectionHandler(r.Client, ctx, team.Spec.ConnectionRef, team.Namespace)
+		if err != nil {
+			return ctrl.Result{RequeueAfter: time.Second * 30}, err
+		}
+		r.LitellmClient = litellmConnectionHandler.GetLitellmClient()
 	}
-	r.LitellmClient = litellmConnectionHandler.GetLitellmClient()
 
 	// If the Team is being deleted, delete the team from litellm
 	if team.GetDeletionTimestamp() != nil {
