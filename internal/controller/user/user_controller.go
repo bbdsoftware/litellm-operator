@@ -23,6 +23,10 @@ import (
 	"strconv"
 	"time"
 
+	authv1alpha1 "github.com/bbdsoftware/litellm-operator/api/auth/v1alpha1"
+	"github.com/bbdsoftware/litellm-operator/internal/controller/common"
+	litellm "github.com/bbdsoftware/litellm-operator/internal/litellm"
+	"github.com/bbdsoftware/litellm-operator/internal/util"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	meta "k8s.io/apimachinery/pkg/api/meta"
@@ -32,11 +36,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/log"
-
-	authv1alpha1 "github.com/bbdsoftware/litellm-operator/api/auth/v1alpha1"
-	"github.com/bbdsoftware/litellm-operator/internal/controller/common"
-	litellm "github.com/bbdsoftware/litellm-operator/internal/litellm"
-	"github.com/bbdsoftware/litellm-operator/internal/util"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
 )
 
 // UserReconciler reconciles a User object
@@ -82,6 +82,21 @@ const (
 // +kubebuilder:rbac:groups=auth.litellm.ai,resources=users/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=auth.litellm.ai,resources=users/finalizers,verbs=update
 
+// fetchUser retrieves the User resource and handles not found errors gracefully
+func (r *UserReconciler) fetchUser(ctx context.Context, namespacedName client.ObjectKey) (*authv1alpha1.User, error) {
+	log := log.FromContext(ctx)
+	user := &authv1alpha1.User{}
+	err := r.Get(ctx, namespacedName, user)
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			log.Info("User resource not found. Ignoring since object must be deleted")
+			return nil, nil
+		}
+		return nil, err
+	}
+	return user, nil
+}
+
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
 // TODO(user): Modify the Reconcile function to compare the state specified by
@@ -94,17 +109,15 @@ const (
 func (r *UserReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := log.FromContext(ctx)
 
-	user := &authv1alpha1.User{}
-	if err := r.Get(ctx, req.NamespacedName, user); err != nil {
-		// If the custom resource is not found then, it usually means that it was deleted or not created
-		// In this way, we will stop the reconciliation
-		if apierrors.IsNotFound(err) {
-			log.Info("User resource not found. Ignoring since object must be deleted")
-			return ctrl.Result{}, nil
-		}
-		// Error reading the object - requeue the request.
+	// Phase 1: Fetch and validate the resource
+	user, err := r.fetchUser(ctx, req.NamespacedName)
+	if err != nil {
 		log.Error(err, "Failed to get User")
 		return ctrl.Result{}, err
+	}
+	if user == nil {
+		// Resource was deleted, stop reconciliation
+		return ctrl.Result{}, nil
 	}
 
 	// If a LitellmClient was injected (tests), reuse it; otherwise create one from connection details
@@ -125,13 +138,90 @@ func (r *UserReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 		r.litellmResourceNaming = util.NewLitellmResourceNaming(&user.Spec.ConnectionRef)
 	}
 
-	// If the User is being deleted, delete the user from litellm
+	// Phase 3: Handle deletion if resource is being deleted
 	if user.GetDeletionTimestamp() != nil {
-		if controllerutil.ContainsFinalizer(user, util.FinalizerName) {
-			log.Info("Deleting User: " + user.Status.UserAlias + " from litellm")
-			return r.deleteUser(ctx, user)
-		}
+		return r.handleDeletion(ctx, user, req)
+	}
+
+	// Phase 4: Handle creation/update (normal reconciliation)
+	return r.handleCreateOrUpdateUser(ctx, user, req)
+
+}
+
+func shouldSyncUser(user *authv1alpha1.User) bool {
+	return user.Status.UserID != "" && user.Status.UserID != user.Spec.UserID
+}
+
+func (r *UserReconciler) userExistsInLitellm(ctx context.Context, user *authv1alpha1.User) (bool, error) {
+	userID, err := r.LitellmClient.GetUserID(ctx, user.Spec.UserEmail)
+	if err != nil {
+		return false, err
+	}
+	return userID != "", nil
+}
+
+// SetupWithManager sets up the controller with the Manager.
+func (r *UserReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	return ctrl.NewControllerManagedBy(mgr).
+		For(&authv1alpha1.User{}).
+		WithEventFilter(predicate.GenerationChangedPredicate{}).
+		Named("litellm-user").
+		Complete(r)
+}
+
+// handleDeletion manages the user deletion process with proper finalizer handling
+func (r *UserReconciler) handleDeletion(ctx context.Context, user *authv1alpha1.User, req ctrl.Request) (ctrl.Result, error) {
+	log := log.FromContext(ctx)
+
+	if !controllerutil.ContainsFinalizer(user, util.FinalizerName) {
 		return ctrl.Result{}, nil
+	}
+
+	log.Info("Deleting User from LiteLLM", "user", user.Status.UserAlias, "userID", user.Status.UserID)
+
+	// Delete the user from LiteLLM
+	if err := r.deleteUserFromLitellm(ctx, user, r.LitellmClient); err != nil {
+		log.Error(err, "Failed to delete user from LiteLLM")
+		r.setCond(user, CondDegraded, metav1.ConditionTrue, ReasonDeleteFailed, err.Error())
+		r.setCond(user, CondReady, metav1.ConditionFalse, ReasonDeleteFailed, err.Error())
+		if updateErr := r.patchStatus(ctx, user, req); updateErr != nil {
+			log.Error(updateErr, "Failed to update status after delete user from LiteLLM error")
+		}
+		return ctrl.Result{RequeueAfter: time.Second * 30}, err
+	}
+
+	controllerutil.RemoveFinalizer(user, util.FinalizerName)
+	if err := r.Update(ctx, user); err != nil {
+		log.Error(err, "Failed to remove finalizer")
+		return ctrl.Result{}, err
+	}
+
+	log.Info("Successfully deleted User from LiteLLM and removed finalizer", "user", user.Status.UserAlias)
+	return ctrl.Result{}, nil
+}
+
+func (r *UserReconciler) deleteUserFromLitellm(ctx context.Context, user *authv1alpha1.User, litellmClient litellm.LitellmUser) error {
+	log := log.FromContext(ctx)
+
+	if err := litellmClient.DeleteUser(ctx, user.Status.UserID); err != nil {
+		return err
+	}
+	log.Info("Deleted User: " + user.Status.UserAlias + " from litellm")
+	return nil
+}
+
+// handleCreateOrUpdateUser manages the complete user lifecycle (creation and updates)
+func (r *UserReconciler) handleCreateOrUpdateUser(ctx context.Context, user *authv1alpha1.User, req ctrl.Request) (ctrl.Result, error) {
+	log := log.FromContext(ctx)
+
+	// Ensure finalizer is present
+	if !controllerutil.ContainsFinalizer(user, util.FinalizerName) {
+		controllerutil.AddFinalizer(user, util.FinalizerName)
+		if err := r.Update(ctx, user); err != nil {
+			log.Error(err, "Failed to add finalizer")
+			return ctrl.Result{}, err
+		}
+		log.Info("Finalizer added", "user", user.Name)
 	}
 
 	// Check that the teamIDs exist before attempting to create the user
@@ -147,7 +237,7 @@ func (r *UserReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 		}
 	}
 
-	userID, err := r.LitellmClient.GetUserID(ctx, user.Spec.UserEmail)
+	userExists, err := r.userExistsInLitellm(ctx, user)
 	if err != nil {
 		log.Error(err, "Failed to check if User exists")
 		r.setCond(user, CondDegraded, metav1.ConditionTrue, ReasonConnectionError, err.Error())
@@ -234,7 +324,9 @@ func (r *UserReconciler) createUser(ctx context.Context, user *authv1alpha1.User
 		if errPatch := r.patchStatus(ctx, user); errPatch != nil {
 			log.Error(errPatch, "Failed to update conditions")
 		}
-		return ctrl.Result{}, err
+
+		log.Info("Created User: " + user.Spec.UserAlias + " in litellm")
+		return ctrl.Result{}, nil
 	}
 
 	secretName := r.litellmResourceNaming.GenerateSecretName(userResponse.UserAlias)
@@ -287,18 +379,14 @@ func (r *UserReconciler) createSecret(ctx context.Context, user *authv1alpha1.Us
 	return r.Create(ctx, secret)
 }
 
-// syncUser syncs the user with the litellm service should changes be detected
-func (r *UserReconciler) syncUser(ctx context.Context, user *authv1alpha1.User) error {
+// updateUserInLitellm updates the user with the litellm service should changes be detected
+func (r *UserReconciler) handleUpdateUser(ctx context.Context, user *authv1alpha1.User) error {
 	log := log.FromContext(ctx)
 
 	userRequest, err := createUserRequest(user)
 	if err != nil {
-		log.Error(err, "Failed to create user request")
 		return err
 	}
-
-	// Need to set the userID in the request, else it will generate a new one
-	userRequest.UserID = user.Status.UserID
 
 	userResponse, err := r.LitellmClient.GetUser(ctx, user.Status.UserID)
 	if err != nil {
