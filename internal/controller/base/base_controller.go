@@ -1,0 +1,288 @@
+/*
+Copyright 2025.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package base
+
+import (
+	"context"
+	"fmt"
+	"time"
+
+	kerrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"sigs.k8s.io/controller-runtime/pkg/log"
+)
+
+// ============================================================================
+// Common Condition Types
+// ============================================================================
+
+const (
+	CondReady       = "Ready"       // Overall health indicator
+	CondProgressing = "Progressing" // Actively reconciling / rolling out
+	CondDegraded    = "Degraded"    // Partial failure state
+	CondFailed      = "Failed"      // Complete failure state
+)
+
+// ============================================================================
+// Common Reason Constants
+// ============================================================================
+
+const (
+	ReasonReconciling         = "Reconciling"
+	ReasonConfigError         = "ConfigError"
+	ReasonChildCreateOrUpdate = "ChildResourcesUpdating"
+	ReasonDependencyNotReady  = "DependencyNotReady"
+	ReasonReconcileError      = "ReconcileError"
+	ReasonReady               = "Ready"
+	ReasonDeleted             = "Deleted"
+	ReasonConnectionError     = "ConnectionError"
+	ReasonDeleteFailed        = "DeleteFailed"
+	ReasonCreateFailed        = "CreateFailed"
+	ReasonConversionFailed    = "ConversionFailed"
+	ReasonUpdateFailed        = "UpdateFailed"
+	ReasonLitellmError        = "LitellmError"
+	ReasonLitellmSuccess      = "LitellmSuccess"
+	ReasonInvalidSpec         = "InvalidSpec"
+)
+
+// ============================================================================
+// Base Controller Interface and Struct
+// ============================================================================
+
+// StatusManager defines the interface for managing resource status and conditions
+type StatusManager[T StatusConditionObject] interface {
+	// PatchStatus updates the status subresource
+	PatchStatus(ctx context.Context, obj T) error
+	// SetCondition sets a condition on the status
+	SetCondition(obj T, condType string, status metav1.ConditionStatus, reason, message string)
+	// SetConditions sets multiple conditions at once
+	SetConditions(obj T, conditions []metav1.Condition)
+	// SetSuccessConditions sets standard success conditions
+	SetSuccessConditions(obj T, message string)
+	// SetErrorConditions sets standard error conditions
+	SetErrorConditions(obj T, reason, message string)
+	// SetProgressingConditions sets standard progressing conditions
+	SetProgressingConditions(obj T, message string)
+}
+
+// StatusConditionObject represents any Kubernetes object that has status conditions
+type StatusConditionObject interface {
+	client.Object
+	GetConditions() []metav1.Condition
+	SetConditions(conditions []metav1.Condition)
+	GetGeneration() int64
+}
+
+// BaseController provides common controller functionality
+type BaseController[T StatusConditionObject] struct {
+	client.Client
+	Scheme *runtime.Scheme
+}
+
+// ============================================================================
+// Status Management Implementation
+// ============================================================================
+
+// PatchStatus updates the status subresource
+func (b *BaseController[T]) PatchStatus(ctx context.Context, obj T) error {
+	return b.Status().Update(ctx, obj)
+}
+
+// SetCondition sets a single condition on the resource status
+func (b *BaseController[T]) SetCondition(obj T, condType string, status metav1.ConditionStatus, reason, message string) {
+	newCondition := metav1.Condition{
+		Type:               condType,
+		Status:             status,
+		Reason:             reason,
+		Message:            message,
+		ObservedGeneration: obj.GetGeneration(),
+	}
+
+	conditions := obj.GetConditions()
+	meta.SetStatusCondition(&conditions, newCondition)
+	obj.SetConditions(conditions)
+}
+
+// SetConditions sets multiple conditions at once
+func (b *BaseController[T]) SetConditions(obj T, conditions []metav1.Condition) {
+	existingConditions := obj.GetConditions()
+	for _, condition := range conditions {
+		condition.ObservedGeneration = obj.GetGeneration()
+		meta.SetStatusCondition(&existingConditions, condition)
+	}
+	obj.SetConditions(existingConditions)
+}
+
+// SetSuccessConditions sets standard conditions for successful operations
+func (b *BaseController[T]) SetSuccessConditions(obj T, message string) {
+	b.SetCondition(obj, CondReady, metav1.ConditionTrue, ReasonReady, message)
+	b.SetCondition(obj, CondProgressing, metav1.ConditionFalse, ReasonReady, message)
+	b.SetCondition(obj, CondDegraded, metav1.ConditionFalse, ReasonReady, message)
+}
+
+// SetErrorConditions sets standard conditions for error states
+func (b *BaseController[T]) SetErrorConditions(obj T, reason, message string) {
+	b.SetCondition(obj, CondReady, metav1.ConditionFalse, reason, message)
+	b.SetCondition(obj, CondProgressing, metav1.ConditionFalse, reason, message)
+	b.SetCondition(obj, CondDegraded, metav1.ConditionTrue, reason, message)
+}
+
+// SetProgressingConditions sets standard conditions for progressing operations
+func (b *BaseController[T]) SetProgressingConditions(obj T, message string) {
+	b.SetCondition(obj, CondReady, metav1.ConditionFalse, ReasonReconciling, message)
+	b.SetCondition(obj, CondProgressing, metav1.ConditionTrue, ReasonReconciling, message)
+	b.SetCondition(obj, CondDegraded, metav1.ConditionFalse, ReasonReconciling, message)
+}
+
+// ============================================================================
+// Helper Methods
+// ============================================================================
+
+// TemporaryError marks an error as retryable
+// Use the standard library's error wrapping and interface idioms for retriable errors.
+
+// HandleError is a common error handling pattern with status update
+func (b *BaseController[T]) HandleErrorRetryable(ctx context.Context, obj T, err error, reason string) (ctrl.Result, error) {
+
+	b.SetErrorConditions(obj, reason, err.Error())
+	_ = b.PatchStatus(ctx, obj)
+
+	return ctrl.Result{RequeueAfter: time.Second * 30}, nil
+}
+
+func (b *BaseController[T]) HandleErrorFinal(ctx context.Context, obj T, err error, reason string) (ctrl.Result, error) {
+	b.SetErrorConditions(obj, reason, err.Error())
+	_ = b.PatchStatus(ctx, obj)
+
+	return ctrl.Result{}, nil
+}
+
+// HandleSuccess is a common success handling pattern with status update
+func (b *BaseController[T]) HandleSuccess(ctx context.Context, obj T, message string) (ctrl.Result, error) {
+	b.SetSuccessConditions(obj, message)
+	_ = b.PatchStatus(ctx, obj)
+	return ctrl.Result{}, nil
+}
+
+// HandleProgressing is a common progressing handling pattern with status update
+func (b *BaseController[T]) HandleProgressing(ctx context.Context, obj T, message string) (ctrl.Result, error) {
+	b.SetProgressingConditions(obj, message)
+	_ = b.PatchStatus(ctx, obj)
+	return ctrl.Result{}, nil
+}
+
+// ============================================================================
+// Finalizer Management
+// ============================================================================
+
+// EnsureFinalizer adds a finalizer to the resource if it doesn't already exist
+func (b *BaseController[T]) EnsureFinalizer(ctx context.Context, obj T, finalizerName string) error {
+	log := log.FromContext(ctx)
+
+	if !controllerutil.ContainsFinalizer(obj, finalizerName) {
+		controllerutil.AddFinalizer(obj, finalizerName)
+		if err := b.Update(ctx, obj); err != nil {
+			log.Error(err, "Failed to add finalizer", "finalizer", finalizerName)
+			return fmt.Errorf("failed to add finalizer %s: %w", finalizerName, err)
+		}
+		log.V(1).Info("Finalizer added", "finalizer", finalizerName, "resource", obj.GetName())
+	}
+	return nil
+}
+
+// RemoveFinalizer removes a finalizer from the resource if it exists
+func (b *BaseController[T]) RemoveFinalizer(ctx context.Context, obj T, finalizerName string) error {
+	log := log.FromContext(ctx)
+
+	if controllerutil.ContainsFinalizer(obj, finalizerName) {
+		controllerutil.RemoveFinalizer(obj, finalizerName)
+		if err := b.Update(ctx, obj); err != nil {
+			log.Error(err, "Failed to remove finalizer", "finalizer", finalizerName)
+			return fmt.Errorf("failed to remove finalizer %s: %w", finalizerName, err)
+		}
+		log.V(1).Info("Finalizer removed", "finalizer", finalizerName, "resource", obj.GetName())
+	}
+	return nil
+}
+
+// ============================================================================
+// Resource Fetching Pattern
+// ============================================================================
+
+// FetchResource retrieves a resource and handles not-found errors gracefully
+func (b *BaseController[T]) FetchResource(ctx context.Context, namespacedName client.ObjectKey, obj T) (T, error) {
+	log := log.FromContext(ctx)
+
+	err := b.Get(ctx, namespacedName, obj)
+	if err != nil {
+		if kerrors.IsNotFound(err) {
+			log.V(1).Info("Resource not found. Ignoring since object must be deleted", "resource", namespacedName)
+			var zero T
+			return zero, nil
+		}
+		log.Error(err, "Failed to get resource", "resource", namespacedName)
+		return obj, err
+	}
+
+	return obj, nil
+}
+
+// ============================================================================
+// Status Update Helpers
+// ============================================================================
+
+// UpdateObservedGeneration updates the observed generation on the status
+func (b *BaseController[T]) UpdateObservedGeneration(obj T) {
+	// This method assumes the status has an ObservedGeneration field
+	// Individual controllers can override this if needed
+}
+
+// ============================================================================
+// Common Deletion Handling Pattern
+// ============================================================================
+
+// HandleDeletionWithFinalizer provides a standard pattern for handling resource deletion
+func (b *BaseController[T]) HandleDeletionWithFinalizer(ctx context.Context, obj T, finalizerName string, deletionFunc func(context.Context, T) error) (ctrl.Result, error) {
+	log := log.FromContext(ctx)
+
+	if !controllerutil.ContainsFinalizer(obj, finalizerName) {
+		return ctrl.Result{}, nil
+	}
+
+	log.Info("Handling resource deletion", "resource", obj.GetName())
+
+	// Execute the custom deletion logic
+	if deletionFunc != nil {
+		if err := deletionFunc(ctx, obj); err != nil {
+			log.Error(err, "Failed to execute deletion logic")
+			return ctrl.Result{RequeueAfter: time.Second * 30}, b.HandleError(ctx, obj, err, ReasonDeleteFailed)
+		}
+	}
+
+	// Remove finalizer
+	if err := b.RemoveFinalizer(ctx, obj, finalizerName); err != nil {
+		return ctrl.Result{}, err
+	}
+
+	log.Info("Successfully completed resource deletion", "resource", obj.GetName())
+	return ctrl.Result{}, nil
+}

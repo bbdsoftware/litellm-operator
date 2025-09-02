@@ -24,78 +24,41 @@ import (
 	"time"
 
 	authv1alpha1 "github.com/bbdsoftware/litellm-operator/api/auth/v1alpha1"
+	"github.com/bbdsoftware/litellm-operator/internal/controller/base"
 	"github.com/bbdsoftware/litellm-operator/internal/controller/common"
 	litellm "github.com/bbdsoftware/litellm-operator/internal/litellm"
 	"github.com/bbdsoftware/litellm-operator/internal/util"
 	corev1 "k8s.io/api/core/v1"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	meta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 )
 
 // UserReconciler reconciles a User object
 type UserReconciler struct {
-	client.Client
-	Scheme                *runtime.Scheme
+	*base.BaseController[*authv1alpha1.User]
 	LitellmClient         litellm.LitellmUser
 	litellmResourceNaming *util.LitellmResourceNaming
-	OverrideLiteLLMURL    string
 }
 
-// Constants moved to controller.go
-
-const (
-	CondReady       = "Ready"       // Overall health indicator
-	CondProgressing = "Progressing" // Actively reconciling / rolling out
-	CondDegraded    = "Degraded"
-	CondFailed      = "Failed"
-)
-
-// ---------- Machine-friendly reasons (stable enums; messages can be free text)
-const (
-	ReasonReconciling         = "Reconciling"
-	ReasonConfigError         = "ConfigError"
-	ReasonChildCreateOrUpdate = "ChildResourcesUpdating"
-	ReasonDependencyNotReady  = "DependencyNotReady"
-	ReasonReconcileError      = "ReconcileError"
-	ReasonReady               = "Ready"
-	ReasonDeleted             = "Deleted"
-	ReasonConnectionError     = "ConnectionError"
-	ReasonDeleteFailed        = "DeleteFailed"
-	ReasonCreateFailed        = "CreateFailed"
-	ReasonConversionFailed    = "ConversionFailed"
-	ReasonUpdateFailed        = "UpdateFailed"
-	ReasonTeamCheckFailed     = "TeamCheckFailed"
-	ReasonDuplicateEmail      = "DuplicateEmail"
-	ReasonInvalidSpec         = "InvalidSpec"
-	ReasonLitellmError        = "LitellmError"
-	ReasonLitellmSuccess      = "LitellmSuccess"
-)
+// NewUserReconciler creates a new UserReconciler instance
+func NewUserReconciler(client client.Client, scheme *runtime.Scheme) *UserReconciler {
+	return &UserReconciler{
+		BaseController: &base.BaseController[*authv1alpha1.User]{
+			Client: client,
+			Scheme: scheme,
+		},
+		LitellmClient:         nil,
+		litellmResourceNaming: nil,
+	}
+}
 
 // +kubebuilder:rbac:groups=auth.litellm.ai,resources=users,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=auth.litellm.ai,resources=users/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=auth.litellm.ai,resources=users/finalizers,verbs=update
-
-// fetchUser retrieves the User resource and handles not found errors gracefully
-func (r *UserReconciler) fetchUser(ctx context.Context, namespacedName client.ObjectKey) (*authv1alpha1.User, error) {
-	log := log.FromContext(ctx)
-	user := &authv1alpha1.User{}
-	err := r.Get(ctx, namespacedName, user)
-	if err != nil {
-		if apierrors.IsNotFound(err) {
-			log.Info("User resource not found. Ignoring since object must be deleted")
-			return nil, nil
-		}
-		return nil, err
-	}
-	return user, nil
-}
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
@@ -110,7 +73,8 @@ func (r *UserReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 	log := log.FromContext(ctx)
 
 	// Phase 1: Fetch and validate the resource
-	user, err := r.fetchUser(ctx, req.NamespacedName)
+	user := &authv1alpha1.User{}
+	user, err := r.FetchResource(ctx, req.NamespacedName, user)
 	if err != nil {
 		log.Error(err, "Failed to get User")
 		return ctrl.Result{}, err
@@ -120,22 +84,25 @@ func (r *UserReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 		return ctrl.Result{}, nil
 	}
 
-	// If a LitellmClient was injected (tests), reuse it; otherwise create one from connection details
 	if r.LitellmClient == nil {
 		litellmConnectionHandler, err := common.NewLitellmConnectionHandler(r.Client, ctx, user.Spec.ConnectionRef, user.Namespace)
 		if err != nil {
-			r.setCond(user, CondDegraded, metav1.ConditionTrue, ReasonConnectionError, err.Error())
-			r.setCond(user, CondReady, metav1.ConditionFalse, ReasonConnectionError, err.Error())
-			if err := r.patchStatus(ctx, user); err != nil {
-				log.Error(err, "Failed to update status after connection error")
-			}
-			return ctrl.Result{RequeueAfter: time.Second * 30}, err
+			return ctrl.Result{RequeueAfter: time.Second * 30}, r.HandleError(ctx, user, err, base.ReasonConnectionError)
 		}
 		r.LitellmClient = litellmConnectionHandler.GetLitellmClient()
 	}
 
 	if r.litellmResourceNaming == nil {
 		r.litellmResourceNaming = util.NewLitellmResourceNaming(&user.Spec.ConnectionRef)
+	}
+
+
+	// Normal path: ensure finalizer
+	if cr.DeletionTimestamp.IsZero() {
+		if err := r.AddFinalizer(ctx, &cr, finalizerUser); err != nil {
+			return ctrl.Result{}, err
+		}
+		return r.reconcileUser(ctx, &cr)
 	}
 
 	// Phase 3: Handle deletion if resource is being deleted
@@ -167,33 +134,9 @@ func (r *UserReconciler) SetupWithManager(mgr ctrl.Manager) error {
 
 // handleDeletion manages the user deletion process with proper finalizer handling
 func (r *UserReconciler) handleDeletion(ctx context.Context, user *authv1alpha1.User) (ctrl.Result, error) {
-	log := log.FromContext(ctx)
-
-	if !controllerutil.ContainsFinalizer(user, util.FinalizerName) {
-		return ctrl.Result{}, nil
-	}
-
-	log.Info("Deleting User from LiteLLM", "user", user.Status.UserAlias, "userID", user.Status.UserID)
-
-	// Delete the user from LiteLLM
-	if err := r.deleteUserFromLitellm(ctx, user, r.LitellmClient); err != nil {
-		log.Error(err, "Failed to delete user from LiteLLM")
-		r.setCond(user, CondDegraded, metav1.ConditionTrue, ReasonDeleteFailed, err.Error())
-		r.setCond(user, CondReady, metav1.ConditionFalse, ReasonDeleteFailed, err.Error())
-		if updateErr := r.patchStatus(ctx, user); updateErr != nil {
-			log.Error(updateErr, "Failed to update status after delete user from LiteLLM error")
-		}
-		return ctrl.Result{RequeueAfter: time.Second * 30}, err
-	}
-
-	controllerutil.RemoveFinalizer(user, util.FinalizerName)
-	if err := r.Update(ctx, user); err != nil {
-		log.Error(err, "Failed to remove finalizer")
-		return ctrl.Result{}, err
-	}
-
-	log.Info("Successfully deleted User from LiteLLM and removed finalizer", "user", user.Status.UserAlias)
-	return ctrl.Result{}, nil
+	return r.HandleDeletionWithFinalizer(ctx, user, util.FinalizerName, func(ctx context.Context, user *authv1alpha1.User) error {
+		return r.deleteUserFromLitellm(ctx, user, r.LitellmClient)
+	})
 }
 
 func (r *UserReconciler) deleteUserFromLitellm(ctx context.Context, user *authv1alpha1.User, litellmClient litellm.LitellmUser) error {
@@ -207,41 +150,54 @@ func (r *UserReconciler) deleteUserFromLitellm(ctx context.Context, user *authv1
 }
 
 // handleCreateOrUpdateUser manages the complete user lifecycle (creation and updates)
-func (r *UserReconciler) handleCreateOrUpdateUser(ctx context.Context, user *authv1alpha1.User) (ctrl.Result, error) {
+func (r *UserReconciler) reconcileUser(ctx context.Context, user *authv1alpha1.User) (ctrl.Result, error) {
 	log := log.FromContext(ctx)
 
-	// Ensure finalizer is present
-	if !controllerutil.ContainsFinalizer(user, util.FinalizerName) {
-		controllerutil.AddFinalizer(user, util.FinalizerName)
-		if err := r.Update(ctx, user); err != nil {
-			log.Error(err, "Failed to add finalizer")
+	var observedUser litellm.UserResponse
+	if desiredUser, err := createUserRequest(user); err != nil {
+		log.Error(err, "Failed to create user request")
+		return ctrl.Result{}, err
+	}
+
+
+	if user.Status.UserID == "" {
+		
+		observedUser, err := r.LitellmClient.CreateUser(ctx, &desiredUser)
+		if err != nil {
+			log.Error(err, "Failed to create user in litellm")
 			return ctrl.Result{}, err
 		}
-		log.Info("Finalizer added", "user", user.Name)
+		updateUserStatus(user, userResponse, desiredUser.KeyAlias)
+		
+
+	}else{
+		observedUser, err := r.LitellmClient.GetUser(ctx, user.Status.UserID)
+		if err != nil {
+			log.Error(err, "Failed to get user from litellm")
+			return ctrl.Result{}, err
+		}
+	}
+
+
+
+	observed : = 
+	// Ensure finalizer is present
+	if err := r.EnsureFinalizer(ctx, user, util.FinalizerName); err != nil {
+		return ctrl.Result{}, err
 	}
 
 	// Check that the teamIDs exist before attempting to create the user
 	for _, teamID := range user.Spec.Teams {
 		_, err := r.LitellmClient.GetTeam(ctx, teamID)
 		if err != nil {
-			r.setCond(user, CondDegraded, metav1.ConditionTrue, ReasonTeamCheckFailed, err.Error())
-			r.setCond(user, CondReady, metav1.ConditionFalse, ReasonTeamCheckFailed, err.Error())
-			if err := r.patchStatus(ctx, user); err != nil {
-				log.Error(err, "Failed to update status after team check error")
-			}
-			return ctrl.Result{}, nil
+			return r.HandleErrorRetryable(ctx, user, err, "TeamCheckFailed", "TeamCheckFailed")
 		}
 	}
 
 	userExists, err := r.userExistsInLitellm(ctx, user)
 	if err != nil {
 		log.Error(err, "Failed to check if User exists")
-		r.setCond(user, CondDegraded, metav1.ConditionTrue, ReasonConnectionError, err.Error())
-		r.setCond(user, CondReady, metav1.ConditionFalse, ReasonConnectionError, err.Error())
-		if err := r.patchStatus(ctx, user); err != nil {
-			log.Error(err, "Failed to update status after GetUserID error")
-		}
-		return ctrl.Result{}, err
+		return r.HandleErrorRetryable(ctx, user, err, base.ReasonConnectionError, "ConnectionError")
 	}
 
 	// Create the user if it doesn't exist
@@ -262,81 +218,31 @@ func (r *UserReconciler) handleCreateOrUpdateUser(ctx context.Context, user *aut
 func (r *UserReconciler) handleCreateUser(ctx context.Context, user *authv1alpha1.User) (ctrl.Result, error) {
 	log := log.FromContext(ctx)
 
-	// Add finalizer first
-	controllerutil.AddFinalizer(user, util.FinalizerName)
-	if errAddFinalizer := r.Update(ctx, user); errAddFinalizer != nil {
-		log.Error(errAddFinalizer, "Failed to add finalizer")
-		return ctrl.Result{}, errAddFinalizer
-	}
-
 	userRequest, err := createUserRequest(user)
 	if err != nil {
-		r.setCond(user, CondReady, metav1.ConditionFalse, ReasonInvalidSpec, err.Error())
-		if err := r.patchStatus(ctx, user); err != nil {
-			log.Error(err, "Failed to update conditions")
-		}
-		return ctrl.Result{}, err
+		return r.HandleErrorRetryable(ctx, user, err, base.ReasonInvalidSpec)
 	}
 
 	userResponse, err := r.LitellmClient.CreateUser(ctx, &userRequest)
 	if err != nil {
-		r.setCond(user, CondReady, metav1.ConditionFalse, ReasonLitellmError, err.Error())
-		if errPatch := r.patchStatus(ctx, user); errPatch != nil {
-			log.Error(errPatch, "Failed to update conditions")
-		}
-
-		log.Info("Created User: " + user.Spec.UserAlias + " in litellm")
-		return ctrl.Result{}, nil
+		return r.HandleErrorRetryable(ctx, user, err, base.ReasonLitellmError)
 	}
 
 	secretName := r.litellmResourceNaming.GenerateSecretName(userResponse.UserAlias)
 	if err := r.createSecret(ctx, user, secretName, userResponse.Key); err != nil {
 		log.Error(err, "Failed to create secret")
-		return ctrl.Result{}, err
+		return r.HandleErrorRetryable(ctx, user, err, "SecretCreateFailed")
 	}
 
 	updateUserStatus(user, userResponse, secretName)
-	r.setCond(user, CondReady, metav1.ConditionTrue, ReasonLitellmSuccess, "User created in Litellm")
-	if errPatch := r.patchStatus(ctx, user); errPatch != nil {
-		log.Error(errPatch, "Failed to update conditions")
-	}
 
 	log.Info("Created User: " + user.Spec.UserAlias + " in litellm")
-	return ctrl.Result{}, nil
-}
-
-// createSecret stores the secret key in a Kubernetes Secret that is owned by the User
-func (r *UserReconciler) createSecret(ctx context.Context, user *authv1alpha1.User, secretName string, key string) error {
-	secret := &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      secretName,
-			Namespace: user.Namespace,
-			OwnerReferences: []metav1.OwnerReference{
-				{
-					APIVersion: "auth.litellm.ai/v1alpha1",
-					Kind:       "User",
-					Name:       user.Name,
-					UID:        user.UID,
-				},
-			},
-		},
-		Data: map[string][]byte{
-			"key": []byte(key),
-		},
-	}
-
-	return r.Create(ctx, secret)
+	return r.HandleSuccess(ctx, user, "User created in LiteLLM")
 }
 
 // updateUserInLitellm updates the user with the litellm service should changes be detected
 func (r *UserReconciler) handleUpdateUser(ctx context.Context, user *authv1alpha1.User) (ctrl.Result, error) {
 	log := log.FromContext(ctx)
-
-	controllerutil.AddFinalizer(user, util.FinalizerName)
-	if errAddFinalizer := r.Update(ctx, user); errAddFinalizer != nil {
-		log.Error(errAddFinalizer, "Failed to add finalizer")
-		return ctrl.Result{}, errAddFinalizer
-	}
 
 	userRequest, err := createUserRequest(user)
 	if err != nil {
@@ -364,16 +270,35 @@ func (r *UserReconciler) handleUpdateUser(ctx context.Context, user *authv1alpha
 		}
 
 		updateUserStatus(user, updatedResponse, user.Status.KeySecretRef)
-		if errPatch := r.patchStatus(ctx, user); errPatch != nil {
-			log.Error(err, "Failed to update User status")
-			return ctrl.Result{}, errPatch
-		}
 
 		log.Info("Updated User: " + user.Spec.UserAlias + " in litellm")
-		return ctrl.Result{}, nil
+		return r.HandleSuccess(ctx, user, "User updated in LiteLLM")
 	}
 
 	return ctrl.Result{}, nil
+}
+
+// createSecret stores the secret key in a Kubernetes Secret that is owned by the User
+func (r *UserReconciler) createSecret(ctx context.Context, user *authv1alpha1.User, secretName string, key string) error {
+	secret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      secretName,
+			Namespace: user.Namespace,
+			OwnerReferences: []metav1.OwnerReference{
+				{
+					APIVersion: "auth.litellm.ai/v1alpha1",
+					Kind:       "User",
+					Name:       user.Name,
+					UID:        user.UID,
+				},
+			},
+		},
+		Data: map[string][]byte{
+			"key": []byte(key),
+		},
+	}
+
+	return r.Create(ctx, secret)
 }
 
 // createUserRequest creates a UserRequest from a User
@@ -460,24 +385,4 @@ func updateUserStatus(user *authv1alpha1.User, userResponse litellm.UserResponse
 	user.Status.UserEmail = userResponse.UserEmail
 	user.Status.UserID = userResponse.UserID
 	user.Status.UserRole = userResponse.UserRole
-}
-
-// ============================================================================
-// Utility Functions
-// ============================================================================
-
-// patchStatus updates the status subresource
-func (r *UserReconciler) patchStatus(ctx context.Context, cr *authv1alpha1.User) error {
-	return r.Status().Update(ctx, cr)
-}
-
-func (r *UserReconciler) setCond(cr *authv1alpha1.User, typeCond string, status metav1.ConditionStatus, reason, msg string) {
-	newC := metav1.Condition{
-		Type:               typeCond,
-		Status:             status,
-		Reason:             reason,
-		Message:            msg,
-		ObservedGeneration: cr.GetGeneration(),
-	}
-	meta.SetStatusCondition(&cr.Status.Conditions, newC)
 }

@@ -200,6 +200,16 @@ type UserList struct {
 	Items           []User `json:"items"`
 }
 
+// GetConditions returns the conditions slice
+func (u *User) GetConditions() []metav1.Condition {
+	return u.Status.Conditions
+}
+
+// SetConditions sets the conditions slice
+func (u *User) SetConditions(conditions []metav1.Condition) {
+	u.Status.Conditions = conditions
+}
+
 func init() {
 	SchemeBuilder.Register(&User{}, &UserList{})
 }

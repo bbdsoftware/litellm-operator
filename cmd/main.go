@@ -155,33 +155,27 @@ func main() {
 	}
 
 	if err = (&virtualkey.VirtualKeyReconciler{
-		Client:             mgr.GetClient(),
-		Scheme:             mgr.GetScheme(),
-		OverrideLiteLLMURL: overRideLiteLLMURL,
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "VirtualKey")
 		os.Exit(1)
 	}
-	if err = (&user.UserReconciler{
-		Client:             mgr.GetClient(),
-		Scheme:             mgr.GetScheme(),
-		OverrideLiteLLMURL: overRideLiteLLMURL,
-	}).SetupWithManager(mgr); err != nil {
+	userReconciler := user.NewUserReconciler(mgr.GetClient(), mgr.GetScheme())
+	if err = userReconciler.SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "User")
 		os.Exit(1)
 	}
 	if err = (&team.TeamReconciler{
-		Client:             mgr.GetClient(),
-		Scheme:             mgr.GetScheme(),
-		OverrideLiteLLMURL: overRideLiteLLMURL,
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Team")
 		os.Exit(1)
 	}
 	if err = (&association.TeamMemberAssociationReconciler{
-		Client:             mgr.GetClient(),
-		Scheme:             mgr.GetScheme(),
-		OverrideLiteLLMURL: overRideLiteLLMURL,
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "TeamMemberAssociation")
 		os.Exit(1)
@@ -193,10 +187,8 @@ func main() {
 		setupLog.Error(err, "unable to create controller", "controller", "LiteLLMInstance")
 		os.Exit(1)
 	}
-	if err := (&model.ModelReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
-	}).SetupWithManager(mgr); err != nil {
+	modelReconciler := model.NewModelReconciler(mgr.GetClient(), mgr.GetScheme())
+	if err := modelReconciler.SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Model")
 		os.Exit(1)
 	}
