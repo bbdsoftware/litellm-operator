@@ -47,8 +47,6 @@ type ModelReconciler struct {
 	client.Client
 	Scheme             *runtime.Scheme
 	LitellmModelClient litellm.LitellmModel
-	connectionHandler  *common.ConnectionHandler
-	OverrideLiteLLMURL string
 }
 
 // Constants moved to controller.go
@@ -101,13 +99,13 @@ func (r *ModelReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 	}
 
 	log.Info("Reconciling Model resource", "model", model.Name)
-	if err := r.ensureConnectionSetup(ctx, model); err != nil {
+
+	litellmConnectionHandler, err := common.NewLitellmConnectionHandler(r.Client, ctx, model.Spec.ConnectionRef, model.Namespace)
+	if err != nil {
 		r.setCond(model, CondDegraded, metav1.ConditionTrue, ReasonConnectionError, err.Error())
-		if updateErr := r.patchStatus(ctx, model, req); updateErr != nil {
-			return ctrl.Result{RequeueAfter: time.Second * 30}, updateErr
-		}
 		return ctrl.Result{RequeueAfter: time.Second * 30}, err
 	}
+	r.LitellmModelClient = litellmConnectionHandler.GetLitellmClient()
 
 	// Phase 3: Handle deletion if resource is being deleted
 	if model.GetDeletionTimestamp() != nil {
@@ -216,27 +214,6 @@ func (r *ModelReconciler) fetchModel(ctx context.Context, namespacedName client.
 	}
 
 	return model, nil
-}
-
-// ensureConnectionSetup initialises the connection handler and LiteLLM client
-func (r *ModelReconciler) ensureConnectionSetup(ctx context.Context, model *litellmv1alpha1.Model) error {
-	// Initialize connection handler if not already done
-	if r.connectionHandler == nil {
-		r.connectionHandler = common.NewConnectionHandler(r.Client)
-	}
-
-	// Get connection details
-	connectionDetails, err := r.connectionHandler.GetConnectionDetailsFromLitellmRef(ctx, model.Spec.ConnectionRef, model.Namespace)
-	if err != nil {
-		return fmt.Errorf("failed to get connection details: %w", err)
-	}
-
-	// Configure the LiteLLM client with connection details only if not already set (for testing)
-	if r.LitellmModelClient == nil {
-		r.LitellmModelClient = common.ConfigureLitellmClient(connectionDetails)
-	}
-
-	return nil
 }
 
 // shouldCreateModel determines if a new model should be created

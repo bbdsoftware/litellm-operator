@@ -19,12 +19,12 @@ package common
 import (
 	"context"
 	"fmt"
+	"os"
 	"strings"
 
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	authv1alpha1 "github.com/bbdsoftware/litellm-operator/api/auth/v1alpha1"
 	litellmv1alpha1 "github.com/bbdsoftware/litellm-operator/api/litellm/v1alpha1"
 	"github.com/bbdsoftware/litellm-operator/internal/interfaces"
 	"github.com/bbdsoftware/litellm-operator/internal/litellm"
@@ -51,20 +51,40 @@ func (n NilKeys) GetURL() string {
 }
 
 // ConnectionHandler provides methods to handle connection references
-type ConnectionHandler struct {
+type LitellmConnectionHandler struct {
 	client.Client
+	litellmClient *litellm.LitellmClient
+}
+
+func (h *LitellmConnectionHandler) GetLitellmClient() *litellm.LitellmClient {
+	return h.litellmClient
 }
 
 // NewConnectionHandler creates a new connection handler
-func NewConnectionHandler(client client.Client) *ConnectionHandler {
-	return &ConnectionHandler{
+func NewLitellmConnectionHandler(client client.Client, ctx context.Context, connectionRef interfaces.ConnectionRefInterface, namespace string) (*LitellmConnectionHandler, error) {
+
+	h := &LitellmConnectionHandler{
 		Client: client,
 	}
+
+	connectionDetails, err := h.GetConnectionDetails(ctx, connectionRef, namespace)
+	if err != nil {
+		return nil, err
+	}
+
+	h.litellmClient = litellm.NewLitellmClient(connectionDetails.URL, connectionDetails.MasterKey)
+	h.litellmClient.TestConnection(ctx)
+	if err != nil {
+		return h, err
+	}
+
+	return h, nil
+
 }
 
 // GetConnectionDetails retrieves connection details from either a secret or LiteLLM instance
 // This is now a generic function that can handle different ConnectionRef types
-func (h *ConnectionHandler) GetConnectionDetails(ctx context.Context, connectionRef interfaces.ConnectionRefInterface, namespace string) (*ConnectionDetails, error) {
+func (h *LitellmConnectionHandler) GetConnectionDetails(ctx context.Context, connectionRef interfaces.ConnectionRefInterface, namespace string) (*ConnectionDetails, error) {
 	if connectionRef.HasSecretRef() {
 		secretRef := connectionRef.GetSecretRef()
 		if secretRefInterface, ok := secretRef.(interfaces.SecretRefInterface); ok {
@@ -83,7 +103,7 @@ func (h *ConnectionHandler) GetConnectionDetails(ctx context.Context, connection
 }
 
 // getConnectionDetailsFromSecretRef handles different SecretRef types
-func (h *ConnectionHandler) getConnectionDetailsFromSecretRef(ctx context.Context, secretRef interfaces.SecretRefInterface, namespace string) (*ConnectionDetails, error) {
+func (h *LitellmConnectionHandler) getConnectionDetailsFromSecretRef(ctx context.Context, secretRef interfaces.SecretRefInterface, namespace string) (*ConnectionDetails, error) {
 	secret := &corev1.Secret{}
 	secretNamespace := secretRef.GetNamespace()
 	if secretNamespace == "" {
@@ -145,7 +165,7 @@ func (h *ConnectionHandler) getConnectionDetailsFromSecretRef(ctx context.Contex
 }
 
 // getConnectionDetailsFromInstanceRef handles different InstanceRef types
-func (h *ConnectionHandler) getConnectionDetailsFromInstanceRef(ctx context.Context, instanceRef interfaces.InstanceRefInterface, namespace string) (*ConnectionDetails, error) {
+func (h *LitellmConnectionHandler) getConnectionDetailsFromInstanceRef(ctx context.Context, instanceRef interfaces.InstanceRefInterface, namespace string) (*ConnectionDetails, error) {
 	// Determine namespace for the instance
 	instanceNamespace := instanceRef.GetNamespace()
 	if instanceNamespace == "" {
@@ -193,72 +213,15 @@ func (h *ConnectionHandler) getConnectionDetailsFromInstanceRef(ctx context.Cont
 	}
 
 	// Construct the URL
-	url := fmt.Sprintf("http://%s.%s.svc.cluster.local", service.Name, instanceNamespace)
+	url := ""
+	if os.Getenv("LITELLM_URL_OVERRIDE") != "" {
+		url = os.Getenv("LITELLM_URL_OVERRIDE")
+	} else {
+		url = fmt.Sprintf("http://%s.%s.svc.cluster.local", service.Name, instanceNamespace)
+	}
 
 	return &ConnectionDetails{
 		MasterKey: strings.TrimSpace(string(masterKeyBytes)),
 		URL:       strings.TrimSpace(url),
 	}, nil
 }
-
-// ConfigureLitellmClient configures a LiteLLM client with connection details
-func ConfigureLitellmClient(connectionDetails *ConnectionDetails) *litellm.LitellmClient {
-	return litellm.NewLitellmClient(connectionDetails.URL, connectionDetails.MasterKey)
-}
-
-// GetConnectionDetailsFromAuthRef is a convenience function for authv1alpha1.ConnectionRef
-func (h *ConnectionHandler) GetConnectionDetailsFromAuthRef(ctx context.Context, connectionRef authv1alpha1.ConnectionRef, namespace string) (*ConnectionDetails, error) {
-	return h.GetConnectionDetails(ctx, connectionRef, namespace)
-}
-
-// GetConnectionDetailsFromLitellmRef is a convenience function for litellmv1alpha1.ConnectionRef
-func (h *ConnectionHandler) GetConnectionDetailsFromLitellmRef(ctx context.Context, connectionRef litellmv1alpha1.ConnectionRef, namespace string) (*ConnectionDetails, error) {
-	return h.GetConnectionDetails(ctx, connectionRef, namespace)
-}
-
-/*
-Usage Examples:
-
-// For authv1alpha1.ConnectionRef (used in Team, User, TeamMemberAssociation, VirtualKey controllers)
-authConnectionRef := authv1alpha1.ConnectionRef{
-    SecretRef: &authv1alpha1.SecretRef{
-        Name: "my-secret",
-        Keys: authv1alpha1.SecretKeys{
-            MasterKey: "masterkey",
-            URL: "url",
-        },
-    },
-}
-connectionDetails, err := handler.GetConnectionDetailsFromAuthRef(ctx, authConnectionRef, namespace)
-
-// For litellmv1alpha1.ConnectionRef (used in Model controller)
-litellmConnectionRef := litellmv1alpha1.ConnectionRef{
-    SecretRef: litellmv1alpha1.SecretRef{
-        Namespace:  "my-namespace",
-        SecretName: "my-secret",
-    },
-}
-connectionDetails, err := handler.GetConnectionDetailsFromLitellmRef(ctx, litellmConnectionRef, namespace)
-
-// Using the generic interface directly (no adapters needed!)
-connectionDetails, err := handler.GetConnectionDetails(ctx, authConnectionRef, namespace)
-connectionDetails, err := handler.GetConnectionDetails(ctx, litellmConnectionRef, namespace)
-
-// The system is now completely generic and not tied to any specific types:
-// - ConnectionRefInterface for different ConnectionRef types
-// - SecretRefInterface for different SecretRef types
-// - InstanceRefInterface for different InstanceRef types
-// - KeysInterface for different key structures
-//
-// To add a new type, just implement the interfaces on your types:
-//
-// type MySecretKeys struct {
-//     MasterKeyField string `json:"masterKeyField"`
-//     URLField       string `json:"urlField"`
-// }
-//
-// func (m MySecretKeys) GetMasterKey() string { return m.MasterKeyField }
-// func (m MySecretKeys) GetURL() string { return m.URLField }
-//
-// No adapters needed - the original types implement the interfaces directly!
-*/

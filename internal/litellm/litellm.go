@@ -28,6 +28,14 @@ func NewLitellmClient(baseURL, masterKey string) *LitellmClient {
 	}
 }
 
+func (l *LitellmClient) TestConnection(ctx context.Context) error {
+	_, err := l.makeRequest(ctx, "GET", "/", nil)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 func (l *LitellmClient) makeRequest(ctx context.Context, method, path string, body []byte) ([]byte, error) {
 	log := log.FromContext(ctx)
 

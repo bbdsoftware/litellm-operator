@@ -138,9 +138,9 @@ var _ = Describe("TeamMemberAssociation Controller", func() {
 		It("should successfully reconcile the resource", func() {
 			By("Reconciling the created resource")
 			controllerReconciler := &TeamMemberAssociationReconciler{
-				Client:                       k8sClient,
-				Scheme:                       k8sClient.Scheme(),
-				LitellmTeamMemberAssociation: &FakeLitellmTeamMemberAssociationClient{},
+				Client:        k8sClient,
+				Scheme:        k8sClient.Scheme(),
+				LitellmClient: &FakeLitellmTeamMemberAssociationClient{},
 			}
 
 			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{

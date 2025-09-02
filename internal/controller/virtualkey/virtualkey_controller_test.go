@@ -171,9 +171,9 @@ var _ = Describe("VirtualKey Controller", func() {
 		It("should successfully reconcile the resource", func() {
 			By("Reconciling the created resource")
 			controllerReconciler := &VirtualKeyReconciler{
-				Client:            k8sClient,
-				Scheme:            k8sClient.Scheme(),
-				LitellmVirtualKey: &FakeLitellmVirtualKeyClient{},
+				Client:        k8sClient,
+				Scheme:        k8sClient.Scheme(),
+				LitellmClient: &FakeLitellmVirtualKeyClient{},
 			}
 
 			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{

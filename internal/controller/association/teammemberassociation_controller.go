@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"strconv"
+	"time"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	meta "k8s.io/apimachinery/pkg/api/meta"
@@ -39,9 +40,8 @@ import (
 // TeamMemberAssociationReconciler reconciles a TeamMemberAssociation object
 type TeamMemberAssociationReconciler struct {
 	client.Client
-	Scheme *runtime.Scheme
-	litellm.LitellmTeamMemberAssociation
-	connectionHandler  *common.ConnectionHandler
+	Scheme             *runtime.Scheme
+	LitellmClient      litellm.LitellmTeamMemberAssociation
 	OverrideLiteLLMURL string
 }
 
@@ -75,31 +75,11 @@ func (r *TeamMemberAssociationReconciler) Reconcile(ctx context.Context, req ctr
 		return ctrl.Result{}, err
 	}
 
-	// Initialize connection handler if not already done
-	if r.connectionHandler == nil {
-		r.connectionHandler = common.NewConnectionHandler(r.Client)
-	}
-
-	// Get connection details
-	connectionDetails, err := r.connectionHandler.GetConnectionDetailsFromAuthRef(ctx, teamMemberAssociation.Spec.ConnectionRef, teamMemberAssociation.Namespace)
+	litellmConnectionHandler, err := common.NewLitellmConnectionHandler(r.Client, ctx, teamMemberAssociation.Spec.ConnectionRef, teamMemberAssociation.Namespace)
 	if err != nil {
-		log.Error(err, "Failed to get connection details")
-		if _, updateErr := r.updateConditions(ctx, teamMemberAssociation, metav1.Condition{
-			Type:               "Ready",
-			Status:             metav1.ConditionFalse,
-			LastTransitionTime: metav1.Now(),
-			Reason:             "ConnectionError",
-			Message:            err.Error(),
-		}); updateErr != nil {
-			log.Error(updateErr, "Failed to update conditions")
-		}
-		return ctrl.Result{}, err
+		return ctrl.Result{RequeueAfter: time.Second * 30}, err
 	}
-
-	// Configure the LiteLLM client with connection details only if not already set (for testing)
-	if r.LitellmTeamMemberAssociation == nil {
-		r.LitellmTeamMemberAssociation = common.ConfigureLitellmClient(connectionDetails)
-	}
+	r.LitellmClient = litellmConnectionHandler.GetLitellmClient()
 
 	// If the TeamMemberAssociation is being deleted, delete the team member association from litellm
 	if teamMemberAssociation.GetDeletionTimestamp() != nil {
@@ -110,7 +90,7 @@ func (r *TeamMemberAssociationReconciler) Reconcile(ctx context.Context, req ctr
 		return ctrl.Result{}, nil
 	}
 
-	teamID, err := r.GetTeamID(ctx, teamMemberAssociation.Status.TeamAlias)
+	teamID, err := r.LitellmClient.GetTeamID(ctx, teamMemberAssociation.Status.TeamAlias)
 	if err != nil {
 		log.Error(err, "Failed to check if Team exists")
 		if _, updateErr := r.updateConditions(ctx, teamMemberAssociation, metav1.Condition{
@@ -125,7 +105,7 @@ func (r *TeamMemberAssociationReconciler) Reconcile(ctx context.Context, req ctr
 		return ctrl.Result{}, err
 	}
 
-	teamResponse, err := r.GetTeam(ctx, teamID)
+	teamResponse, err := r.LitellmClient.GetTeam(ctx, teamID)
 	if err != nil {
 		log.Error(err, "Failed to get Team")
 		return ctrl.Result{}, err
@@ -170,7 +150,7 @@ func (r *TeamMemberAssociationReconciler) updateConditions(ctx context.Context, 
 func (r *TeamMemberAssociationReconciler) deleteTeamMemberAssociation(ctx context.Context, teamMemberAssociation *authv1alpha1.TeamMemberAssociation) (ctrl.Result, error) {
 	log := log.FromContext(ctx)
 
-	if err := r.DeleteTeamMemberAssociation(ctx, teamMemberAssociation.Status.TeamAlias, teamMemberAssociation.Status.UserEmail); err != nil {
+	if err := r.LitellmClient.DeleteTeamMemberAssociation(ctx, teamMemberAssociation.Status.TeamAlias, teamMemberAssociation.Status.UserEmail); err != nil {
 		return r.updateConditions(ctx, teamMemberAssociation, metav1.Condition{
 			Type:               "DeleteTeamMemberAssociation",
 			Status:             metav1.ConditionFalse,
@@ -212,7 +192,7 @@ func (r *TeamMemberAssociationReconciler) createTeamMemberAssociation(ctx contex
 		})
 	}
 
-	createTeamResponse, err := r.CreateTeamMemberAssociation(ctx, &teamRequest)
+	createTeamResponse, err := r.LitellmClient.CreateTeamMemberAssociation(ctx, &teamRequest)
 	if err != nil {
 		return r.updateConditions(ctx, teamMemberAssociation, metav1.Condition{
 			Type:               "Ready",

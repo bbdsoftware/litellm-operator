@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"time"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	meta "k8s.io/apimachinery/pkg/api/meta"
@@ -40,9 +41,8 @@ import (
 // TeamReconciler reconciles a Team object
 type TeamReconciler struct {
 	client.Client
-	Scheme *runtime.Scheme
-	litellm.LitellmTeam
-	connectionHandler  *common.ConnectionHandler
+	Scheme             *runtime.Scheme
+	LitellmClient      litellm.LitellmTeam
 	OverrideLiteLLMURL string
 }
 
@@ -76,31 +76,11 @@ func (r *TeamReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 		return ctrl.Result{}, err
 	}
 
-	// Initialize connection handler if not already done
-	if r.connectionHandler == nil {
-		r.connectionHandler = common.NewConnectionHandler(r.Client)
-	}
-
-	// Get connection details
-	connectionDetails, err := r.connectionHandler.GetConnectionDetailsFromAuthRef(ctx, team.Spec.ConnectionRef, team.Namespace)
+	litellmConnectionHandler, err := common.NewLitellmConnectionHandler(r.Client, ctx, team.Spec.ConnectionRef, team.Namespace)
 	if err != nil {
-		log.Error(err, "Failed to get connection details")
-		if _, updateErr := r.updateConditions(ctx, team, metav1.Condition{
-			Type:               "Ready",
-			Status:             metav1.ConditionFalse,
-			LastTransitionTime: metav1.Now(),
-			Reason:             "ConnectionError",
-			Message:            err.Error(),
-		}); updateErr != nil {
-			log.Error(updateErr, "Failed to update conditions")
-		}
-		return ctrl.Result{}, err
+		return ctrl.Result{RequeueAfter: time.Second * 30}, err
 	}
-
-	// Configure the LiteLLM client with connection details only if not already set (for testing)
-	if r.LitellmTeam == nil {
-		r.LitellmTeam = common.ConfigureLitellmClient(connectionDetails)
-	}
+	r.LitellmClient = litellmConnectionHandler.GetLitellmClient()
 
 	// If the Team is being deleted, delete the team from litellm
 	if team.GetDeletionTimestamp() != nil {
@@ -111,7 +91,7 @@ func (r *TeamReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 		return ctrl.Result{}, nil
 	}
 
-	teamID, err := r.GetTeamID(ctx, team.Spec.TeamAlias)
+	teamID, err := r.LitellmClient.GetTeamID(ctx, team.Spec.TeamAlias)
 	if err != nil {
 		log.Error(err, "Failed to check if Team exists")
 		if _, updateErr := r.updateConditions(ctx, team, metav1.Condition{
@@ -178,7 +158,7 @@ func (r *TeamReconciler) updateConditions(ctx context.Context, team *authv1alpha
 func (r *TeamReconciler) deleteTeam(ctx context.Context, team *authv1alpha1.Team) (ctrl.Result, error) {
 	log := log.FromContext(ctx)
 
-	if err := r.DeleteTeam(ctx, team.Status.TeamID); err != nil {
+	if err := r.LitellmClient.DeleteTeam(ctx, team.Status.TeamID); err != nil {
 		return r.updateConditions(ctx, team, metav1.Condition{
 			Type:               "DeleteTeam",
 			Status:             metav1.ConditionFalse,
@@ -225,7 +205,7 @@ func (r *TeamReconciler) createTeam(ctx context.Context, team *authv1alpha1.Team
 		})
 	}
 
-	createTeamResponse, err := r.CreateTeam(ctx, &teamRequest)
+	createTeamResponse, err := r.LitellmClient.CreateTeam(ctx, &teamRequest)
 	if err != nil {
 		return r.updateConditions(ctx, team, metav1.Condition{
 			Type:               "Ready",
@@ -270,15 +250,15 @@ func (r *TeamReconciler) syncTeam(ctx context.Context, team *authv1alpha1.Team) 
 	// Need to set the teamID in the request
 	teamRequest.TeamID = team.Status.TeamID
 
-	teamResponse, err := r.GetTeam(ctx, team.Status.TeamID)
+	teamResponse, err := r.LitellmClient.GetTeam(ctx, team.Status.TeamID)
 	if err != nil {
 		log.Error(err, "Failed to get team from litellm")
 		return err
 	}
 
-	if r.IsTeamUpdateNeeded(ctx, &teamResponse, &teamRequest) {
+	if r.LitellmClient.IsTeamUpdateNeeded(ctx, &teamResponse, &teamRequest) {
 		log.Info("Updating Team: " + team.Spec.TeamAlias + " in litellm")
-		updatedResponse, err := r.UpdateTeam(ctx, &teamRequest)
+		updatedResponse, err := r.LitellmClient.UpdateTeam(ctx, &teamRequest)
 		if err != nil {
 			log.Error(err, "Failed to update team in litellm")
 			return err
