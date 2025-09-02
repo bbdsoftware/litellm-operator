@@ -155,7 +155,7 @@ func (r *ModelReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 	}
 
 	// ModelId present: attempt to fetch the remote model
-	existingModel, err := r.LitellmModelClient.GetModel(ctx, strings.TrimSpace(*model.Status.ModelId))
+	existingModel, err := r.LitellmModelClient.GetModelInfo(ctx, strings.TrimSpace(*model.Status.ModelId))
 	if err != nil {
 		log.Error(err, "Failed to get existing model from LiteLLM for model with id", "model", model.Name, "modelId", *model.Status.ModelId)
 		r.setCond(model, CondDegraded, metav1.ConditionTrue, ReasonRemoteModelMissing, err.Error())

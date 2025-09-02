@@ -4,8 +4,6 @@ import (
 	"context"
 	"encoding/json"
 
-	"github.com/google/go-cmp/cmp"
-	"github.com/google/go-cmp/cmp/cmpopts"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
@@ -13,6 +11,7 @@ type LitellmModel interface {
 	CreateModel(ctx context.Context, req *ModelRequest) (ModelResponse, error)
 	DeleteModel(ctx context.Context, modelName string) error
 	GetModel(ctx context.Context, modelName string) (ModelResponse, error)
+	GetModelInfo(ctx context.Context, modelID string) (ModelResponse, error)
 	IsModelUpdateNeeded(ctx context.Context, model *ModelResponse, req *ModelRequest) bool
 	UpdateModel(ctx context.Context, req *ModelRequest) (ModelResponse, error)
 }
@@ -29,6 +28,10 @@ type ModelResponse struct {
 	ModelName     string               `json:"model_name"`
 	LiteLLMParams *UpdateLiteLLMParams `json:"litellm_params,omitempty"`
 	ModelInfo     *ModelInfo           `json:"model_info,omitempty"`
+}
+
+type ModelListResponse struct {
+	Data []ModelResponse `json:"data"`
 }
 
 // UpdateLiteLLMParams represents the LiteLLM parameters for model configuration
@@ -142,11 +145,29 @@ func (l *LitellmClient) UpdateModel(ctx context.Context, req *ModelRequest) (Mod
 	return modelResponse, nil
 }
 
+func (l *LitellmClient) GetModelInfo(ctx context.Context, modelID string) (ModelResponse, error) {
+	log := log.FromContext(ctx)
+
+	response, err := l.makeRequest(ctx, "GET", "/model/info?litellm_model_id="+modelID, nil)
+	if err != nil {
+		log.Error(err, "Failed to get model info from LiteLLM")
+		return ModelResponse{}, err
+	}
+
+	var modelListResponse ModelListResponse
+	if err := json.Unmarshal(response, &modelListResponse); err != nil {
+		log.Error(err, "Failed to unmarshal model response from LiteLLM")
+		return ModelResponse{}, err
+	}
+
+	return modelListResponse.Data[0], nil
+}
+
 // GetModel retrieves a model from the LiteLLM service
 func (l *LitellmClient) GetModel(ctx context.Context, modelID string) (ModelResponse, error) {
 	log := log.FromContext(ctx)
 
-	response, err := l.makeRequest(ctx, "GET", "/model/?litellm_model_id="+modelID, nil)
+	response, err := l.makeRequest(ctx, "GET", "/model?litellm_model_id="+modelID, nil)
 	if err != nil {
 		log.Error(err, "Failed to get model from LiteLLM")
 		return ModelResponse{}, err
@@ -182,18 +203,6 @@ func (l *LitellmClient) IsModelUpdateNeeded(ctx context.Context, model *ModelRes
 	// Compare model names
 	if model.ModelName != req.ModelName {
 		log.Info("Model name changed")
-		return true
-	}
-
-	// Compare LiteLLM parameters
-	if !cmp.Equal(model.LiteLLMParams, req.LiteLLMParams, cmpopts.EquateEmpty()) {
-		log.Info("LiteLLM parameters changed")
-		return true
-	}
-
-	// Compare model info
-	if !cmp.Equal(model.ModelInfo, req.ModelInfo, cmpopts.EquateEmpty()) {
-		log.Info("Model info changed")
 		return true
 	}
 
