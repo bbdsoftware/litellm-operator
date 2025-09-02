@@ -184,7 +184,7 @@ func (r *UserReconciler) handleDeletion(ctx context.Context, user *authv1alpha1.
 		log.Error(err, "Failed to delete user from LiteLLM")
 		r.setCond(user, CondDegraded, metav1.ConditionTrue, ReasonDeleteFailed, err.Error())
 		r.setCond(user, CondReady, metav1.ConditionFalse, ReasonDeleteFailed, err.Error())
-		if updateErr := r.patchStatus(ctx, user, req); updateErr != nil {
+		if updateErr := r.patchStatus(ctx, user); updateErr != nil {
 			log.Error(updateErr, "Failed to update status after delete user from LiteLLM error")
 		}
 		return ctrl.Result{RequeueAfter: time.Second * 30}, err
@@ -248,43 +248,22 @@ func (r *UserReconciler) handleCreateOrUpdateUser(ctx context.Context, user *aut
 		return ctrl.Result{}, err
 	}
 
-	// User does not exist, create it
-	if userID == "" {
+	// Create the user if it doesn't exist
+	if !userExists {
 		log.Info("Creating User: " + user.Spec.UserAlias + " in litellm")
-		return r.createUser(ctx, user)
+		return r.handleCreateUser(ctx, user)
 	}
 
-	// If the UserID is not the same as the one in the CR, then the user is not managed by this CR
-	if userID != user.Status.UserID {
-		errorMessage := fmt.Sprintf("User with email %s already exists but is not managed by this resource (existing ID: %s, expected ID: %s)", user.Spec.UserEmail, userID, user.Status.UserID)
-		log.Info(errorMessage)
-		r.setCond(user, CondReady, metav1.ConditionFalse, ReasonDuplicateEmail, errorMessage)
-		r.setCond(user, CondFailed, metav1.ConditionTrue, ReasonDuplicateEmail, errorMessage)
-		if err := r.patchStatus(ctx, user); err != nil {
-			log.Error(err, "Failed to update status after duplicate email detection")
-		}
-		return ctrl.Result{}, nil
-	}
-
-	// Sync user if required
-	err = r.syncUser(ctx, user)
-	if err != nil {
-		log.Error(err, "Failed to sync user")
-		return ctrl.Result{}, err
+	if userExists {
+		log.Info("Updating User: " + user.Spec.UserAlias + " in litellm")
+		return r.handleUpdateUser(ctx, user)
 	}
 
 	return ctrl.Result{}, nil
 }
 
-// SetupWithManager sets up the controller with the Manager.
-func (r *UserReconciler) SetupWithManager(mgr ctrl.Manager) error {
-	return ctrl.NewControllerManagedBy(mgr).
-		For(&authv1alpha1.User{}).
-		Complete(r)
-}
-
-// deleteUser handles the deletion of a user from the litellm service
-func (r *UserReconciler) deleteUser(ctx context.Context, user *authv1alpha1.User) (ctrl.Result, error) {
+// deleteUserz handles the deletion of a user from the litellm service
+func (r *UserReconciler) handleDeleteUser(ctx context.Context, user *authv1alpha1.User) (ctrl.Result, error) {
 	log := log.FromContext(ctx)
 
 	if err := r.LitellmClient.DeleteUser(ctx, user.Status.UserID); err != nil {
@@ -306,8 +285,15 @@ func (r *UserReconciler) deleteUser(ctx context.Context, user *authv1alpha1.User
 }
 
 // createUser creates a new user for the litellm service
-func (r *UserReconciler) createUser(ctx context.Context, user *authv1alpha1.User) (ctrl.Result, error) {
+func (r *UserReconciler) handleCreateUser(ctx context.Context, user *authv1alpha1.User) (ctrl.Result, error) {
 	log := log.FromContext(ctx)
+
+	// Add finalizer first
+	controllerutil.AddFinalizer(user, util.FinalizerName)
+	if errAddFinalizer := r.Update(ctx, user); errAddFinalizer != nil {
+		log.Error(errAddFinalizer, "Failed to add finalizer")
+		return ctrl.Result{}, errAddFinalizer
+	}
 
 	userRequest, err := createUserRequest(user)
 	if err != nil {
@@ -330,23 +316,12 @@ func (r *UserReconciler) createUser(ctx context.Context, user *authv1alpha1.User
 	}
 
 	secretName := r.litellmResourceNaming.GenerateSecretName(userResponse.UserAlias)
-
-	updateUserStatus(user, userResponse, secretName)
-
-	// Add finalizer first
-	controllerutil.AddFinalizer(user, util.FinalizerName)
-	if errAddFinalizer := r.Update(ctx, user); errAddFinalizer != nil {
-		log.Error(errAddFinalizer, "Failed to add finalizer")
-		return ctrl.Result{}, errAddFinalizer
-	}
-
-	// Create the secret
 	if err := r.createSecret(ctx, user, secretName, userResponse.Key); err != nil {
 		log.Error(err, "Failed to create secret")
 		return ctrl.Result{}, err
 	}
 
-	// Update status conditions
+	updateUserStatus(user, userResponse, secretName)
 	r.setCond(user, CondReady, metav1.ConditionTrue, ReasonLitellmSuccess, "User created in Litellm")
 	if errPatch := r.patchStatus(ctx, user); errPatch != nil {
 		log.Error(errPatch, "Failed to update conditions")
@@ -380,44 +355,51 @@ func (r *UserReconciler) createSecret(ctx context.Context, user *authv1alpha1.Us
 }
 
 // updateUserInLitellm updates the user with the litellm service should changes be detected
-func (r *UserReconciler) handleUpdateUser(ctx context.Context, user *authv1alpha1.User) error {
+func (r *UserReconciler) handleUpdateUser(ctx context.Context, user *authv1alpha1.User) (ctrl.Result, error) {
 	log := log.FromContext(ctx)
+
+	controllerutil.AddFinalizer(user, util.FinalizerName)
+	if errAddFinalizer := r.Update(ctx, user); errAddFinalizer != nil {
+		log.Error(errAddFinalizer, "Failed to add finalizer")
+		return ctrl.Result{}, errAddFinalizer
+	}
 
 	userRequest, err := createUserRequest(user)
 	if err != nil {
-		return err
+		return ctrl.Result{}, err
 	}
 
 	userResponse, err := r.LitellmClient.GetUser(ctx, user.Status.UserID)
 	if err != nil {
 		log.Error(err, "Failed to get user from litellm")
-		return err
+		return ctrl.Result{}, err
 	}
 
 	userUpdateNeeded, err := r.LitellmClient.IsUserUpdateNeeded(ctx, &userResponse, &userRequest)
 	if err != nil {
 		log.Error(err, "Failed to check if user needs to be updated")
-		return err
+		return ctrl.Result{}, err
 	}
+
 	if userUpdateNeeded.NeedsUpdate {
 		log.Info("Updating User: "+user.Spec.UserAlias+" in litellm", "Fields changed", userUpdateNeeded.ChangedFields)
 		updatedResponse, err := r.LitellmClient.UpdateUser(ctx, &userRequest)
 		if err != nil {
 			log.Error(err, "Failed to update user in litellm")
-			return err
+			return ctrl.Result{}, err
 		}
 
 		updateUserStatus(user, updatedResponse, user.Status.KeySecretRef)
-
-		if err := r.Status().Update(ctx, user); err != nil {
+		if errPatch := r.patchStatus(ctx, user); errPatch != nil {
 			log.Error(err, "Failed to update User status")
-			return err
-		} else {
-			log.Info("Updated User: " + user.Spec.UserAlias + " in litellm")
+			return ctrl.Result{}, errPatch
 		}
+
+		log.Info("Updated User: " + user.Spec.UserAlias + " in litellm")
+		return ctrl.Result{}, nil
 	}
 
-	return nil
+	return ctrl.Result{}, nil
 }
 
 // createUserRequest creates a UserRequest from a User
