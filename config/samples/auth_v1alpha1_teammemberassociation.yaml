@@ -1,7 +1,7 @@
 apiVersion: auth.litellm.ai/v1alpha1
 kind: TeamMemberAssociation
 metadata:
-  name: alice-ai-team
+  name: bob-ai-team
   namespace: litellm
 spec:
   connectionRef:
@@ -10,4 +10,4 @@ spec:
       namespace: litellm
   role: user
   teamAlias: ai-team
-  userEmail: alice@example.com
+  userEmail: bob@example.com

@@ -7,6 +7,7 @@ resources:
 - bases/auth.litellm.ai_teams.yaml
 - bases/auth.litellm.ai_teammemberassociations.yaml
 - bases/litellm.litellm.ai_litellminstances.yaml
+- bases/litellm.litellm.ai_models.yaml
 # +kubebuilder:scaffold:crdkustomizeresource
 
 patches:

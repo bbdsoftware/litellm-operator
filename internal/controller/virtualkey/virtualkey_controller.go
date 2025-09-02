@@ -14,13 +14,14 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package controller
+package virtualkey
 
 import (
 	"context"
 	"errors"
 	"fmt"
 	"strconv"
+	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -42,10 +43,10 @@ import (
 // VirtualKeyReconciler reconciles a VirtualKey object
 type VirtualKeyReconciler struct {
 	client.Client
-	Scheme *runtime.Scheme
-	litellm.LitellmVirtualKey
-	connectionHandler     *common.ConnectionHandler
+	Scheme                *runtime.Scheme
+	LitellmClient         litellm.LitellmVirtualKey
 	litellmResourceNaming *util.LitellmResourceNaming
+	OverrideLiteLLMURL    string
 }
 
 // +kubebuilder:rbac:groups=auth.litellm.ai,resources=virtualkeys,verbs=get;list;watch;create;update;patch;delete
@@ -80,33 +81,17 @@ func (r *VirtualKeyReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	}
 
 	// Initialize connection handler if not already done
-	if r.connectionHandler == nil {
-		r.connectionHandler = common.NewConnectionHandler(r.Client)
+	// If a LitellmClient was injected (tests), reuse it; otherwise create one from connection details
+	if r.LitellmClient == nil {
+		litellmConnectionHandler, err := common.NewLitellmConnectionHandler(r.Client, ctx, virtualKey.Spec.ConnectionRef, virtualKey.Namespace)
+		if err != nil {
+			return ctrl.Result{RequeueAfter: time.Second * 30}, err
+		}
+		r.LitellmClient = litellmConnectionHandler.GetLitellmClient()
 	}
 
 	if r.litellmResourceNaming == nil {
 		r.litellmResourceNaming = util.NewLitellmResourceNaming(&virtualKey.Spec.ConnectionRef)
-	}
-
-	// Get connection details
-	connectionDetails, err := r.connectionHandler.GetConnectionDetails(ctx, virtualKey.Spec.ConnectionRef, virtualKey.Namespace)
-	if err != nil {
-		log.Error(err, "Failed to get connection details")
-		if _, updateErr := r.updateConditions(ctx, virtualKey, metav1.Condition{
-			Type:               "Ready",
-			Status:             metav1.ConditionFalse,
-			LastTransitionTime: metav1.Now(),
-			Reason:             "ConnectionError",
-			Message:            err.Error(),
-		}); updateErr != nil {
-			log.Error(updateErr, "Failed to update conditions")
-		}
-		return ctrl.Result{}, err
-	}
-
-	// Configure the LiteLLM client with connection details only if not already set (for testing)
-	if r.LitellmVirtualKey == nil {
-		r.LitellmVirtualKey = common.ConfigureLitellmClient(connectionDetails)
 	}
 
 	// If the VirtualKey is being deleted, delete the key from litellm
@@ -118,7 +103,7 @@ func (r *VirtualKeyReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		return ctrl.Result{}, nil
 	}
 
-	exists, err := r.CheckVirtualKeyExists(ctx, virtualKey.Spec.KeyAlias)
+	exists, err := r.LitellmClient.CheckVirtualKeyExists(ctx, virtualKey.Spec.KeyAlias)
 	if err != nil {
 		log.Error(err, "Failed to check if VirtualKey exists")
 		if _, updateErr := r.updateConditions(ctx, virtualKey, metav1.Condition{
@@ -174,7 +159,7 @@ func (r *VirtualKeyReconciler) updateConditions(ctx context.Context, virtualKey 
 func (r *VirtualKeyReconciler) deleteVirtualKey(ctx context.Context, virtualKey *authv1alpha1.VirtualKey) (ctrl.Result, error) {
 	log := log.FromContext(ctx)
 
-	if err := r.DeleteVirtualKey(ctx, virtualKey.Status.KeyAlias); err != nil {
+	if err := r.LitellmClient.DeleteVirtualKey(ctx, virtualKey.Status.KeyAlias); err != nil {
 		return r.updateConditions(ctx, virtualKey, metav1.Condition{
 			Type:    "Deleted",
 			Status:  metav1.ConditionFalse,
@@ -209,7 +194,7 @@ func (r *VirtualKeyReconciler) generateVirtualKey(ctx context.Context, virtualKe
 		return ctrl.Result{}, err
 	}
 
-	virtualKeyResponse, err := r.GenerateVirtualKey(ctx, &virtualKeyRequest)
+	virtualKeyResponse, err := r.LitellmClient.GenerateVirtualKey(ctx, &virtualKeyRequest)
 	if err != nil {
 		return r.updateConditions(ctx, virtualKey, metav1.Condition{
 			Type:    "Ready",
@@ -219,8 +204,7 @@ func (r *VirtualKeyReconciler) generateVirtualKey(ctx context.Context, virtualKe
 		})
 	}
 
-	resourceNaming := util.NewLitellmResourceNaming(&virtualKey.Spec.ConnectionRef)
-	secretName := resourceNaming.GenerateSecretName(virtualKeyResponse.KeyAlias)
+	secretName := r.litellmResourceNaming.GenerateSecretName(virtualKeyResponse.KeyAlias)
 
 	updateVirtualKeyStatus(virtualKey, virtualKeyResponse, secretName)
 	_, err = r.updateConditions(ctx, virtualKey, metav1.Condition{
@@ -287,18 +271,18 @@ func (r *VirtualKeyReconciler) syncVirtualKey(ctx context.Context, virtualKey *a
 		return err
 	}
 
-	virtualKeyResponse, err := r.GetVirtualKey(ctx, key)
+	virtualKeyResponse, err := r.LitellmClient.GetVirtualKey(ctx, key)
 	if err != nil {
 		log.Error(err, "Failed to get virtual key from litellm")
 		return err
 	}
 
-	if r.IsVirtualKeyUpdateNeeded(ctx, &virtualKeyResponse, &virtualKeyRequest) {
+	if r.LitellmClient.IsVirtualKeyUpdateNeeded(ctx, &virtualKeyResponse, &virtualKeyRequest) {
 		log.Info("Updating VirtualKey: " + virtualKey.Spec.KeyAlias + " in litellm")
 		// When updating a key, we need to pass the key in the request but this usually resides in the Secret
 		virtualKeyRequest.Key = key
 
-		updatedResponse, err := r.UpdateVirtualKey(ctx, &virtualKeyRequest)
+		updatedResponse, err := r.LitellmClient.UpdateVirtualKey(ctx, &virtualKeyRequest)
 		if err != nil {
 			log.Error(err, "Failed to update virtual key in litellm")
 			return err

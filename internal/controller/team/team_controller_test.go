@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package controller
+package team
 
 import (
 	"context"
@@ -148,9 +148,9 @@ var _ = Describe("Team Controller", func() {
 			Expect(k8sClient.Delete(ctx, resource)).To(Succeed())
 			By("Deleting the resource from litellm")
 			controllerReconciler := &TeamReconciler{
-				Client:      k8sClient,
-				Scheme:      k8sClient.Scheme(),
-				LitellmTeam: &FakeLitellmTeamClient{teamExists: true},
+				Client:        k8sClient,
+				Scheme:        k8sClient.Scheme(),
+				LitellmClient: &FakeLitellmTeamClient{teamExists: true},
 			}
 			_, err = controllerReconciler.Reconcile(ctx, reconcile.Request{
 				NamespacedName: typeNamespacedName,
@@ -169,9 +169,9 @@ var _ = Describe("Team Controller", func() {
 			It("should successfully reconcile the resource", func() {
 				By("Reconciling the created resource")
 				controllerReconciler := &TeamReconciler{
-					Client:      k8sClient,
-					Scheme:      k8sClient.Scheme(),
-					LitellmTeam: &FakeLitellmTeamClient{teamExists: false},
+					Client:        k8sClient,
+					Scheme:        k8sClient.Scheme(),
+					LitellmClient: &FakeLitellmTeamClient{teamExists: false},
 				}
 
 				_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
@@ -208,9 +208,9 @@ var _ = Describe("Team Controller", func() {
 			It("should add an error condition to the status", func() {
 				By("Reconciling the created resource")
 				controllerReconciler := &TeamReconciler{
-					Client:      k8sClient,
-					Scheme:      k8sClient.Scheme(),
-					LitellmTeam: &FakeLitellmTeamClient{teamExists: true},
+					Client:        k8sClient,
+					Scheme:        k8sClient.Scheme(),
+					LitellmClient: &FakeLitellmTeamClient{teamExists: true},
 				}
 
 				_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{

@@ -15,21 +15,17 @@ spec:
   scope: Namespaced
   versions:
   - additionalPrinterColumns:
-    - description: The unique user identifier
-      jsonPath: .spec.userID
-      name: User ID
+    - description: The ready status of the user
+      jsonPath: .status.conditions[?(@.type=='Ready')].status
+      name: Ready
       type: string
     - description: The user's email address
       jsonPath: .spec.userEmail
-      name: User Email
-      type: string
-    - description: The user alias
-      jsonPath: .spec.userAlias
-      name: User Alias
+      name: Email
       type: string
     - description: The user's role
       jsonPath: .spec.userRole
-      name: User Role
+      name: Role
       type: string
     - description: Whether the user is blocked
       jsonPath: .spec.blocked
@@ -37,37 +33,13 @@ spec:
       type: boolean
     - description: Maximum budget for the user
       jsonPath: .spec.maxBudget
-      name: Max Budget
+      name: Budget
       type: string
-    - description: Requests per minute limit
-      jsonPath: .spec.rpmLimit
-      name: RPM Limit
-      type: integer
-    - description: Tokens per minute limit
-      jsonPath: .spec.tpmLimit
-      name: TPM Limit
-      type: integer
-    - description: Allowed models for the user
-      jsonPath: .spec.models
-      name: Models
-      type: string
-    - description: Teams the user belongs to
-      jsonPath: .spec.teams
-      name: Teams
-      type: string
-    - description: Whether to auto-create a key
-      jsonPath: .spec.autoCreateKey
-      name: Auto Create Key
-      type: boolean
     - description: Current user spend
       jsonPath: .status.spend
       name: Spend
       type: string
-    - description: User creation date
-      jsonPath: .status.createdAt
-      name: Created
-      type: string
-    - description: Age of the user
+    - description: Time since creation
       jsonPath: .metadata.creationTimestamp
       name: Age
       type: date
@@ -260,8 +232,12 @@ spec:
                 type: string
               userRole:
                 description: UserRole is the role of the user - one of "proxy_admin",
-                  "proxy_admin_viewer", "internal_user", "internal_user_viewer", "team",
-                  "customer"
+                  "proxy_admin_viewer", "internal_user", "internal_user_viewer"
+                enum:
+                - proxy_admin
+                - proxy_admin_viewer
+                - internal_user
+                - internal_user_viewer
                 type: string
             required:
             - connectionRef

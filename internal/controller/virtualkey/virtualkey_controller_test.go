@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package controller
+package virtualkey
 
 import (
 	"context"
@@ -30,43 +30,50 @@ import (
 
 	authv1alpha1 "github.com/bbdsoftware/litellm-operator/api/auth/v1alpha1"
 	"github.com/bbdsoftware/litellm-operator/internal/litellm"
+	"github.com/bbdsoftware/litellm-operator/internal/util"
 )
 
-type FakeLitellmTeamMemberAssociationClient struct{}
+type FakeLitellmVirtualKeyClient struct{}
 
-func (l *FakeLitellmTeamMemberAssociationClient) CreateTeamMemberAssociation(ctx context.Context, req *litellm.TeamMemberAssociationRequest) (litellm.TeamMemberAssociationResponse, error) {
-	return litellm.TeamMemberAssociationResponse{}, nil
+var fakeVirtualKeyResponse = litellm.VirtualKeyResponse{
+	KeyAlias:  "test-virtual-key-alias",
+	KeyName:   "test-virtual-key-name",
+	UserID:    "test-user-id",
+	Expires:   "2024-03-20T10:00:00Z",
+	Key:       "test-secret-key",
+	TokenID:   "test-token-id",
+	MaxBudget: 100.0,
 }
 
-func (l *FakeLitellmTeamMemberAssociationClient) DeleteTeamMemberAssociation(ctx context.Context, teamAlias string, userEmail string) error {
+func (l *FakeLitellmVirtualKeyClient) GenerateVirtualKey(ctx context.Context, req *litellm.VirtualKeyRequest) (litellm.VirtualKeyResponse, error) {
+	return fakeVirtualKeyResponse, nil
+}
+
+func (l *FakeLitellmVirtualKeyClient) DeleteVirtualKey(ctx context.Context, keyAlias string) error {
 	return nil
 }
 
-func (l *FakeLitellmTeamMemberAssociationClient) GetTeamMemberAssociation(ctx context.Context, teamAlias string, userEmail string) (litellm.TeamMemberAssociationResponse, error) {
-	return litellm.TeamMemberAssociationResponse{}, nil
+func (l *FakeLitellmVirtualKeyClient) CheckVirtualKeyExists(ctx context.Context, virtualKeyID string) (bool, error) {
+	return true, nil
 }
 
-func (l *FakeLitellmTeamMemberAssociationClient) IsTeamMemberAssociationUpdateNeeded(ctx context.Context, teamMemberAssociationResponse *litellm.TeamMemberAssociationResponse, teamMemberAssociationRequest *litellm.TeamMemberAssociationRequest) bool {
+func (l *FakeLitellmVirtualKeyClient) GetVirtualKey(ctx context.Context, keyAlias string) (litellm.VirtualKeyResponse, error) {
+	return fakeVirtualKeyResponse, nil
+}
+
+func (l *FakeLitellmVirtualKeyClient) GetVirtualKeyID(ctx context.Context, keyAlias string) (string, error) {
+	return "test-virtual-key-id", nil
+}
+
+func (l *FakeLitellmVirtualKeyClient) IsVirtualKeyUpdateNeeded(ctx context.Context, virtualKeyResponse *litellm.VirtualKeyResponse, virtualKeyRequest *litellm.VirtualKeyRequest) bool {
 	return false
 }
 
-func (l *FakeLitellmTeamMemberAssociationClient) UpdateTeamMemberAssociation(ctx context.Context, req *litellm.TeamMemberAssociationRequest) (litellm.TeamMemberAssociationResponse, error) {
-	return litellm.TeamMemberAssociationResponse{}, nil
+func (l *FakeLitellmVirtualKeyClient) UpdateVirtualKey(ctx context.Context, req *litellm.VirtualKeyRequest) (litellm.VirtualKeyResponse, error) {
+	return fakeVirtualKeyResponse, nil
 }
 
-func (l *FakeLitellmTeamMemberAssociationClient) GetTeam(ctx context.Context, teamAlias string) (litellm.TeamResponse, error) {
-	return litellm.TeamResponse{}, nil
-}
-
-func (l *FakeLitellmTeamMemberAssociationClient) GetTeamID(ctx context.Context, teamAlias string) (string, error) {
-	return "test-team-id", nil
-}
-
-func (l *FakeLitellmTeamMemberAssociationClient) GetUserID(ctx context.Context, userEmail string) (string, error) {
-	return "test-user-id", nil
-}
-
-var _ = Describe("TeamMemberAssociation Controller", func() {
+var _ = Describe("VirtualKey Controller", func() {
 	Context("When reconciling a resource", func() {
 		const resourceName = "test-resource"
 
@@ -76,7 +83,16 @@ var _ = Describe("TeamMemberAssociation Controller", func() {
 			Name:      resourceName,
 			Namespace: "default", // TODO(user):Modify as needed
 		}
-		teammemberassociation := &authv1alpha1.TeamMemberAssociation{}
+		virtualkey := &authv1alpha1.VirtualKey{}
+
+		var llmName string
+		if virtualkey.Spec.ConnectionRef.InstanceRef != nil {
+			llmName = virtualkey.Spec.ConnectionRef.InstanceRef.Name
+		} else {
+			llmName = util.DefaultLLMName
+		}
+
+		resourceNaming := util.NewLitellmResourceNaming(llmName)
 
 		BeforeEach(func() {
 			By("creating the test connection secret")
@@ -92,15 +108,17 @@ var _ = Describe("TeamMemberAssociation Controller", func() {
 			}
 			Expect(k8sClient.Create(ctx, connectionSecret)).To(Succeed())
 
-			By("creating the custom resource for the Kind TeamMemberAssociation")
-			err := k8sClient.Get(ctx, typeNamespacedName, teammemberassociation)
+			By("creating the custom resource for the Kind VirtualKey")
+			err := k8sClient.Get(ctx, typeNamespacedName, virtualkey)
 			if err != nil && errors.IsNotFound(err) {
-				resource := &authv1alpha1.TeamMemberAssociation{
+				// create VirtualKey
+
+				resource := &authv1alpha1.VirtualKey{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      resourceName,
 						Namespace: "default",
 					},
-					Spec: authv1alpha1.TeamMemberAssociationSpec{
+					Spec: authv1alpha1.VirtualKeySpec{
 						ConnectionRef: authv1alpha1.ConnectionRef{
 							SecretRef: &authv1alpha1.SecretRef{
 								Name: "test-secret",
@@ -110,22 +128,37 @@ var _ = Describe("TeamMemberAssociation Controller", func() {
 								},
 							},
 						},
-						TeamAlias: "test-team-alias",
-						UserEmail: "test-user-email",
-						Role:      "user",
+						KeyAlias: "test-key-alias",
+					},
+					Status: authv1alpha1.VirtualKeyStatus{
+						KeySecretRef: resourceNaming.GenerateSecretName("test-key-alias"),
 					},
 				}
 				Expect(k8sClient.Create(ctx, resource)).To(Succeed())
+
+				secretName := resourceNaming.GenerateSecretName(resource.Spec.KeyAlias)
+
+				// create Secret
+				secret := &corev1.Secret{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      secretName,
+						Namespace: "default",
+					},
+					Data: map[string][]byte{
+						"key": []byte("fake-key-data"),
+					},
+				}
+				Expect(k8sClient.Create(ctx, secret)).To(Succeed())
 			}
 		})
 
 		AfterEach(func() {
 			// TODO(user): Cleanup logic after each test, like removing the resource instance.
-			resource := &authv1alpha1.TeamMemberAssociation{}
+			resource := &authv1alpha1.VirtualKey{}
 			err := k8sClient.Get(ctx, typeNamespacedName, resource)
 			Expect(err).NotTo(HaveOccurred())
 
-			By("Cleanup the specific resource instance TeamMemberAssociation")
+			By("Cleanup the specific resource instance VirtualKey")
 			Expect(k8sClient.Delete(ctx, resource)).To(Succeed())
 
 			By("Cleanup the test connection secret")
@@ -137,10 +170,10 @@ var _ = Describe("TeamMemberAssociation Controller", func() {
 		})
 		It("should successfully reconcile the resource", func() {
 			By("Reconciling the created resource")
-			controllerReconciler := &TeamMemberAssociationReconciler{
-				Client:                       k8sClient,
-				Scheme:                       k8sClient.Scheme(),
-				LitellmTeamMemberAssociation: &FakeLitellmTeamMemberAssociationClient{},
+			controllerReconciler := &VirtualKeyReconciler{
+				Client:        k8sClient,
+				Scheme:        k8sClient.Scheme(),
+				LitellmClient: &FakeLitellmVirtualKeyClient{},
 			}
 
 			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{

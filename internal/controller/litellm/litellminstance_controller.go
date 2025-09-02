@@ -24,21 +24,21 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strconv"
+	"regexp"
+	"strings"
 	"time"
+
+	"gopkg.in/yaml.v2"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
-	"regexp"
-	"strings"
-
 	litellmv1alpha1 "github.com/bbdsoftware/litellm-operator/api/litellm/v1alpha1"
+	"github.com/bbdsoftware/litellm-operator/internal/controller/common"
 	"github.com/bbdsoftware/litellm-operator/internal/util"
 	"github.com/google/uuid"
-	"gopkg.in/yaml.v2"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
@@ -86,46 +86,46 @@ type LiteLLMInstanceReconciler struct {
 }
 
 type LiteLLMParamsYAML struct {
-	ApiKey                           string              `yaml:"api_key,omitempty"`
-	ApiBase                          string              `yaml:"api_base,omitempty"`
-	AwsAccessKeyID                   string              `yaml:"aws_access_key_id,omitempty"`
-	AwsSecretAccessKey               string              `yaml:"aws_secret_access_key,omitempty"`
-	AwsRegionName                    string              `yaml:"aws_region_name,omitempty"`
-	AutoRouterConfigPath             string              `yaml:"auto_router_config_path,omitempty"`
-	AutoRouterConfig                 string              `yaml:"auto_router_config,omitempty"`
-	AutoRouterDefaultModel           string              `yaml:"auto_router_default_model,omitempty"`
-	AutoRouterEmbeddingModel         string              `yaml:"auto_router_embedding_model,omitempty"`
-	AdditionalProps                  map[string]string   `yaml:"additionalProps,omitempty"`
-	ApiVersion                       string              `yaml:"api_version,omitempty"`
-	BudgetDuration                   string              `yaml:"budget_duration,omitempty"`
-	ConfigurableClientsideAuthParams []map[string]string `yaml:"configurable_clientside_auth_params,omitempty"`
-	CustomLLMProvider                string              `yaml:"custom_llm_provider,omitempty"`
-	InputCostPerToken                float64             `yaml:"input_cost_per_token,omitempty"`
-	InputCostPerPixel                float64             `yaml:"input_cost_per_pixel,omitempty"`
-	InputCostPerSecond               float64             `yaml:"input_cost_per_second,omitempty"`
-	LiteLLMTraceID                   string              `yaml:"litellm_trace_id,omitempty"`
-	LiteLLMCredentialName            string              `yaml:"litellm_credential_name,omitempty"`
-	MaxFileSizeMB                    float64             `yaml:"max_file_size_mb,omitempty"`
-	MergeReasoningContentInChoices   bool                `yaml:"merge_reasoning_content_in_choices,omitempty"`
-	MockResponse                     string              `yaml:"mock_response,omitempty"`
-	Model                            string              `yaml:"model"`
-	MaxBudget                        float64             `yaml:"max_budget,omitempty"`
-	MaxRetries                       int                 `yaml:"max_retries,omitempty"`
-	Organization                     string              `yaml:"organization,omitempty"`
-	OutputCostPerToken               float64             `yaml:"output_cost_per_token,omitempty"`
-	OutputCostPerSecond              float64             `yaml:"output_cost_per_second,omitempty"`
-	OutputCostPerPixel               float64             `yaml:"output_cost_per_pixel,omitempty"`
-	RegionName                       string              `yaml:"region_name,omitempty"`
-	RPM                              int                 `yaml:"rpm,omitempty"`
-	StreamTimeout                    int                 `yaml:"stream_timeout,omitempty"`
-	TPM                              int                 `yaml:"tpm,omitempty"`
-	Timeout                          int                 `yaml:"timeout,omitempty"`
-	UseInPassThrough                 bool                `yaml:"use_in_pass_through,omitempty"`
-	UseLiteLLMProxy                  bool                `yaml:"use_litellm_proxy,omitempty"`
-	VertexProject                    string              `yaml:"vertex_project,omitempty"`
-	VertexLocation                   string              `yaml:"vertex_location,omitempty"`
-	VertexCredentials                string              `yaml:"vertex_credentials,omitempty"`
-	WatsonxRegionName                string              `yaml:"watsonx_region_name,omitempty"`
+	ApiKey                           string                 `yaml:"api_key,omitempty"`
+	ApiBase                          string                 `yaml:"api_base,omitempty"`
+	AwsAccessKeyID                   string                 `yaml:"aws_access_key_id,omitempty"`
+	AwsSecretAccessKey               string                 `yaml:"aws_secret_access_key,omitempty"`
+	AwsRegionName                    string                 `yaml:"aws_region_name,omitempty"`
+	AutoRouterConfigPath             string                 `yaml:"auto_router_config_path,omitempty"`
+	AutoRouterConfig                 string                 `yaml:"auto_router_config,omitempty"`
+	AutoRouterDefaultModel           string                 `yaml:"auto_router_default_model,omitempty"`
+	AutoRouterEmbeddingModel         string                 `yaml:"auto_router_embedding_model,omitempty"`
+	AdditionalProps                  map[string]interface{} `yaml:"additionalProps,omitempty"`
+	ApiVersion                       string                 `yaml:"api_version,omitempty"`
+	BudgetDuration                   string                 `yaml:"budget_duration,omitempty"`
+	ConfigurableClientsideAuthParams []interface{}          `yaml:"configurable_clientside_auth_params,omitempty"`
+	CustomLLMProvider                string                 `yaml:"custom_llm_provider,omitempty"`
+	InputCostPerToken                float64                `yaml:"input_cost_per_token,omitempty"`
+	InputCostPerPixel                float64                `yaml:"input_cost_per_pixel,omitempty"`
+	InputCostPerSecond               float64                `yaml:"input_cost_per_second,omitempty"`
+	LiteLLMTraceID                   string                 `yaml:"litellm_trace_id,omitempty"`
+	LiteLLMCredentialName            string                 `yaml:"litellm_credential_name,omitempty"`
+	MaxFileSizeMB                    int                    `yaml:"max_file_size_mb,omitempty"`
+	MergeReasoningContentInChoices   bool                   `yaml:"merge_reasoning_content_in_choices,omitempty"`
+	MockResponse                     string                 `yaml:"mock_response,omitempty"`
+	Model                            string                 `yaml:"model"`
+	MaxBudget                        float64                `yaml:"max_budget,omitempty"`
+	MaxRetries                       int                    `yaml:"max_retries,omitempty"`
+	Organization                     string                 `yaml:"organization,omitempty"`
+	OutputCostPerToken               float64                `yaml:"output_cost_per_token,omitempty"`
+	OutputCostPerSecond              float64                `yaml:"output_cost_per_second,omitempty"`
+	OutputCostPerPixel               float64                `yaml:"output_cost_per_pixel,omitempty"`
+	RegionName                       string                 `yaml:"region_name,omitempty"`
+	RPM                              int                    `yaml:"rpm,omitempty"`
+	StreamTimeout                    int                    `yaml:"stream_timeout,omitempty"`
+	TPM                              int                    `yaml:"tpm,omitempty"`
+	Timeout                          int                    `yaml:"timeout,omitempty"`
+	UseInPassThrough                 bool                   `yaml:"use_in_pass_through,omitempty"`
+	UseLiteLLMProxy                  bool                   `yaml:"use_litellm_proxy,omitempty"`
+	VertexProject                    string                 `yaml:"vertex_project,omitempty"`
+	VertexLocation                   string                 `yaml:"vertex_location,omitempty"`
+	VertexCredentials                string                 `yaml:"vertex_credentials,omitempty"`
+	WatsonxRegionName                string                 `yaml:"watsonx_region_name,omitempty"`
 }
 
 type ModelListItemYAML struct {
@@ -144,6 +144,7 @@ type ProxyConfig struct {
 	RouterSettings  RouterSettingsYAML  `yaml:"router_settings,omitempty"`
 	GeneralSettings struct {
 		AllowRequestsOnDBUnavailable bool `yaml:"allow_requests_on_db_unavailable"`
+		StoreModelInDB               bool `yaml:"store_model_in_db"` //Needed to be able to store new models created via REST API
 	} `yaml:"general_settings"`
 }
 
@@ -169,6 +170,10 @@ func (r *LiteLLMInstanceReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	llm := &litellmv1alpha1.LiteLLMInstance{}
 	if err := r.Get(ctx, req.NamespacedName, llm); err != nil {
 		return RequeueWithError(client.IgnoreNotFound(err))
+	}
+
+	if r.litellmResourceNaming == nil {
+		r.litellmResourceNaming = util.NewLitellmResourceNaming(llm.Name)
 	}
 
 	if r.litellmResourceNaming == nil {
@@ -202,7 +207,6 @@ func (r *LiteLLMInstanceReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	}
 
 	secret, err := r.createMasterKeySecret(ctx, llm)
-
 	if err != nil {
 		log.Error(err, "Failed to create or update Secret")
 		return util.HandleConflictError(err)
@@ -287,16 +291,7 @@ func validateModelListForDuplicates(llm *litellmv1alpha1.LiteLLMInstance) (bool,
 	return true, nil
 }
 
-func parseAndAssign(field string, target *float64, fieldName string) error {
-	if field != "" {
-		value, err := strconv.ParseFloat(field, 64)
-		if err != nil {
-			return errors.New(fieldName + " not parsable to float")
-		}
-		*target = value
-	}
-	return nil
-}
+// Shared function parseAndAssign moved to controller.go
 
 // renderProxyConfig generates the YAML configuration for the LiteLLM proxy server.
 // It creates a configuration structure with model list, router settings, and general settings.
@@ -307,7 +302,7 @@ func renderProxyConfig(llm *litellmv1alpha1.LiteLLMInstance, ctx context.Context
 	if llm.Spec.Models != nil {
 		for _, model := range llm.Spec.Models {
 
-			if model.LiteLLMParams.Model == "" {
+			if model.LiteLLMParams.Model == nil || *model.LiteLLMParams.Model == "" {
 				err := fmt.Errorf("model name is required for each model in the list")
 				log.Error(err, "Failed to render proxy config")
 				return "", err
@@ -315,73 +310,76 @@ func renderProxyConfig(llm *litellmv1alpha1.LiteLLMInstance, ctx context.Context
 
 			//map all LiteLLMParams to the YAML struct
 			litellmParams := LiteLLMParamsYAML{
-				ApiKey:                           model.LiteLLMParams.ApiKey,
-				ApiBase:                          model.LiteLLMParams.ApiBase,
-				AwsAccessKeyID:                   model.LiteLLMParams.AwsAccessKeyID,
-				AwsSecretAccessKey:               model.LiteLLMParams.AwsSecretAccessKey,
-				AwsRegionName:                    model.LiteLLMParams.AwsRegionName,
-				AutoRouterConfigPath:             model.LiteLLMParams.AutoRouterConfigPath,
-				AutoRouterConfig:                 model.LiteLLMParams.AutoRouterConfig,
-				AutoRouterDefaultModel:           model.LiteLLMParams.AutoRouterDefaultModel,
-				AutoRouterEmbeddingModel:         model.LiteLLMParams.AutoRouterEmbeddingModel,
-				AdditionalProps:                  model.LiteLLMParams.AdditionalProps,
-				ApiVersion:                       model.LiteLLMParams.ApiVersion,
-				BudgetDuration:                   model.LiteLLMParams.BudgetDuration,
-				ConfigurableClientsideAuthParams: model.LiteLLMParams.ConfigurableClientsideAuthParams,
-				CustomLLMProvider:                model.LiteLLMParams.CustomLLMProvider,
-				LiteLLMTraceID:                   model.LiteLLMParams.LiteLLMTraceID,
-				LiteLLMCredentialName:            model.LiteLLMParams.LiteLLMCredentialName,
-				MergeReasoningContentInChoices:   model.LiteLLMParams.MergeReasoningContentInChoices,
-				MockResponse:                     model.LiteLLMParams.MockResponse,
-				Model:                            model.LiteLLMParams.Model,
-				MaxRetries:                       model.LiteLLMParams.MaxRetries,
-				Organization:                     model.LiteLLMParams.Organization,
-				RegionName:                       model.LiteLLMParams.RegionName,
-				RPM:                              model.LiteLLMParams.RPM,
-				StreamTimeout:                    model.LiteLLMParams.StreamTimeout,
-				TPM:                              model.LiteLLMParams.TPM,
-				Timeout:                          model.LiteLLMParams.Timeout,
-				UseInPassThrough:                 model.LiteLLMParams.UseInPassThrough,
-				UseLiteLLMProxy:                  model.LiteLLMParams.UseLiteLLMProxy,
-				VertexProject:                    model.LiteLLMParams.VertexProject,
-				VertexLocation:                   model.LiteLLMParams.VertexLocation,
-				VertexCredentials:                model.LiteLLMParams.VertexCredentials,
-				WatsonxRegionName:                model.LiteLLMParams.WatsonxRegionName,
+				ApiKey:                         util.DerefString(model.LiteLLMParams.ApiKey),
+				ApiBase:                        util.DerefString(model.LiteLLMParams.ApiBase),
+				AwsAccessKeyID:                 util.DerefString(model.LiteLLMParams.AwsAccessKeyID),
+				AwsSecretAccessKey:             util.DerefString(model.LiteLLMParams.AwsSecretAccessKey),
+				AwsRegionName:                  util.DerefString(model.LiteLLMParams.AwsRegionName),
+				AutoRouterConfigPath:           util.DerefString(model.LiteLLMParams.AutoRouterConfigPath),
+				AutoRouterConfig:               util.DerefString(model.LiteLLMParams.AutoRouterConfig),
+				AutoRouterDefaultModel:         util.DerefString(model.LiteLLMParams.AutoRouterDefaultModel),
+				AutoRouterEmbeddingModel:       util.DerefString(model.LiteLLMParams.AutoRouterEmbeddingModel),
+				ApiVersion:                     util.DerefString(model.LiteLLMParams.ApiVersion),
+				BudgetDuration:                 util.DerefString(model.LiteLLMParams.BudgetDuration),
+				CustomLLMProvider:              util.DerefString(model.LiteLLMParams.CustomLLMProvider),
+				LiteLLMTraceID:                 util.DerefString(model.LiteLLMParams.LiteLLMTraceID),
+				LiteLLMCredentialName:          util.DerefString(model.LiteLLMParams.LiteLLMCredentialName),
+				MergeReasoningContentInChoices: util.DerefBool(model.LiteLLMParams.MergeReasoningContentInChoices),
+				MockResponse:                   util.DerefString(model.LiteLLMParams.MockResponse),
+				Model:                          util.DerefString(model.LiteLLMParams.Model),
+				MaxRetries:                     util.DerefInt(model.LiteLLMParams.MaxRetries),
+				MaxFileSizeMB:                  util.DerefInt(model.LiteLLMParams.MaxFileSizeMB),
+				Organization:                   util.DerefString(model.LiteLLMParams.Organization),
+				RegionName:                     util.DerefString(model.LiteLLMParams.RegionName),
+				RPM:                            util.DerefInt(model.LiteLLMParams.RPM),
+				StreamTimeout:                  util.DerefInt(model.LiteLLMParams.StreamTimeout),
+				TPM:                            util.DerefInt(model.LiteLLMParams.TPM),
+				Timeout:                        util.DerefInt(model.LiteLLMParams.Timeout),
+				UseInPassThrough:               util.DerefBool(model.LiteLLMParams.UseInPassThrough),
+				UseLiteLLMProxy:                util.DerefBool(model.LiteLLMParams.UseLiteLLMProxy),
+				VertexProject:                  util.DerefString(model.LiteLLMParams.VertexProject),
+				VertexLocation:                 util.DerefString(model.LiteLLMParams.VertexLocation),
+				VertexCredentials:              util.DerefString(model.LiteLLMParams.VertexCredentials),
+				WatsonxRegionName:              util.DerefString(model.LiteLLMParams.WatsonXRegionName),
 			}
 
-			if err := parseAndAssign(model.LiteLLMParams.OutputCostPerToken, &litellmParams.OutputCostPerToken, "OutputCostPerToken"); err != nil {
+			if err := common.ParseAndAssign(model.LiteLLMParams.OutputCostPerToken, &litellmParams.OutputCostPerToken, "OutputCostPerToken"); err != nil {
 				log.Error(err, "parsing error")
 				return "", err
 			}
-			if err := parseAndAssign(model.LiteLLMParams.OutputCostPerSecond, &litellmParams.OutputCostPerSecond, "OutputCostPerSecond"); err != nil {
+			if err := common.ParseAndAssign(model.LiteLLMParams.OutputCostPerSecond, &litellmParams.OutputCostPerSecond, "OutputCostPerSecond"); err != nil {
 				log.Error(err, "parsing error")
 				return "", err
 			}
-			if err := parseAndAssign(model.LiteLLMParams.OutputCostPerPixel, &litellmParams.OutputCostPerPixel, "OutputCostPerPixel"); err != nil {
+			if err := common.ParseAndAssign(model.LiteLLMParams.OutputCostPerPixel, &litellmParams.OutputCostPerPixel, "OutputCostPerPixel"); err != nil {
 				log.Error(err, "parsing error")
 				return "", err
 			}
-			if err := parseAndAssign(model.LiteLLMParams.InputCostPerPixel, &litellmParams.InputCostPerPixel, "InputCostPerPixel"); err != nil {
+			if err := common.ParseAndAssign(model.LiteLLMParams.InputCostPerPixel, &litellmParams.InputCostPerPixel, "InputCostPerPixel"); err != nil {
 				log.Error(err, "parsing error")
 				return "", err
 			}
-			if err := parseAndAssign(model.LiteLLMParams.InputCostPerSecond, &litellmParams.InputCostPerSecond, "InputCostPerSecond"); err != nil {
+			if err := common.ParseAndAssign(model.LiteLLMParams.InputCostPerSecond, &litellmParams.InputCostPerSecond, "InputCostPerSecond"); err != nil {
 				log.Error(err, "parsing error")
 				return "", err
 			}
-			if err := parseAndAssign(model.LiteLLMParams.InputCostPerToken, &litellmParams.InputCostPerSecond, "InputCostPerToken"); err != nil {
+			if err := common.ParseAndAssign(model.LiteLLMParams.InputCostPerToken, &litellmParams.InputCostPerToken, "InputCostPerToken"); err != nil {
 				log.Error(err, "parsing error")
 				return "", err
 			}
-			if err := parseAndAssign(model.LiteLLMParams.MaxBudget, &litellmParams.MaxBudget, "MaxBudget"); err != nil {
-				log.Error(err, "parsing error")
-				return "", err
-			}
-			if err := parseAndAssign(model.LiteLLMParams.MaxFileSizeMB, &litellmParams.MaxFileSizeMB, "MaxFileSizeMB"); err != nil {
+			if err := common.ParseAndAssign(model.LiteLLMParams.MaxBudget, &litellmParams.MaxBudget, "MaxBudget"); err != nil {
 				log.Error(err, "parsing error")
 				return "", err
 			}
 
+			if model.LiteLLMParams.ConfigurableClientsideAuthParams != nil && len(*model.LiteLLMParams.ConfigurableClientsideAuthParams) > 0 {
+				litellmParams.ConfigurableClientsideAuthParams = make([]interface{}, len(*model.LiteLLMParams.ConfigurableClientsideAuthParams))
+				for i, param := range *model.LiteLLMParams.ConfigurableClientsideAuthParams {
+					litellmParams.ConfigurableClientsideAuthParams[i] = param
+				}
+			}
+
+			// If the model requires authentication, create individual secrets for each model
 			if model.RequiresAuth {
 				//get existing modelCredentials secret
 				modelCredentials := &corev1.Secret{}
@@ -419,8 +417,9 @@ func renderProxyConfig(llm *litellmv1alpha1.LiteLLMInstance, ctx context.Context
 
 			}
 
+			// Append a short tag to indicate this model was created from a LiteLLMInstance modelList
 			modelYAML := ModelListItemYAML{
-				ModelName:     model.ModelName,
+				ModelName:     common.AppendModelSourceTag(model.ModelName, common.ModelTagInst),
 				LitellmParams: litellmParams,
 			}
 			modelListYAML = append(modelListYAML, modelYAML)
@@ -437,7 +436,9 @@ func renderProxyConfig(llm *litellmv1alpha1.LiteLLMInstance, ctx context.Context
 	}
 
 	cfg := ProxyConfig{ModelList: modelListYAML, RouterSettings: routerSettings}
-	cfg.GeneralSettings.AllowRequestsOnDBUnavailable = false //set to false to ensure pod does not become healthy if DB is not reachable
+	cfg.GeneralSettings.AllowRequestsOnDBUnavailable = true
+	cfg.GeneralSettings.StoreModelInDB = true
+
 	b, _ := yaml.Marshal(cfg)
 	return string(b), nil
 }
@@ -753,7 +754,7 @@ func sanitizeKey(key string) string {
 	return sanitized
 }
 
-func createAdditionalModelSecrets(ctx context.Context, model *litellmv1alpha1.Model, modelCredentials *corev1.Secret, llm *litellmv1alpha1.LiteLLMInstance,
+func createAdditionalModelSecrets(ctx context.Context, model *litellmv1alpha1.InitModelInstance, modelCredentials *corev1.Secret, llm *litellmv1alpha1.LiteLLMInstance,
 	k8sClient client.Client, scheme *runtime.Scheme) (map[string]string, error) {
 
 	log := logf.FromContext(ctx)
@@ -811,6 +812,8 @@ func createSecret(ctx context.Context, k8sClient client.Client, scheme *runtime.
 // createDeployment creates or updates the Deployment for the LiteLLM instance.
 // It creates a Deployment that runs the LiteLLM proxy container with appropriate configuration.
 func (r *LiteLLMInstanceReconciler) createDeployment(ctx context.Context, llm *litellmv1alpha1.LiteLLMInstance, configMap *corev1.ConfigMap, secret *corev1.Secret, serviceAccount *corev1.ServiceAccount) (*appsv1.Deployment, error) {
+	log := logf.FromContext(ctx)
+
 	deployment := &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      r.litellmResourceNaming.GetDeploymentName(),
@@ -847,8 +850,9 @@ func (r *LiteLLMInstanceReconciler) createDeployment(ctx context.Context, llm *l
 			},
 		},
 	}
-
+	log.Info("Creating or updating deployment", "deployment", deployment.Name)
 	if _, err := util.CreateOrUpdateWithRetry(ctx, r.Client, r.Scheme, deployment, llm); err != nil {
+		log.Error(err, "Cannot create deployment")
 		return nil, err
 	}
 
@@ -1088,6 +1092,9 @@ func buildEnvironmentVariables(llm *litellmv1alpha1.LiteLLMInstance, secretName 
 			},
 		}
 		envVars = append(envVars, dbEnvVars...)
+
+		// Add extra environment variables
+		envVars = append(envVars, llm.Spec.ExtraEnvVars...)
 	}
 
 	for _, model := range llm.Spec.Models {
