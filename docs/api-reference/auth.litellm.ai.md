@@ -380,7 +380,7 @@ _Appears in:_
 | `userAlias` _string_ | UserAlias is the alias of the user |  |  |
 | `userEmail` _string_ | UserEmail is the email of the user |  | Required: \{\} <br /> |
 | `userID` _string_ | UserID is the ID of the user. If not set, a unique ID will be generated. |  |  |
-| `userRole` _string_ | UserRole is the role of the user - one of "proxy_admin", "proxy_admin_viewer", "internal_user", "internal_user_viewer", "team", "customer" |  |  |
+| `userRole` _string_ | UserRole is the role of the user - one of "proxy_admin", "proxy_admin_viewer", "internal_user", "internal_user_viewer" |  |  |
 
 
 #### UserStatus
