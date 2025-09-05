@@ -230,7 +230,7 @@ var _ = Describe("TeamMemberAssociation Controller", func() {
 			},
 			Entry("create new association successfully",
 				"create new association successfully",
-				createTestTeamMemberAssociation("test-association", "default"),
+				createTestTeamMemberAssociation("test-association"),
 				nil, // User not in team yet
 				nil, // No create error
 				ctrl.Result{RequeueAfter: 60 * time.Second},
@@ -240,7 +240,7 @@ var _ = Describe("TeamMemberAssociation Controller", func() {
 			),
 			Entry("user already correctly in team",
 				"user already correctly in team",
-				createTestTeamMemberAssociation("test-association", "default"),
+				createTestTeamMemberAssociation("test-association"),
 				&litellm.TeamMemberWithRole{
 					UserID:    "user-test-association@example.com",
 					UserEmail: "test-association@example.com",
@@ -254,7 +254,7 @@ var _ = Describe("TeamMemberAssociation Controller", func() {
 			),
 			Entry("litellm creation error",
 				"litellm creation error",
-				createTestTeamMemberAssociation("test-association", "default"),
+				createTestTeamMemberAssociation("test-association"),
 				nil, // No existing member
 				errors.New("litellm service unavailable"),
 				ctrl.Result{RequeueAfter: 30 * time.Second},
@@ -350,7 +350,7 @@ var _ = Describe("TeamMemberAssociation Controller", func() {
 				err := reconcilerForError.Create(context.Background(), secret)
 				Expect(err).NotTo(HaveOccurred())
 
-				association := createTestTeamMemberAssociation("test", "default")
+				association := createTestTeamMemberAssociation("test")
 				err = reconcilerForError.Create(context.Background(), association)
 				Expect(err).NotTo(HaveOccurred())
 
@@ -417,11 +417,12 @@ func setupTestTeamMemberAssociationReconciler() *TeamMemberAssociationReconciler
 	}
 }
 
-func createTestTeamMemberAssociation(name, namespace string) *authv1alpha1.TeamMemberAssociation {
+func createTestTeamMemberAssociation(name string) *authv1alpha1.TeamMemberAssociation {
+	const testNamespace = "default"
 	return &authv1alpha1.TeamMemberAssociation{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:       name,
-			Namespace:  namespace,
+			Namespace:  testNamespace,
 			Generation: 1,
 		},
 		Spec: authv1alpha1.TeamMemberAssociationSpec{

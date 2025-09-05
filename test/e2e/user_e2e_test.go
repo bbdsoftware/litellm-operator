@@ -226,6 +226,7 @@ func verifyUserExistsInLiteLLM(userEmail string) error {
 }
 
 func verifyUserUpdatedInLiteLLM(userEmail, expectedBudget string, expectedRPM int) error {
+	// Verify budget
 	cmd := exec.Command("kubectl", "get", "user", "-n", modelTestNamespace,
 		"-o", "jsonpath={.items[?(@.spec.userEmail=='"+userEmail+"')].spec.maxBudget}")
 
@@ -236,6 +237,20 @@ func verifyUserUpdatedInLiteLLM(userEmail, expectedBudget string, expectedRPM in
 
 	if strings.TrimSpace(string(output)) != expectedBudget {
 		return fmt.Errorf("expected budget %s, got %s", expectedBudget, string(output))
+	}
+
+	// Verify RPM limit
+	cmd = exec.Command("kubectl", "get", "user", "-n", modelTestNamespace,
+		"-o", "jsonpath={.items[?(@.spec.userEmail=='"+userEmail+"')].spec.rpmLimit}")
+
+	output, err = utils.Run(cmd)
+	if err != nil {
+		return err
+	}
+
+	actualRPM := strings.TrimSpace(string(output))
+	if actualRPM != fmt.Sprintf("%d", expectedRPM) {
+		return fmt.Errorf("expected RPM limit %d, got %s", expectedRPM, actualRPM)
 	}
 
 	return nil

@@ -86,15 +86,18 @@ func (m *mockLitellmVirtualKeyClient) DeleteVirtualKey(ctx context.Context, keyA
 	return nil
 }
 
-func (m *mockLitellmVirtualKeyClient) CheckVirtualKeyExists(ctx context.Context, keyAlias string) (bool, error) {
-	if m.checkExistsError != nil {
-		return false, m.checkExistsError
+func (m *mockLitellmVirtualKeyClient) GetVirtualKeyFromAlias(ctx context.Context, keyAlias string) ([]string, error) {
+	if m.getError != nil {
+		return []string{}, m.getError
 	}
-	if m.keyExists {
-		return true, nil
+	return []string{m.virtualKeys[keyAlias].Key}, nil
+}
+
+func (m *mockLitellmVirtualKeyClient) GetVirtualKeyInfo(ctx context.Context, key string) (litellm.VirtualKeyResponse, error) {
+	if m.getError != nil {
+		return litellm.VirtualKeyResponse{}, m.getError
 	}
-	_, exists := m.virtualKeys[keyAlias]
-	return exists, nil
+	return *m.virtualKeys[key], nil
 }
 
 func (m *mockLitellmVirtualKeyClient) GetVirtualKey(ctx context.Context, key string) (litellm.VirtualKeyResponse, error) {
@@ -192,11 +195,11 @@ func findCondition(conditions []metav1.Condition, condType string) *metav1.Condi
 	return nil
 }
 
-func assertCondition(conditions []metav1.Condition, condType string, status metav1.ConditionStatus, reason string) {
+func assertCondition(conditions []metav1.Condition, condType string, reason string) {
 	condition := findCondition(conditions, condType)
 	Expect(condition).NotTo(BeNil(), "condition %s should exist", condType)
 	if condition != nil {
-		Expect(condition.Status).To(Equal(status), "condition %s status", condType)
+		Expect(condition.Status).To(Equal(metav1.ConditionTrue), "condition %s status", condType)
 		Expect(condition.Reason).To(Equal(reason), "condition %s reason", condType)
 	}
 }
@@ -248,7 +251,7 @@ var _ = Describe("VirtualKey Controller", func() {
 
 				Expect(updatedVK.Status.KeyAlias).To(Equal(virtualKey.Spec.KeyAlias))
 				Expect(updatedVK.Status.ObservedGeneration).To(Equal(virtualKey.Generation))
-				assertCondition(updatedVK.Status.Conditions, base.CondReady, metav1.ConditionTrue, base.ReasonReady)
+				assertCondition(updatedVK.Status.Conditions, base.CondReady, base.ReasonReady)
 
 				// Verify finalizer was added
 				Expect(updatedVK.Finalizers).To(ContainElement(util.FinalizerName))
@@ -334,7 +337,7 @@ var _ = Describe("VirtualKey Controller", func() {
 				}, updatedVK)
 				Expect(err).NotTo(HaveOccurred())
 
-				assertCondition(updatedVK.Status.Conditions, base.CondReady, metav1.ConditionTrue, base.ReasonReady)
+				assertCondition(updatedVK.Status.Conditions, base.CondReady, base.ReasonReady)
 			})
 
 			It("should update virtual key when drift detected", func() {
@@ -444,7 +447,7 @@ var _ = Describe("VirtualKey Controller", func() {
 				}, updatedVK)
 				Expect(err).NotTo(HaveOccurred())
 
-				assertCondition(updatedVK.Status.Conditions, base.CondDegraded, metav1.ConditionTrue, base.ReasonLitellmError)
+				assertCondition(updatedVK.Status.Conditions, base.CondDegraded, base.ReasonLitellmError)
 			})
 
 			It("should handle connection errors", func() {
@@ -468,7 +471,7 @@ var _ = Describe("VirtualKey Controller", func() {
 				}, updatedVK)
 				Expect(err).NotTo(HaveOccurred())
 
-				assertCondition(updatedVK.Status.Conditions, base.CondDegraded, metav1.ConditionTrue, base.ReasonLitellmError)
+				assertCondition(updatedVK.Status.Conditions, base.CondDegraded, base.ReasonLitellmError)
 			})
 		})
 

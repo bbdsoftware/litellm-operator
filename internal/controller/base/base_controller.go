@@ -238,7 +238,7 @@ func (b *BaseController[T]) AddFinalizer(ctx context.Context, obj client.Object,
 	}
 	patch := client.MergeFrom(obj.DeepCopyObject().(client.Object))
 	obj.SetFinalizers(append(obj.GetFinalizers(), name))
-	return b.Client.Patch(ctx, obj, patch)
+	return b.Patch(ctx, obj, patch)
 }
 
 func (b *BaseController[T]) RemoveFinalizer(ctx context.Context, obj client.Object, name string) error {
@@ -257,7 +257,7 @@ func (b *BaseController[T]) RemoveFinalizer(ctx context.Context, obj client.Obje
 	}
 	patch := client.MergeFrom(obj.DeepCopyObject().(client.Object))
 	obj.SetFinalizers(out)
-	return b.Client.Patch(ctx, obj, patch)
+	return b.Patch(ctx, obj, patch)
 }
 
 func (b *BaseController[T]) HasFinalizer(obj client.Object, name string) bool {

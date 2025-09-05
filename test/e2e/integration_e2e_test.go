@@ -31,6 +31,8 @@ import (
 	"github.com/bbdsoftware/litellm-operator/test/utils"
 )
 
+// Use status constants from model_e2e_test.go
+
 var _ = Describe("Integration E2E Tests", Ordered, func() {
 	Context("User-Team-VirtualKey Integration", func() {
 		It("should create and manage complete user-team-key workflow", func() {
@@ -62,16 +64,16 @@ var _ = Describe("Integration E2E Tests", Ordered, func() {
 
 			By("verifying all resources are ready")
 			Eventually(func() error {
-				if err := verifyTeamCRStatus(teamCRName, "Ready"); err != nil {
+				if err := verifyTeamCRStatus(teamCRName); err != nil {
 					return fmt.Errorf("team not ready: %v", err)
 				}
-				if err := verifyUserCRStatus(userCRName, "Ready"); err != nil {
+				if err := verifyUserCRStatus(userCRName, statusReady); err != nil {
 					return fmt.Errorf("user not ready: %v", err)
 				}
-				if err := verifyTeamMemberAssociationCRStatus(associationCRName, "Ready"); err != nil {
+				if err := verifyTeamMemberAssociationCRStatus(associationCRName, statusReady); err != nil {
 					return fmt.Errorf("association not ready: %v", err)
 				}
-				if err := verifyVirtualKeyCRStatus(keyCRName, "Ready"); err != nil {
+				if err := verifyVirtualKeyCRStatus(keyCRName, statusReady); err != nil {
 					return fmt.Errorf("virtual key not ready: %v", err)
 				}
 				return nil
@@ -440,9 +442,9 @@ func verifyTeamMemberAssociationCRStatus(associationCRName, expectedStatus strin
 	got := strings.TrimSpace(string(output))
 	var expectedConditionStatus string
 	switch expectedStatus {
-	case "Ready":
+	case statusReady:
 		expectedConditionStatus = condStatusTrue
-	case "Error":
+	case statusError:
 		expectedConditionStatus = condStatusFalse
 	default:
 		expectedConditionStatus = expectedStatus

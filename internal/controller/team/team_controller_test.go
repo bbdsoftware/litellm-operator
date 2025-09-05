@@ -147,11 +147,12 @@ func (m *mockLitellmTeamClient) UpdateTeam(ctx context.Context, req *litellm.Tea
 }
 
 // Helper function to create test team
-func createTestTeam(name, namespace string) *authv1alpha1.Team {
+func createTestTeam() *authv1alpha1.Team {
+	const testTeamName = "test-team"
 	return &authv1alpha1.Team{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:       name,
-			Namespace:  namespace,
+			Name:       testTeamName,
+			Namespace:  "default",
 			Generation: 1,
 		},
 		Spec: authv1alpha1.TeamSpec{
@@ -267,7 +268,7 @@ var _ = Describe("Team Controller", func() {
 	Context("Team reconciliation behaviour", func() {
 		It("creates team via LiteLLM and correctly updates status", func() {
 			By("creating the team CR without status")
-			team := createTestTeam(resourceName, namespace)
+			team := createTestTeam()
 			Expect(k8sClient.Create(ctx, team)).To(Succeed())
 
 			By("reconciling the created resource")
@@ -300,7 +301,7 @@ var _ = Describe("Team Controller", func() {
 			mockClient.teams["different-team-id"] = existingTeam
 
 			By("creating the team CR")
-			team := createTestTeam(resourceName, namespace)
+			team := createTestTeam()
 			Expect(k8sClient.Create(ctx, team)).To(Succeed())
 
 			By("updating team status to simulate existing team")
@@ -336,7 +337,7 @@ var _ = Describe("Team Controller", func() {
 			mockClient.updateNeeded = true
 
 			By("creating the team CR")
-			team := createTestTeam(resourceName, namespace)
+			team := createTestTeam()
 			Expect(k8sClient.Create(ctx, team)).To(Succeed())
 
 			By("updating team status to simulate existing team")
@@ -368,7 +369,7 @@ var _ = Describe("Team Controller", func() {
 			mockClient.createError = errors.New("connection refused")
 
 			By("creating the team CR")
-			team := createTestTeam(resourceName, namespace)
+			team := createTestTeam()
 			Expect(k8sClient.Create(ctx, team)).To(Succeed())
 
 			By("reconciling should handle error gracefully")
@@ -390,7 +391,7 @@ var _ = Describe("Team Controller", func() {
 	Context("Finalizer lifecycle behaviour", func() {
 		It("properly handles team deletion", func() {
 			By("creating and reconciling team first")
-			team := createTestTeam(resourceName, namespace)
+			team := createTestTeam()
 			Expect(k8sClient.Create(ctx, team)).To(Succeed())
 
 			_, err := reconciler.Reconcile(ctx, reconcile.Request{

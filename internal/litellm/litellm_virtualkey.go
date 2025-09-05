@@ -10,10 +10,10 @@ import (
 )
 
 type LitellmVirtualKey interface {
-	CheckVirtualKeyExists(ctx context.Context, keyAlias string) (bool, error)
 	DeleteVirtualKey(ctx context.Context, keyAlias string) error
 	GenerateVirtualKey(ctx context.Context, req *VirtualKeyRequest) (VirtualKeyResponse, error)
-	GetVirtualKey(ctx context.Context, key string) (VirtualKeyResponse, error)
+	GetVirtualKeyFromAlias(ctx context.Context, keyAlias string) ([]string, error)
+	GetVirtualKeyInfo(ctx context.Context, key string) (VirtualKeyResponse, error)
 	IsVirtualKeyUpdateNeeded(ctx context.Context, virtualKey *VirtualKeyResponse, req *VirtualKeyRequest) bool
 	UpdateVirtualKey(ctx context.Context, req *VirtualKeyRequest) (VirtualKeyResponse, error)
 }
@@ -151,14 +151,14 @@ func (l *LitellmClient) DeleteVirtualKey(ctx context.Context, keyAlias string) e
 	return nil
 }
 
-// CheckVirtualKeyExists checks if a virtual key already exists in the Litellm service
-func (l *LitellmClient) CheckVirtualKeyExists(ctx context.Context, keyAlias string) (bool, error) {
+// GetVirtualKeyFromAlias
+func (l *LitellmClient) GetVirtualKeyFromAlias(ctx context.Context, keyAlias string) ([]string, error) {
 	log := log.FromContext(ctx)
 
 	body, err := l.makeRequest(ctx, "GET", "/key/list?key_alias="+keyAlias, nil)
 	if err != nil {
 		log.Error(err, "Failed to check if virtual key exists")
-		return false, err
+		return []string{}, err
 	}
 
 	var response struct {
@@ -167,18 +167,15 @@ func (l *LitellmClient) CheckVirtualKeyExists(ctx context.Context, keyAlias stri
 
 	if err := json.Unmarshal(body, &response); err != nil {
 		log.Error(err, "Failed to unmarshal response from Litellm")
-		return false, err
+		return []string{}, err
 	}
 
 	// Check if any key exists with the given alias
-	if len(response.Keys) == 0 {
-		return false, nil
-	}
-	return true, nil
+	return response.Keys, nil
 }
 
 // GetVirtualKey gets a virtual key from the Litellm service
-func (l *LitellmClient) GetVirtualKey(ctx context.Context, key string) (VirtualKeyResponse, error) {
+func (l *LitellmClient) GetVirtualKeyInfo(ctx context.Context, key string) (VirtualKeyResponse, error) {
 	log := log.FromContext(ctx)
 
 	body, err := l.makeRequest(ctx, "GET", "/key/info?key="+key, nil)

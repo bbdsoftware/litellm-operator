@@ -49,6 +49,8 @@ const (
 const (
 	condStatusTrue  = "True"
 	condStatusFalse = "False"
+	statusReady     = "Ready"
+	statusError     = "Error"
 )
 
 var k8sClient client.Client
@@ -484,9 +486,9 @@ func verifyModelCRStatusError(modelCRName, expectedStatus string, errorMsg strin
 	// Map the human-friendly expected statuses used in tests to the actual condition status values.
 	var expectedConditionStatus string
 	switch expectedStatus {
-	case "Ready":
+	case statusReady:
 		expectedConditionStatus = condStatusTrue
-	case "Error":
+	case statusError:
 		expectedConditionStatus = condStatusFalse
 	default:
 		expectedConditionStatus = expectedStatus
@@ -541,9 +543,9 @@ func verifyModelCRStatus(modelCRName, expectedStatus string) error {
 	// Map the human-friendly expected statuses used in tests to the actual condition status values.
 	var expectedConditionStatus string
 	switch expectedStatus {
-	case "Ready":
+	case statusReady:
 		expectedConditionStatus = condStatusTrue
-	case "Error":
+	case statusError:
 		expectedConditionStatus = condStatusFalse
 	default:
 		expectedConditionStatus = expectedStatus

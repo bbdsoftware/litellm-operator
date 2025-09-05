@@ -278,7 +278,6 @@ func (l *LitellmClient) IsUserUpdateNeeded(ctx context.Context, user *UserRespon
 	checkField("tpm_limit", "TPMLimit", user.TPMLimit, req.TPMLimit, false, false)
 	checkField("user_alias", "UserAlias", user.UserAlias, req.UserAlias, false, true)
 	checkField("user_email", "UserEmail", user.UserEmail, req.UserEmail, false, true)
-	checkField("user_id", "UserID", user.UserID, req.UserID, false, true)
 	checkField("user_role", "UserRole", user.UserRole, req.UserRole, false, true)
 
 	return changedFields, nil

@@ -270,6 +270,7 @@ func verifyVirtualKeyExistsInLiteLLM(keyAlias string) error {
 }
 
 func verifyVirtualKeyUpdatedInLiteLLM(keyAlias, expectedBudget string, expectedRPM int) error {
+	// Verify budget
 	cmd := exec.Command("kubectl", "get", "virtualkey", "-n", modelTestNamespace,
 		"-o", "jsonpath={.items[?(@.spec.keyAlias=='"+keyAlias+"')].spec.maxBudget}")
 
@@ -280,6 +281,20 @@ func verifyVirtualKeyUpdatedInLiteLLM(keyAlias, expectedBudget string, expectedR
 
 	if strings.TrimSpace(string(output)) != expectedBudget {
 		return fmt.Errorf("expected budget %s, got %s", expectedBudget, string(output))
+	}
+
+	// Verify RPM limit
+	cmd = exec.Command("kubectl", "get", "virtualkey", "-n", modelTestNamespace,
+		"-o", "jsonpath={.items[?(@.spec.keyAlias=='"+keyAlias+"')].spec.rpmLimit}")
+
+	output, err = utils.Run(cmd)
+	if err != nil {
+		return err
+	}
+
+	actualRPM := strings.TrimSpace(string(output))
+	if actualRPM != fmt.Sprintf("%d", expectedRPM) {
+		return fmt.Errorf("expected RPM limit %d, got %s", expectedRPM, actualRPM)
 	}
 
 	return nil
@@ -409,9 +424,9 @@ func verifyVirtualKeyCRStatus(keyCRName, expectedStatus string) error {
 	got := strings.TrimSpace(string(output))
 	var expectedConditionStatus string
 	switch expectedStatus {
-	case "Ready":
+	case statusReady:
 		expectedConditionStatus = condStatusTrue
-	case "Error":
+	case statusError:
 		expectedConditionStatus = condStatusFalse
 	default:
 		expectedConditionStatus = expectedStatus

@@ -35,7 +35,7 @@ This directory contains comprehensive end-to-end tests for the LiteLLM Operator,
 
 ### Integration Tests
 
-5. **`integration_e2e_test.go`** - Tests for resource interactions
+1. **`integration_e2e_test.go`** - Tests for resource interactions
    - Complete User-Team-VirtualKey workflow
    - TeamMemberAssociation functionality
    - Budget hierarchy validation
@@ -55,11 +55,13 @@ Before running the e2e tests, ensure you have:
 ## Running the Tests
 
 ### Run All E2E Tests
+
 ```bash
 make test-e2e
 ```
 
 ### Run Specific Test Suites
+
 ```bash
 # Run only model tests
 ginkgo --focus="Model E2E Tests" test/e2e/
@@ -72,6 +74,7 @@ ginkgo --focus="Integration E2E Tests" test/e2e/
 ```
 
 ### Run with Verbose Output
+
 ```bash
 ginkgo -v test/e2e/
 ```
@@ -79,16 +82,20 @@ ginkgo -v test/e2e/
 ## Test Data and Cleanup
 
 ### Test Namespace
+
 All tests run in the `model-e2e-test` namespace, which is created and destroyed automatically.
 
 ### Sample Resources
+
 - `test/samples/test-model-secret.yaml` - Test secret for model authentication
 - `test/samples/test-auth-secret.yaml` - Test secret for auth operations
 - `test/samples/postgres-secret.yaml` - PostgreSQL connection details
 - `test/samples/test-postgres.yaml` - PostgreSQL cluster definition
 
 ### Automatic Cleanup
+
 Each test ensures proper cleanup of resources:
+
 - Kubernetes custom resources are deleted
 - Associated secrets are cleaned up
 - LiteLLM instance data is verified for removal
@@ -96,21 +103,25 @@ Each test ensures proper cleanup of resources:
 ## Test Patterns
 
 ### Resource Lifecycle Testing
+
 1. **Create** - Verify CR creation and LiteLLM registration
 2. **Update** - Modify CR and verify LiteLLM synchronisation
 3. **Delete** - Remove CR and verify cleanup
 
 ### Validation Testing
+
 - Field validation (required, enum, format)
 - Immutable field enforcement
 - Cross-resource reference validation
 
 ### Status Verification
+
 - Ready condition monitoring
 - Error condition handling
 - Status field population
 
 ### Integration Testing
+
 - Resource dependency management
 - Budget hierarchy enforcement
 - Role-based access control
@@ -119,6 +130,7 @@ Each test ensures proper cleanup of resources:
 ## Debugging Failed Tests
 
 ### View Test Logs
+
 ```bash
 # Get controller logs
 kubectl logs -n litellm-operator-system deployment/litellm-operator-controller-manager
@@ -131,6 +143,7 @@ kubectl describe user <user-name> -n model-e2e-test
 ```
 
 ### Manual Resource Inspection
+
 ```bash
 # Check LiteLLM instance status
 kubectl get litellminstance -n model-e2e-test -o yaml

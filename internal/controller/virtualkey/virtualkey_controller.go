@@ -26,7 +26,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -206,15 +205,20 @@ func (r *VirtualKeyReconciler) ensureExternal(ctx context.Context, virtualKey *a
 		return r.HandleErrorRetryable(ctx, virtualKey, err, base.ReasonInvalidSpec)
 	}
 
-	// Check if key exists in LiteLLM
-	exists, err := r.LitellmClient.CheckVirtualKeyExists(ctx, virtualKey.Spec.KeyAlias)
+	observedVirtualKeys, err := r.LitellmClient.GetVirtualKeyFromAlias(ctx, virtualKey.Spec.KeyAlias)
 	if err != nil {
-		log.Error(err, "Failed to check if virtual key exists")
+		log.Error(err, "Failed to get virtual key from LiteLLM")
 		return r.HandleErrorRetryable(ctx, virtualKey, err, base.ReasonLitellmError)
 	}
 
-	// Create if no external key exists
-	if !exists {
+	observedVirtualKeyDetails, err := r.LitellmClient.GetVirtualKeyInfo(ctx, observedVirtualKeys[0])
+	if err != nil {
+		log.Error(err, "Failed to get virtual key info from LiteLLM")
+		return r.HandleErrorRetryable(ctx, virtualKey, err, base.ReasonLitellmError)
+	}
+
+	if len(observedVirtualKeys) == 0 {
+		// Create if no external key exists
 		log.Info("Creating new virtual key in LiteLLM", "keyAlias", virtualKey.Spec.KeyAlias)
 		createResponse, err := r.LitellmClient.GenerateVirtualKey(ctx, &desiredVirtualKey)
 		if err != nil {
@@ -235,25 +239,11 @@ func (r *VirtualKeyReconciler) ensureExternal(ctx context.Context, virtualKey *a
 		return ctrl.Result{}, nil
 	}
 
-	// Key exists, check for drift and repair if needed
-	log.V(1).Info("Checking for drift", "keyAlias", virtualKey.Spec.KeyAlias)
-	key, err := r.getKeyFromSecret(ctx, virtualKey)
-	if err != nil {
-		log.Error(err, "Failed to get key from secret")
-		return r.HandleErrorRetryable(ctx, virtualKey, err, base.ReasonReconcileError)
-	}
-
-	observedVirtualKey, err := r.LitellmClient.GetVirtualKey(ctx, key)
-	if err != nil {
-		log.Error(err, "Failed to get virtual key from LiteLLM")
-		return r.HandleErrorRetryable(ctx, virtualKey, err, base.ReasonLitellmError)
-	}
-
-	updateNeeded := r.LitellmClient.IsVirtualKeyUpdateNeeded(ctx, &observedVirtualKey, &desiredVirtualKey)
+	updateNeeded := r.LitellmClient.IsVirtualKeyUpdateNeeded(ctx, &observedVirtualKeyDetails, &desiredVirtualKey)
 	if updateNeeded {
 		log.Info("Repairing drift in LiteLLM", "keyAlias", virtualKey.Spec.KeyAlias)
 		// When updating a key, we need to pass the key in the request
-		desiredVirtualKey.Key = key
+		desiredVirtualKey.Key = observedVirtualKeyDetails.Key
 		updateResponse, err := r.LitellmClient.UpdateVirtualKey(ctx, &desiredVirtualKey)
 		if err != nil {
 			log.Error(err, "Failed to update virtual key in LiteLLM")
@@ -271,7 +261,7 @@ func (r *VirtualKeyReconciler) ensureExternal(ctx context.Context, virtualKey *a
 	} else {
 		log.V(1).Info("Virtual key is up to date in LiteLLM", "keyAlias", virtualKey.Spec.KeyAlias)
 		// Still need to populate external data for secret management
-		externalData.Key = key
+		externalData.Key = observedVirtualKeyDetails.Key
 		externalData.KeyAlias = virtualKey.Status.KeyAlias
 	}
 
@@ -280,9 +270,6 @@ func (r *VirtualKeyReconciler) ensureExternal(ctx context.Context, virtualKey *a
 
 // ensureChildren manages in-cluster child resources using CreateOrUpdate pattern
 func (r *VirtualKeyReconciler) ensureChildren(ctx context.Context, virtualKey *authv1alpha1.VirtualKey, externalData *ExternalData) error {
-	if virtualKey.Status.KeySecretRef == "" {
-		return nil // No secret to create
-	}
 
 	secretName := r.litellmResourceNaming.GenerateSecretName(virtualKey.Spec.KeyAlias)
 	secret := &corev1.Secret{
@@ -308,19 +295,6 @@ func (r *VirtualKeyReconciler) ensureChildren(ctx context.Context, virtualKey *a
 	})
 
 	return err
-}
-
-// getKeyFromSecret gets the key from the secret associated with the VirtualKey
-func (r *VirtualKeyReconciler) getKeyFromSecret(ctx context.Context, virtualKey *authv1alpha1.VirtualKey) (string, error) {
-	namespacedName := types.NamespacedName{
-		Name:      r.litellmResourceNaming.GenerateSecretName(virtualKey.Spec.KeyAlias),
-		Namespace: virtualKey.Namespace,
-	}
-	var secret corev1.Secret
-	if err := r.Get(ctx, namespacedName, &secret); err != nil {
-		return "", err
-	}
-	return string(secret.Data["key"]), nil
 }
 
 // convertToVirtualKeyRequest creates a VirtualKeyRequest from a VirtualKey (isolated for testing)

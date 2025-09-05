@@ -48,7 +48,7 @@ var _ = Describe("Team E2E Tests", Ordered, func() {
 
 			By("verifying team CR has ready status")
 			Eventually(func() error {
-				return verifyTeamCRStatus(teamCRName, "Ready")
+				return verifyTeamCRStatus(teamCRName)
 			}, testTimeout, testInterval).Should(Succeed())
 
 			By("updating the team CR")
@@ -134,10 +134,10 @@ var _ = Describe("Team E2E Tests", Ordered, func() {
 
 			By("verifying both team CRs have ready status")
 			Eventually(func() error {
-				if err := verifyTeamCRStatus(team1CRName, "Ready"); err != nil {
+				if err := verifyTeamCRStatus(team1CRName); err != nil {
 					return err
 				}
-				return verifyTeamCRStatus(team2CRName, "Ready")
+				return verifyTeamCRStatus(team2CRName)
 			}, testTimeout, testInterval).Should(Succeed())
 
 			By("cleaning up both team CRs")
@@ -255,6 +255,7 @@ func verifyTeamExistsInLiteLLM(teamAlias string) error {
 }
 
 func verifyTeamUpdatedInLiteLLM(teamAlias, expectedBudget string, expectedRPM int) error {
+	// Verify budget
 	cmd := exec.Command("kubectl", "get", "team", "-n", modelTestNamespace,
 		"-o", "jsonpath={.items[?(@.spec.teamAlias=='"+teamAlias+"')].spec.maxBudget}")
 
@@ -265,6 +266,20 @@ func verifyTeamUpdatedInLiteLLM(teamAlias, expectedBudget string, expectedRPM in
 
 	if strings.TrimSpace(string(output)) != expectedBudget {
 		return fmt.Errorf("expected budget %s, got %s", expectedBudget, string(output))
+	}
+
+	// Verify RPM limit
+	cmd = exec.Command("kubectl", "get", "team", "-n", modelTestNamespace,
+		"-o", "jsonpath={.items[?(@.spec.teamAlias=='"+teamAlias+"')].spec.rpmLimit}")
+
+	output, err = utils.Run(cmd)
+	if err != nil {
+		return err
+	}
+
+	actualRPM := strings.TrimSpace(string(output))
+	if actualRPM != fmt.Sprintf("%d", expectedRPM) {
+		return fmt.Errorf("expected RPM limit %d, got %s", expectedRPM, actualRPM)
 	}
 
 	return nil
@@ -319,7 +334,8 @@ func verifyTeamBudgetDuration(teamAlias, expectedDuration string) error {
 	return nil
 }
 
-func verifyTeamCRStatus(teamCRName, expectedStatus string) error {
+func verifyTeamCRStatus(teamCRName string) error {
+	expectedStatus := statusReady
 	cmd := exec.Command("kubectl", "get", "team", teamCRName,
 		"-n", modelTestNamespace,
 		"-o", "jsonpath={.status.conditions[?(@.type=='Ready')].status}")
@@ -332,9 +348,9 @@ func verifyTeamCRStatus(teamCRName, expectedStatus string) error {
 	got := strings.TrimSpace(string(output))
 	var expectedConditionStatus string
 	switch expectedStatus {
-	case "Ready":
+	case statusReady:
 		expectedConditionStatus = condStatusTrue
-	case "Error":
+	case statusError:
 		expectedConditionStatus = condStatusFalse
 	default:
 		expectedConditionStatus = expectedStatus
