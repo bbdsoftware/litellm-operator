@@ -18,63 +18,48 @@ package model
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"reflect"
 	"strings"
 	"time"
 
-	"errors"
-
-	kerrors "k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/api/meta"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
-	ctrl "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
-	logf "sigs.k8s.io/controller-runtime/pkg/log"
-	"sigs.k8s.io/controller-runtime/pkg/predicate"
-
 	litellmv1alpha1 "github.com/bbdsoftware/litellm-operator/api/litellm/v1alpha1"
+	"github.com/bbdsoftware/litellm-operator/internal/controller/base"
 	"github.com/bbdsoftware/litellm-operator/internal/controller/common"
 	"github.com/bbdsoftware/litellm-operator/internal/litellm"
 	modelProvider "github.com/bbdsoftware/litellm-operator/internal/model"
 	"github.com/bbdsoftware/litellm-operator/internal/util"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	logf "sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
 )
 
 // ModelReconciler reconciles a Model object
 type ModelReconciler struct {
-	client.Client
-	Scheme             *runtime.Scheme
+	*base.BaseController[*litellmv1alpha1.Model]
 	LitellmModelClient litellm.LitellmModel
 }
 
-// Constants moved to controller.go
+type ExternalData struct {
+	ModelID   string `json:"modelID"`
+	ModelName string `json:"modelName"`
+}
 
-const (
-	CondReady       = "Ready"       // Overall health indicator
-	CondProgressing = "Progressing" // Actively reconciling / rolling out
-	CondDegraded    = "Degraded"
-	CondFailed      = "Failed"
-)
-
-// ---------- Machine-friendly reasons (stable enums; messages can be free text)
-const (
-	ReasonReconciling          = "Reconciling"
-	ReasonWaitingForDeployment = "WaitingForDeployment"
-	ReasonConfigError          = "ConfigError"
-	ReasonChildCreateOrUpdate  = "ChildResourcesUpdating"
-	ReasonDependencyNotReady   = "DependencyNotReady"
-	ReasonReconcileError       = "ReconcileError"
-	ReasonReady                = "Ready"
-	ReasonDeleted              = "Deleted"
-	ReasonConnectionError      = "ConnectionError"
-	ReasonDeleteFailed         = "DeleteFailed"
-	ReasonCreateFailed         = "CreateFailed"
-	ReasonConversionFailed     = "ConversionFailed"
-	ReasonUpdateFailed         = "UpdateFailed"
-	ReasonRemoteModelMissing   = "RemoteModelMissing"
-)
+// NewModelReconciler creates a new ModelReconciler instance
+func NewModelReconciler(client client.Client, scheme *runtime.Scheme) *ModelReconciler {
+	return &ModelReconciler{
+		BaseController: &base.BaseController[*litellmv1alpha1.Model]{
+			Client:         client,
+			Scheme:         scheme,
+			DefaultTimeout: 20 * time.Second,
+		},
+		LitellmModelClient: nil,
+	}
+}
 
 // +kubebuilder:rbac:groups=litellm.litellm.ai,resources=models,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=litellm.litellm.ai,resources=models/status,verbs=get;update;patch
@@ -84,287 +69,239 @@ const (
 // Main Reconciler
 // ============================================================================
 
-// Reconcile is part of the main kubernetes reconciliation loop which aims to
-// move the current state of the cluster closer to the desired state.
+// Reconcile implements the single-loop ensure* pattern with finalizer, conditions, and drift sync
 func (r *ModelReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+	// Add timeout to avoid long-running reconciliation
+	ctx, cancel := r.WithTimeout(ctx)
+	defer cancel()
+
 	log := logf.FromContext(ctx)
-	// Phase 1: Fetch and validate the Model resource
-	model, err := r.fetchModel(ctx, req.NamespacedName)
+
+	// Phase 1: Fetch and validate the resource
+	model := &litellmv1alpha1.Model{}
+	model, err := r.FetchResource(ctx, req.NamespacedName, model)
 	if err != nil {
+		log.Error(err, "Failed to get Model")
 		return ctrl.Result{}, err
 	}
 	if model == nil {
-		// Model was deleted, no reconciliation needed
 		return ctrl.Result{}, nil
 	}
 
-	log.Info("Reconciling Model resource", "model", model.Name)
+	log.Info("Reconciling external model resource", "model", model.Name) // Add timeout to avoid long-running reconciliation
+	// Phase 2: Set up connections and clients
+	if err := r.ensureConnectionSetup(ctx, model); err != nil {
+		log.Error(err, "Failed to setup connections")
+		return r.HandleErrorRetryable(ctx, model, err, base.ReasonConnectionError)
+	}
 
-	// If a LitellmModelClient was injected (tests), reuse it; otherwise create one from connection details
+	// Phase 3: Handle deletion if resource is being deleted
+	if !model.DeletionTimestamp.IsZero() {
+		return r.reconcileDelete(ctx, model)
+	}
+
+	// Phase 4: Upsert branch - ensure finalizer
+	if err := r.AddFinalizer(ctx, model, util.FinalizerName); err != nil {
+		return ctrl.Result{}, err
+	}
+
+	var externalData ExternalData
+	// Phase 5: Ensure external resource (create/patch/repair drift)
+	if res, err := r.ensureExternal(ctx, model, &externalData); res.Requeue || err != nil {
+		return res, err
+	}
+
+	// Phase 6: Ensure in-cluster children (owned -> GC on delete)
+	if err := r.ensureChildren(ctx, model, &externalData); err != nil {
+		return r.HandleCommonErrors(ctx, model, err)
+	}
+
+	// Phase 7: Mark Ready and persist ObservedGeneration
+	r.SetSuccessConditions(model, "Model is in desired state")
+	model.Status.ObservedGeneration = model.GetGeneration()
+	if err := r.PatchStatus(ctx, model); err != nil {
+		return ctrl.Result{}, err
+	}
+
+	// Phase 8: Periodic drift sync (external might change out of band)
+	return ctrl.Result{RequeueAfter: 60 * time.Second}, nil
+}
+
+// ensureConnectionSetup configures the LiteLLM client
+func (r *ModelReconciler) ensureConnectionSetup(ctx context.Context, model *litellmv1alpha1.Model) error {
 	if r.LitellmModelClient == nil {
 		litellmConnectionHandler, err := common.NewLitellmConnectionHandler(r.Client, ctx, model.Spec.ConnectionRef, model.Namespace)
 		if err != nil {
-			r.setCond(model, CondDegraded, metav1.ConditionTrue, ReasonConnectionError, err.Error())
-			return ctrl.Result{RequeueAfter: time.Second * 30}, err
+			return err
 		}
 		r.LitellmModelClient = litellmConnectionHandler.GetLitellmClient()
 	}
 
-	// Phase 3: Handle deletion if resource is being deleted
-	if model.GetDeletionTimestamp() != nil {
-		log.Info("Model resource is being deleted", "model", model.Name)
-		// Resource is being deleted, handle cleanup
-		if controllerutil.ContainsFinalizer(model, util.FinalizerName) {
-			logf.FromContext(ctx).Info("Model:" + model.Name + " is being deleted from litellm")
-			if err := r.handleDeletion(ctx, model); err != nil {
-				r.setCond(model, CondDegraded, metav1.ConditionTrue, ReasonDeleteFailed, err.Error())
-				if updateErr := r.patchStatus(ctx, model); updateErr != nil {
-					return ctrl.Result{RequeueAfter: time.Second * 30}, updateErr
-				}
-				return ctrl.Result{RequeueAfter: time.Second * 30}, err
-			}
-		}
-		return ctrl.Result{}, nil
-	}
-
-	// Phase 4: Handle model creation or update
-	if r.shouldCreateModel(model) {
-		if err := r.handleCreation(ctx, model); err != nil {
-			r.setCond(model, CondDegraded, metav1.ConditionTrue, ReasonCreateFailed, err.Error())
-			if updateErr := r.patchStatus(ctx, model); updateErr != nil {
-				return ctrl.Result{RequeueAfter: time.Second * 30}, updateErr
-			}
-			return ctrl.Result{RequeueAfter: time.Second * 30}, err
-		}
-
-		// Successfully created, requeue to handle the next phase
-		return ctrl.Result{RequeueAfter: time.Second * 5}, nil
-	}
-
-	// Phase 5: Handle model updates (ModelId is present)
-	if model.Status.ModelId == nil || *model.Status.ModelId == "" {
-		log.Info("Model has no ModelId, skipping update check", "model", model.Name)
-		return ctrl.Result{}, nil
-	}
-
-	// Convert model to ModelRequest for update operations
-	modelRequest, err := r.convertToModelRequest(ctx, model)
-	if err != nil {
-		r.setCond(model, CondDegraded, metav1.ConditionTrue, ReasonConversionFailed, err.Error())
-		if updateErr := r.patchStatus(ctx, model); updateErr != nil {
-			return ctrl.Result{RequeueAfter: time.Second * 30}, updateErr
-		}
-		return ctrl.Result{RequeueAfter: time.Second * 30}, err
-	}
-
-	// ModelId present: attempt to fetch the remote model
-	existingModel, err := r.LitellmModelClient.GetModelInfo(ctx, strings.TrimSpace(*model.Status.ModelId))
-	if err != nil {
-		log.Error(err, "Failed to get existing model from LiteLLM for model with id", "model", model.Name, "modelId", *model.Status.ModelId)
-		r.setCond(model, CondDegraded, metav1.ConditionTrue, ReasonRemoteModelMissing, err.Error())
-		if updateErr := r.patchStatus(ctx, model); updateErr != nil {
-			return ctrl.Result{RequeueAfter: time.Second * 30}, updateErr
-		}
-		return ctrl.Result{RequeueAfter: time.Second * 30}, nil
-	}
-
-	// Remote model exists - check whether an update is required
-	modelUpdateNeeded, err := r.LitellmModelClient.IsModelUpdateNeeded(ctx, &existingModel, modelRequest)
-	if err != nil {
-		log.Error(err, "Failed to check if model needs update")
-		r.setCond(model, CondDegraded, metav1.ConditionTrue, ReasonUpdateFailed, err.Error())
-		if updateErr := r.patchStatus(ctx, model); updateErr != nil {
-			return ctrl.Result{RequeueAfter: time.Second * 30}, updateErr
-		}
-		return ctrl.Result{RequeueAfter: time.Second * 30}, err
-	}
-	if modelUpdateNeeded.NeedsUpdate {
-		log.Info("Model needs update, updating in LiteLLM")
-		if err := r.handleUpdate(ctx, model, modelRequest); err != nil {
-			r.setCond(model, CondDegraded, metav1.ConditionTrue, ReasonUpdateFailed, err.Error())
-			if updateErr := r.patchStatus(ctx, model); updateErr != nil {
-				return ctrl.Result{RequeueAfter: time.Second * 30}, updateErr
-			}
-			return ctrl.Result{RequeueAfter: time.Second * 30}, err
-		}
-	}
-
-	// Model exists and is up-to-date - ensure conditions reflect healthy state
-	r.setCond(model, CondProgressing, metav1.ConditionFalse, ReasonReady, "Model is up-to-date")
-	r.setCond(model, CondReady, metav1.ConditionTrue, ReasonReady, "Model is up-to-date")
-	r.setCond(model, CondDegraded, metav1.ConditionFalse, ReasonReady, "Model is up-to-date")
-	if updateErr := r.patchStatus(ctx, model); updateErr != nil {
-		log.Error(updateErr, "Failed to update conditions for up-to-date model")
-		return ctrl.Result{RequeueAfter: time.Second * 30}, updateErr
-	}
-
-	log.Info("Model exists and is up-to-date", "model", model.Name, "modelId", *model.Status.ModelId)
-	return ctrl.Result{}, nil
-
-}
-
-// ============================================================================
-// Resource Handler Functions
-// ============================================================================
-
-// fetchModel retrieves the Model resource and handles not-found scenarios
-func (r *ModelReconciler) fetchModel(ctx context.Context, namespacedName client.ObjectKey) (*litellmv1alpha1.Model, error) {
-	log := logf.FromContext(ctx)
-
-	model := &litellmv1alpha1.Model{}
-	err := r.Get(ctx, namespacedName, model)
-	if err != nil {
-		if kerrors.IsNotFound(err) {
-			// Request object not found, could have been deleted after reconcile request.
-			// Return and don't requeue
-			log.Info("Model resource not found. Ignoring since object must be deleted")
-			return nil, nil
-		}
-		// Error reading the object - requeue the request.
-		log.Error(err, "Failed to get Model")
-		return nil, err
-	}
-
-	return model, nil
-}
-
-// shouldCreateModel determines if a new model should be created
-func (r *ModelReconciler) shouldCreateModel(model *litellmv1alpha1.Model) bool {
-	return model.Status.ModelId == nil || *model.Status.ModelId == ""
-}
-
-// handleCreation handles the creation of a new model
-func (r *ModelReconciler) handleCreation(ctx context.Context, model *litellmv1alpha1.Model) error {
-
-	log := logf.FromContext(ctx)
-
-	r.setCond(model, CondProgressing, metav1.ConditionTrue, ReasonReconciling, "Creating model in LiteLLM")
-	r.setCond(model, CondReady, metav1.ConditionFalse, ReasonReconciling, "Creating model in LiteLLM")
-
-	modelRequest, err := r.convertToModelRequest(ctx, model)
-	if err != nil {
-		r.setCond(model, CondProgressing, metav1.ConditionTrue, ReasonReconciling, "Creating model in LiteLLM")
-		r.setCond(model, CondReady, metav1.ConditionFalse, ReasonReconciling, "Creating model in LiteLLM")
-		if updateErr := r.patchStatus(ctx, model); updateErr != nil {
-			return updateErr
-		}
-		return err
-
-	}
-
-	modelResponse, err := r.LitellmModelClient.CreateModel(ctx, modelRequest)
-	if err != nil {
-		r.setCond(model, CondProgressing, metav1.ConditionFalse, ReasonCreateFailed, err.Error())
-		r.setCond(model, CondReady, metav1.ConditionFalse, ReasonCreateFailed, err.Error())
-		r.setCond(model, CondDegraded, metav1.ConditionTrue, ReasonCreateFailed, err.Error())
-		updateErr := r.patchStatus(ctx, model)
-		if updateErr != nil {
-			log.Error(updateErr, "Failed to update conditions")
-			// Return the original error, not the status update error
-		}
-		return err
-	}
-
-	// Populate status fields (including observed generation and last updated)
-	updateModelStatus(model, &modelResponse)
-
-	//update the crd status
-	r.setCond(model, CondProgressing, metav1.ConditionFalse, ReasonReady, "Model successfully created in LiteLLM")
-	r.setCond(model, CondReady, metav1.ConditionTrue, ReasonReady, "Model successfully created in LiteLLM")
-	r.setCond(model, CondDegraded, metav1.ConditionFalse, ReasonReady, "Model successfully created in LiteLLM")
-	if updateErr := r.patchStatus(ctx, model); updateErr != nil {
-		log.Error(updateErr, "Failed to update conditions")
-		return updateErr
-	}
-
-	// Ensure finalizer is present after status is persisted
-	if !controllerutil.ContainsFinalizer(model, util.FinalizerName) {
-		controllerutil.AddFinalizer(model, util.FinalizerName)
-		if updateErr := r.Update(ctx, model); updateErr != nil {
-			log.Error(updateErr, "Failed to add finalizer")
-			return updateErr
-		}
-	}
-
-	log.Info("Successfully created model " + model.Name + " in LiteLLM")
 	return nil
 }
 
-// handleUpdate handles the update of an existing model
-func (r *ModelReconciler) handleUpdate(ctx context.Context, model *litellmv1alpha1.Model, modelRequest *litellm.ModelRequest) error {
+// reconcileDelete handles the deletion branch with idempotent external cleanup
+func (r *ModelReconciler) reconcileDelete(ctx context.Context, model *litellmv1alpha1.Model) (ctrl.Result, error) {
 	log := logf.FromContext(ctx)
 
-	_, err := r.LitellmModelClient.UpdateModel(ctx, modelRequest)
-	if err != nil {
-		log.Error(err, "Failed to update model in LiteLLM", "modelName", model.Spec.ModelName)
-		r.setCond(model, CondDegraded, metav1.ConditionTrue, ReasonUpdateFailed, err.Error())
-		if updateErr := r.patchStatus(ctx, model); updateErr != nil {
-			return updateErr
-		}
-		return err
+	if !r.HasFinalizer(model, util.FinalizerName) {
+		return ctrl.Result{}, nil
 	}
 
-	// Clear any error conditions and set ready
-	r.setCond(model, CondProgressing, metav1.ConditionFalse, ReasonReady, "Model successfully updated in LiteLLM")
-	r.setCond(model, CondReady, metav1.ConditionTrue, ReasonReady, "Model successfully updated in LiteLLM")
-	r.setCond(model, CondDegraded, metav1.ConditionFalse, ReasonReady, "Model successfully updated in LiteLLM")
-	if updateErr := r.patchStatus(ctx, model); updateErr != nil {
-		log.Error(updateErr, "Failed to update conditions after successful update")
-		return updateErr
+	// Set deleting condition and update status
+	r.SetCondition(model, base.CondReady, metav1.ConditionFalse, "Deleting", "Model is being deleted")
+	if err := r.PatchStatus(ctx, model); err != nil {
+		log.Error(err, "Failed to update status during deletion")
+		// Continue with deletion even if status update fails
 	}
 
-	log.Info("Successfully updated model in LiteLLM", "modelName", model.Spec.ModelName)
-	return nil
-}
-
-// handleDeletion handles the deletion of a model
-func (r *ModelReconciler) handleDeletion(ctx context.Context, model *litellmv1alpha1.Model) error {
-	log := logf.FromContext(ctx)
-
-	// If there is a remote ModelId attempt to delete it; treat not-found as success
+	// Idempotent external cleanup
 	if model.Status.ModelId != nil && *model.Status.ModelId != "" {
 		err := r.LitellmModelClient.DeleteModel(ctx, *model.Status.ModelId)
 		if err != nil {
-			// If the remote model is already gone, proceed to remove finalizer
+			// If the remote model is already gone, proceed to cleanup
 			if errors.Is(err, litellm.ErrNotFound) {
 				log.Info("Remote model already not found in LiteLLM; proceeding to cleanup", "modelId", *model.Status.ModelId)
 			} else {
 				log.Error(err, "Failed to delete model from LiteLLM")
-				// Update condition to surface the deletion failure
-				r.setCond(model, CondDegraded, metav1.ConditionTrue, ReasonDeleteFailed, err.Error())
-				if updateErr := r.patchStatus(ctx, model); updateErr != nil {
-					log.Error(updateErr, "Failed to update conditions after deletion failure")
-				}
-				return err
+				return r.HandleErrorRetryable(ctx, model, err, base.ReasonDeleteFailed)
 			}
 		} else {
 			log.Info("Successfully deleted model from LiteLLM", "modelId", *model.Status.ModelId)
 		}
-	} else {
-		log.Info("No remote ModelId present; skipping remote delete")
 	}
 
-	// Clear ModelId and other status fields
-	model.Status.ModelId = nil
-	model.Status.ModelName = nil
+	// Remove finalizer
+	if err := r.RemoveFinalizer(ctx, model, util.FinalizerName); err != nil {
+		log.Error(err, "Failed to remove finalizer")
+		return r.HandleErrorRetryable(ctx, model, err, base.ReasonDeleteFailed)
+	}
+
+	log.Info("Successfully deleted model", "model", model.Name)
+	return ctrl.Result{}, nil
+}
+
+// ensureExternal manages the external model resource (create/patch/repair drift)
+func (r *ModelReconciler) ensureExternal(ctx context.Context, model *litellmv1alpha1.Model, externalData *ExternalData) (ctrl.Result, error) {
+	log := logf.FromContext(ctx)
+	log.Info("Ensuring external model resource", "model", model.Name)
+
+	// Set progressing condition
+	r.SetProgressingConditions(model, "Reconciling model in LiteLLM")
+	if err := r.PatchStatus(ctx, model); err != nil {
+		log.Error(err, "Failed to update progressing status")
+		// Continue despite status update failure
+	}
+
+	modelRequest, err := r.convertToModelRequest(ctx, model)
+	if err != nil {
+		log.Error(err, "Failed to create model request")
+		return r.HandleErrorRetryable(ctx, model, err, base.ReasonInvalidSpec)
+	}
+
+	// Create if no external ID exists
+	if model.Status.ModelId == nil || *model.Status.ModelId == "" {
+		log.Info("Creating new model in LiteLLM", "modelName", model.Spec.ModelName)
+		modelResponse, err := r.LitellmModelClient.CreateModel(ctx, modelRequest)
+		if err != nil {
+			log.Error(err, "Failed to create model in LiteLLM")
+			return r.HandleErrorRetryable(ctx, model, err, base.ReasonLitellmError)
+		}
+
+		// Populate external data
+		if modelResponse.ModelInfo != nil && modelResponse.ModelInfo.ID != nil {
+			externalData.ModelID = *modelResponse.ModelInfo.ID
+		}
+		externalData.ModelName = modelResponse.ModelName
+
+		r.updateModelStatus(model, &modelResponse)
+		if err := r.PatchStatus(ctx, model); err != nil {
+			log.Error(err, "Failed to update status after creation")
+			return r.HandleErrorRetryable(ctx, model, err, base.ReasonReconcileError)
+		}
+		log.Info("Successfully created model in LiteLLM", "modelID", externalData.ModelID)
+		return ctrl.Result{}, nil
+	}
+
+	// Model exists, check for drift and repair if needed
+	log.V(1).Info("Checking for drift", "modelID", *model.Status.ModelId)
+	observedModel, err := r.LitellmModelClient.GetModelInfo(ctx, strings.TrimSpace(*model.Status.ModelId))
+	if err != nil {
+		log.Error(err, "Failed to get model from LiteLLM")
+		return r.HandleErrorRetryable(ctx, model, err, base.ReasonLitellmError)
+	}
+
+	updateNeeded, err := r.LitellmModelClient.IsModelUpdateNeeded(ctx, &observedModel, modelRequest)
+	if err != nil {
+		log.Error(err, "Failed to check if model needs update")
+		return r.HandleErrorRetryable(ctx, model, err, base.ReasonLitellmError)
+	}
+
+	if updateNeeded.NeedsUpdate {
+		log.Info("Repairing drift in LiteLLM", "modelName", model.Spec.ModelName, "changedFields", updateNeeded.ChangedFields)
+		modelResponse, err := r.LitellmModelClient.UpdateModel(ctx, modelRequest)
+		if err != nil {
+			log.Error(err, "Failed to update model in LiteLLM")
+			return r.HandleErrorRetryable(ctx, model, err, base.ReasonLitellmError)
+		}
+
+		// Populate external data
+		if modelResponse.ModelInfo != nil && modelResponse.ModelInfo.ID != nil {
+			externalData.ModelID = *modelResponse.ModelInfo.ID
+		}
+		externalData.ModelName = modelResponse.ModelName
+
+		r.updateModelStatus(model, &modelResponse)
+		if err := r.PatchStatus(ctx, model); err != nil {
+			log.Error(err, "Failed to update status after update")
+			return r.HandleErrorRetryable(ctx, model, err, base.ReasonReconcileError)
+		}
+		log.Info("Successfully repaired drift in LiteLLM", "modelID", *model.Status.ModelId)
+	} else {
+		log.V(1).Info("Model is up to date in LiteLLM", "modelID", *model.Status.ModelId)
+	}
+
+	return ctrl.Result{}, nil
+}
+
+// ensureChildren manages in-cluster child resources (models don't have children currently)
+func (r *ModelReconciler) ensureChildren(ctx context.Context, model *litellmv1alpha1.Model, externalData *ExternalData) error {
+	// Models don't currently have child resources, but this follows the pattern
+	return nil
+}
+
+// updateModelStatus updates the status of the k8s Model from the litellm response
+func (r *ModelReconciler) updateModelStatus(model *litellmv1alpha1.Model, modelResponse *litellm.ModelResponse) {
+	// Update observed generation and timestamp
+	model.Status.ObservedGeneration = model.Generation
 	now := metav1.Now()
 	model.Status.LastUpdated = &now
-	if err := r.patchStatus(ctx, model); err != nil {
-		log.Error(err, "Failed to update Model status during deletion cleanup")
-		return err
-	}
 
-	// Remove finalizer and persist
-	if controllerutil.ContainsFinalizer(model, util.FinalizerName) {
-		controllerutil.RemoveFinalizer(model, util.FinalizerName)
-		if err := r.Update(ctx, model); err != nil {
-			log.Error(err, "Failed to remove finalizer from Model")
-			return err
+	if modelResponse != nil {
+		// ModelName from response
+		if modelResponse.ModelName != "" {
+			model.Status.ModelName = &modelResponse.ModelName
+		} else {
+			model.Status.ModelName = nil
 		}
-	}
 
-	log.Info("Model resource cleanup complete; finalizer removed")
-	return nil
+		// ModelId if present
+		if modelResponse.ModelInfo != nil {
+			model.Status.ModelId = modelResponse.ModelInfo.ID
+		} else {
+			model.Status.ModelId = nil
+		}
+
+		if modelResponse.LiteLLMParams != nil && modelResponse.LiteLLMParams != (&litellm.UpdateLiteLLMParams{}) {
+			model.Status.LiteLLMParams = &litellmv1alpha1.LiteLLMParams{
+				CustomLLMProvider: modelResponse.LiteLLMParams.CustomLLMProvider,
+				Model:             modelResponse.LiteLLMParams.Model,
+			}
+		}
+	} else {
+		model.Status.ModelName = nil
+		model.Status.ModelId = nil
+	}
 }
 
 // ============================================================================
@@ -524,61 +461,6 @@ func (r *ModelReconciler) convertToModelRequest(ctx context.Context, model *lite
 	}
 
 	return modelRequest, nil
-}
-
-func updateModelStatus(model *litellmv1alpha1.Model, modelResponse *litellm.ModelResponse) {
-
-	// Update observed generation and timestamp
-	model.Status.ObservedGeneration = model.Generation
-	now := metav1.Now()
-	model.Status.LastUpdated = &now
-
-	if modelResponse != nil {
-		// ModelName from response
-		if modelResponse.ModelName != "" {
-			model.Status.ModelName = &modelResponse.ModelName
-		} else {
-			model.Status.ModelName = nil
-		}
-
-		// ModelId if present
-		if modelResponse.ModelInfo != nil {
-			model.Status.ModelId = modelResponse.ModelInfo.ID
-		} else {
-			model.Status.ModelId = nil
-		}
-
-		if modelResponse.LiteLLMParams != nil && modelResponse.LiteLLMParams != (&litellm.UpdateLiteLLMParams{}) {
-			model.Status.LiteLLMParams = &litellmv1alpha1.LiteLLMParams{
-				CustomLLMProvider: modelResponse.LiteLLMParams.CustomLLMProvider,
-				Model:             modelResponse.LiteLLMParams.Model,
-			}
-		}
-	} else {
-		model.Status.ModelName = nil
-		model.Status.ModelId = nil
-	}
-
-}
-
-// ============================================================================
-// Utility Functions
-// ============================================================================
-
-// patchStatus updates the status subresource
-func (r *ModelReconciler) patchStatus(ctx context.Context, cr *litellmv1alpha1.Model) error {
-	return r.Status().Update(ctx, cr)
-}
-
-func (r *ModelReconciler) setCond(cr *litellmv1alpha1.Model, t string, status metav1.ConditionStatus, reason, msg string) {
-	newC := metav1.Condition{
-		Type:               t,
-		Status:             status,
-		Reason:             reason,
-		Message:            msg,
-		ObservedGeneration: cr.GetGeneration(),
-	}
-	meta.SetStatusCondition(&cr.Status.Conditions, newC)
 }
 
 // ============================================================================

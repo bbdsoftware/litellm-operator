@@ -23,265 +23,249 @@ import (
 	"strconv"
 	"time"
 
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	meta "k8s.io/apimachinery/pkg/api/meta"
+	authv1alpha1 "github.com/bbdsoftware/litellm-operator/api/auth/v1alpha1"
+	"github.com/bbdsoftware/litellm-operator/internal/controller/base"
+	"github.com/bbdsoftware/litellm-operator/internal/controller/common"
+	litellm "github.com/bbdsoftware/litellm-operator/internal/litellm"
+	"github.com/bbdsoftware/litellm-operator/internal/util"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/log"
-
-	authv1alpha1 "github.com/bbdsoftware/litellm-operator/api/auth/v1alpha1"
-	"github.com/bbdsoftware/litellm-operator/internal/controller/common"
-	"github.com/bbdsoftware/litellm-operator/internal/litellm"
-	"github.com/bbdsoftware/litellm-operator/internal/util"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
 )
 
 // TeamReconciler reconciles a Team object
 type TeamReconciler struct {
-	client.Client
-	Scheme             *runtime.Scheme
-	LitellmClient      litellm.LitellmTeam
-	OverrideLiteLLMURL string
+	*base.BaseController[*authv1alpha1.Team]
+	LitellmClient litellm.LitellmTeam
+}
+
+// NewTeamReconciler creates a new TeamReconciler instance
+func NewTeamReconciler(client client.Client, scheme *runtime.Scheme) *TeamReconciler {
+	return &TeamReconciler{
+		BaseController: &base.BaseController[*authv1alpha1.Team]{
+			Client:         client,
+			Scheme:         scheme,
+			DefaultTimeout: 20 * time.Second,
+		},
+		LitellmClient: nil,
+	}
+}
+
+type ExternalData struct {
+	TeamID    string `json:"teamID"`
+	TeamAlias string `json:"teamAlias"`
 }
 
 // +kubebuilder:rbac:groups=auth.litellm.ai,resources=teams,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=auth.litellm.ai,resources=teams/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=auth.litellm.ai,resources=teams/finalizers,verbs=update
 
-// Reconcile is part of the main kubernetes reconciliation loop which aims to
-// move the current state of the cluster closer to the desired state.
-// TODO(user): Modify the Reconcile function to compare the state specified by
-// the Team object against the actual cluster state, and then
-// perform operations to make the cluster state reflect the state specified by
-// the user.
-//
-// For more details, check Reconcile and its Result here:
-// - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.19.0/pkg/reconcile
+// Reconcile implements the single-loop ensure* pattern with finalizer, conditions, and drift sync
 func (r *TeamReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+	// Add timeout to avoid long-running reconciliation
+	ctx, cancel := r.WithTimeout(ctx)
+	defer cancel()
+
 	log := log.FromContext(ctx)
 
-	// TODO(user): your logic here
+	// Phase 1: Fetch and validate the resource
 	team := &authv1alpha1.Team{}
-	if err := r.Get(ctx, req.NamespacedName, team); err != nil {
-		// If the custom resource is not found then, it usually means that it was deleted or not created
-		// In this way, we will stop the reconciliation
-		if apierrors.IsNotFound(err) {
-			log.Info("Team resource not found. Ignoring since object must be deleted")
-			return ctrl.Result{}, nil
-		}
-		// Error reading the object - requeue the request.
+	team, err := r.FetchResource(ctx, req.NamespacedName, team)
+	if err != nil {
 		log.Error(err, "Failed to get Team")
 		return ctrl.Result{}, err
 	}
-
-	// If a LitellmClient was injected (tests), reuse it; otherwise create one from connection details
-	if r.LitellmClient == nil {
-		litellmConnectionHandler, err := common.NewLitellmConnectionHandler(r.Client, ctx, team.Spec.ConnectionRef, team.Namespace)
-		if err != nil {
-			return ctrl.Result{RequeueAfter: time.Second * 30}, err
-		}
-		r.LitellmClient = litellmConnectionHandler.GetLitellmClient()
-	}
-
-	// If the Team is being deleted, delete the team from litellm
-	if team.GetDeletionTimestamp() != nil {
-		if controllerutil.ContainsFinalizer(team, util.FinalizerName) {
-			log.Info("Deleting Team: " + team.Status.TeamAlias + " from litellm")
-			return r.deleteTeam(ctx, team)
-		}
+	if team == nil {
 		return ctrl.Result{}, nil
 	}
 
-	teamID, err := r.LitellmClient.GetTeamID(ctx, team.Spec.TeamAlias)
-	if err != nil {
-		log.Error(err, "Failed to check if Team exists")
-		if _, updateErr := r.updateConditions(ctx, team, metav1.Condition{
-			Type:               "Ready",
-			Status:             metav1.ConditionFalse,
-			LastTransitionTime: metav1.Now(),
-			Reason:             "UnableToCheckTeamExists",
-			Message:            err.Error(),
-		}); updateErr != nil {
-			log.Error(updateErr, "Failed to update conditions")
-		}
+	log.Info("Reconciling external team resource", "team", team.Name) // Add timeout to avoid long-running reconciliation
+	// Phase 2: Set up connections and clients
+	if err := r.ensureConnectionSetup(ctx, team); err != nil {
+		log.Error(err, "Failed to setup connections")
+		return r.HandleErrorRetryable(ctx, team, err, base.ReasonConnectionError)
+	}
+
+	// Phase 3: Handle deletion if resource is being deleted
+	if !team.DeletionTimestamp.IsZero() {
+		return r.reconcileDelete(ctx, team)
+	}
+
+	// Phase 4: Upsert branch - ensure finalizer
+	if err := r.AddFinalizer(ctx, team, util.FinalizerName); err != nil {
 		return ctrl.Result{}, err
 	}
 
-	// Team does not exist, create it
-	if teamID == "" {
-		log.Info("Creating Team: " + team.Spec.TeamAlias + " in litellm")
-		return r.createTeam(ctx, team)
+	var externalData ExternalData
+	// Phase 5: Ensure external resource (create/patch/repair drift)
+	if res, err := r.ensureExternal(ctx, team, &externalData); res.Requeue || res.RequeueAfter > 0 || err != nil {
+		return res, err
 	}
 
-	// If the TeamID is not the same as the one in the CR, then the team is not managed by this CR
-	if teamID != team.Status.TeamID {
-		log.Info(fmt.Sprintf("Team with alias: %v already exists", team.Spec.TeamAlias))
-		return r.updateConditions(ctx, team, metav1.Condition{
-			Type:    "Ready",
-			Status:  metav1.ConditionFalse,
-			Reason:  "DuplicateAlias",
-			Message: "Team with this alias already exists",
-		})
+	// Phase 6: Ensure in-cluster children (owned -> GC on delete)
+	if err := r.ensureChildren(ctx, team, &externalData); err != nil {
+		return r.HandleCommonErrors(ctx, team, err)
 	}
 
-	// Sync team if required
-	err = r.syncTeam(ctx, team)
-	if err != nil {
-		log.Error(err, "Failed to sync team")
+	// Phase 7: Mark Ready and persist ObservedGeneration
+	r.SetSuccessConditions(team, "Team is in desired state")
+	team.Status.ObservedGeneration = team.GetGeneration()
+	if err := r.PatchStatus(ctx, team); err != nil {
 		return ctrl.Result{}, err
 	}
 
-	return ctrl.Result{}, nil
+	// Phase 8: Periodic drift sync (external might change out of band)
+	return ctrl.Result{RequeueAfter: 60 * time.Second}, nil
 }
 
-// SetupWithManager sets up the controller with the Manager.
-func (r *TeamReconciler) SetupWithManager(mgr ctrl.Manager) error {
-	return ctrl.NewControllerManagedBy(mgr).
-		For(&authv1alpha1.Team{}).
-		Complete(r)
-}
-
-// updateConditions updates the Team status with the given condition
-func (r *TeamReconciler) updateConditions(ctx context.Context, team *authv1alpha1.Team, condition metav1.Condition) (ctrl.Result, error) {
-	log := log.FromContext(ctx)
-
-	if meta.SetStatusCondition(&team.Status.Conditions, condition) {
-		if err := r.Status().Update(ctx, team); err != nil {
-			log.Error(err, "unable to update Team status with condition")
-			return ctrl.Result{}, err
-		}
-	}
-
-	return ctrl.Result{}, nil
-}
-
-// deleteTeam handles the deletion of a team from the litellm service
-func (r *TeamReconciler) deleteTeam(ctx context.Context, team *authv1alpha1.Team) (ctrl.Result, error) {
-	log := log.FromContext(ctx)
-
-	if err := r.LitellmClient.DeleteTeam(ctx, team.Status.TeamID); err != nil {
-		return r.updateConditions(ctx, team, metav1.Condition{
-			Type:               "DeleteTeam",
-			Status:             metav1.ConditionFalse,
-			LastTransitionTime: metav1.Now(),
-			Reason:             "DeleteTeamFailure",
-			Message:            err.Error(),
-		})
-	}
-
-	controllerutil.RemoveFinalizer(team, util.FinalizerName)
-	if err := r.Update(ctx, team); err != nil {
-		log.Error(err, "Failed to remove finalizer")
-		return ctrl.Result{}, err
-	}
-	log.Info("Deleted Team: " + team.Status.TeamAlias + " from litellm")
-	return ctrl.Result{}, nil
-}
-
-// convertToK8sTeamMemberWithRole converts the Litellm TeamMemberWithRole to TeamMemberWithRole
-func convertToK8sTeamMemberWithRole(membersWithRole []litellm.TeamMemberWithRole) []authv1alpha1.TeamMemberWithRole {
-	k8sMembersWithRole := []authv1alpha1.TeamMemberWithRole{}
-	for _, member := range membersWithRole {
-		k8sMembersWithRole = append(k8sMembersWithRole, authv1alpha1.TeamMemberWithRole{
-			UserID:    member.UserID,
-			UserEmail: member.UserEmail,
-			Role:      member.Role,
-		})
-	}
-	return k8sMembersWithRole
-}
-
-// createTeam creates a new team for the litellm service
-func (r *TeamReconciler) createTeam(ctx context.Context, team *authv1alpha1.Team) (ctrl.Result, error) {
-	log := log.FromContext(ctx)
-
-	teamRequest, err := createTeamRequest(team)
-	if err != nil {
-		return r.updateConditions(ctx, team, metav1.Condition{
-			Type:               "Ready",
-			Status:             metav1.ConditionFalse,
-			LastTransitionTime: metav1.Now(),
-			Reason:             "InvalidSpec",
-			Message:            err.Error(),
-		})
-	}
-
-	createTeamResponse, err := r.LitellmClient.CreateTeam(ctx, &teamRequest)
-	if err != nil {
-		return r.updateConditions(ctx, team, metav1.Condition{
-			Type:               "Ready",
-			Status:             metav1.ConditionFalse,
-			LastTransitionTime: metav1.Now(),
-			Reason:             "LitellmError",
-			Message:            err.Error(),
-		})
-	}
-
-	updateTeamStatus(team, createTeamResponse)
-	_, err = r.updateConditions(ctx, team, metav1.Condition{
-		Type:    "Ready",
-		Status:  metav1.ConditionTrue,
-		Reason:  "LitellmSuccess",
-		Message: "Team created in Litellm",
-	})
-	if err != nil {
-		return ctrl.Result{}, err
-	}
-
-	controllerutil.AddFinalizer(team, util.FinalizerName)
-	if err := r.Update(ctx, team); err != nil {
-		log.Error(err, "Failed to add finalizer")
-		return ctrl.Result{}, err
-	}
-
-	log.Info("Created Team: " + team.Spec.TeamAlias + " in litellm")
-	return ctrl.Result{}, nil
-}
-
-// syncTeam syncs the team with the litellm service should changes be detected
-func (r *TeamReconciler) syncTeam(ctx context.Context, team *authv1alpha1.Team) error {
-	log := log.FromContext(ctx)
-
-	teamRequest, err := createTeamRequest(team)
-	if err != nil {
-		log.Error(err, "Failed to create team request")
-		return err
-	}
-
-	// Need to set the teamID in the request
-	teamRequest.TeamID = team.Status.TeamID
-
-	teamResponse, err := r.LitellmClient.GetTeam(ctx, team.Status.TeamID)
-	if err != nil {
-		log.Error(err, "Failed to get team from litellm")
-		return err
-	}
-
-	if r.LitellmClient.IsTeamUpdateNeeded(ctx, &teamResponse, &teamRequest) {
-		log.Info("Updating Team: " + team.Spec.TeamAlias + " in litellm")
-		updatedResponse, err := r.LitellmClient.UpdateTeam(ctx, &teamRequest)
+// ensureConnectionSetup configures the LiteLLM client
+func (r *TeamReconciler) ensureConnectionSetup(ctx context.Context, team *authv1alpha1.Team) error {
+	if r.LitellmClient == nil {
+		litellmConnectionHandler, err := common.NewLitellmConnectionHandler(r.Client, ctx, team.Spec.ConnectionRef, team.Namespace)
 		if err != nil {
-			log.Error(err, "Failed to update team in litellm")
 			return err
 		}
-
-		updateTeamStatus(team, updatedResponse)
-
-		if err := r.Status().Update(ctx, team); err != nil {
-			log.Error(err, "Failed to update Team status")
-			return err
-		} else {
-			log.Info("Updated Team: " + team.Spec.TeamAlias + " in litellm")
-		}
+		r.LitellmClient = litellmConnectionHandler.GetLitellmClient()
 	}
 
 	return nil
 }
 
-// createTeamRequest creates a TeamRequest from a Team
-func createTeamRequest(team *authv1alpha1.Team) (litellm.TeamRequest, error) {
+// reconcileDelete handles the deletion branch with idempotent external cleanup
+func (r *TeamReconciler) reconcileDelete(ctx context.Context, team *authv1alpha1.Team) (ctrl.Result, error) {
+	log := log.FromContext(ctx)
+
+	if !r.HasFinalizer(team, util.FinalizerName) {
+		return ctrl.Result{}, nil
+	}
+
+	// Set deleting condition and update status
+	r.SetCondition(team, base.CondReady, metav1.ConditionFalse, "Deleting", "Team is being deleted")
+	if err := r.PatchStatus(ctx, team); err != nil {
+		log.Error(err, "Failed to update status during deletion")
+		// Continue with deletion even if status update fails
+	}
+
+	// Idempotent external cleanup
+	if team.Status.TeamID != "" {
+		if err := r.LitellmClient.DeleteTeam(ctx, team.Status.TeamID); err != nil {
+			log.Error(err, "Failed to delete team from LiteLLM")
+			return r.HandleErrorRetryable(ctx, team, err, base.ReasonDeleteFailed)
+		}
+		log.Info("Successfully deleted team from LiteLLM", "teamID", team.Status.TeamID)
+	}
+
+	// Remove finalizer
+	if err := r.RemoveFinalizer(ctx, team, util.FinalizerName); err != nil {
+		log.Error(err, "Failed to remove finalizer")
+		return r.HandleErrorRetryable(ctx, team, err, base.ReasonDeleteFailed)
+	}
+
+	log.Info("Successfully deleted team", "team", team.Name)
+	return ctrl.Result{}, nil
+}
+
+// ensureExternal manages the external team resource (create/patch/repair drift)
+func (r *TeamReconciler) ensureExternal(ctx context.Context, team *authv1alpha1.Team, externalData *ExternalData) (ctrl.Result, error) {
+	log := log.FromContext(ctx)
+	log.Info("Ensuring external team resource", "team", team.Name)
+
+	// Set progressing condition
+	r.SetProgressingConditions(team, "Reconciling team in LiteLLM")
+	if err := r.PatchStatus(ctx, team); err != nil {
+		log.Error(err, "Failed to update progressing status")
+		// Continue despite status update failure
+	}
+
+	teamRequest, err := r.convertToTeamRequest(team)
+	if err != nil {
+		log.Error(err, "Failed to create team request")
+		return r.HandleErrorRetryable(ctx, team, err, base.ReasonInvalidSpec)
+	}
+
+	// Check if team exists by alias
+	existingTeamID, err := r.LitellmClient.GetTeamID(ctx, team.Spec.TeamAlias)
+	if err != nil {
+		log.Error(err, "Failed to check if team exists")
+		return r.HandleErrorRetryable(ctx, team, err, base.ReasonLitellmError)
+	}
+
+	// If team exists but doesn't match our managed team ID, it's a conflict
+	if existingTeamID != "" && team.Status.TeamID != "" && existingTeamID != team.Status.TeamID {
+		err := fmt.Errorf("team with alias %s already exists with different ID (existing: %s, ours: %s)",
+			team.Spec.TeamAlias, existingTeamID, team.Status.TeamID)
+		log.Error(err, "Team alias conflict")
+		return r.HandleErrorRetryable(ctx, team, err, base.ReasonConfigError)
+	}
+
+	// Create if no external ID exists or if no team found by alias
+	if team.Status.TeamID == "" || existingTeamID == "" {
+		log.Info("Creating new team in LiteLLM", "teamAlias", team.Spec.TeamAlias)
+		createResponse, err := r.LitellmClient.CreateTeam(ctx, &teamRequest)
+		if err != nil {
+			log.Error(err, "Failed to create team in LiteLLM")
+			return r.HandleErrorRetryable(ctx, team, err, base.ReasonLitellmError)
+		}
+
+		externalData.TeamID = createResponse.TeamID
+		externalData.TeamAlias = createResponse.TeamAlias
+
+		r.updateTeamStatus(team, createResponse)
+		if err := r.PatchStatus(ctx, team); err != nil {
+			log.Error(err, "Failed to update status after creation")
+			return r.HandleErrorRetryable(ctx, team, err, base.ReasonReconcileError)
+		}
+		log.Info("Successfully created team in LiteLLM", "teamID", createResponse.TeamID)
+		return ctrl.Result{}, nil
+	}
+
+	// Team exists, check for drift and repair if needed
+	log.V(1).Info("Checking for drift", "teamID", team.Status.TeamID)
+	observedTeam, err := r.LitellmClient.GetTeam(ctx, team.Status.TeamID)
+	if err != nil {
+		log.Error(err, "Failed to get team from LiteLLM")
+		return r.HandleErrorRetryable(ctx, team, err, base.ReasonLitellmError)
+	}
+
+	// Set the teamID in the request for update
+	teamRequest.TeamID = team.Status.TeamID
+
+	updateNeeded := r.LitellmClient.IsTeamUpdateNeeded(ctx, &observedTeam, &teamRequest)
+	if updateNeeded {
+		log.Info("Repairing drift in LiteLLM", "teamAlias", team.Spec.TeamAlias)
+		updateResponse, err := r.LitellmClient.UpdateTeam(ctx, &teamRequest)
+		if err != nil {
+			log.Error(err, "Failed to update team in LiteLLM")
+			return r.HandleErrorRetryable(ctx, team, err, base.ReasonLitellmError)
+		}
+
+		externalData.TeamID = updateResponse.TeamID
+		externalData.TeamAlias = updateResponse.TeamAlias
+
+		r.updateTeamStatus(team, updateResponse)
+		if err := r.PatchStatus(ctx, team); err != nil {
+			log.Error(err, "Failed to update status after update")
+			return r.HandleErrorRetryable(ctx, team, err, base.ReasonReconcileError)
+		}
+		log.Info("Successfully repaired drift in LiteLLM", "teamID", team.Status.TeamID)
+	} else {
+		log.V(1).Info("Team is up to date in LiteLLM", "teamID", team.Status.TeamID)
+	}
+
+	return ctrl.Result{}, nil
+}
+
+// ensureChildren manages in-cluster child resources (teams don't have children currently)
+func (r *TeamReconciler) ensureChildren(ctx context.Context, team *authv1alpha1.Team, externalData *ExternalData) error {
+	// Teams don't currently have child resources, but this follows the pattern
+	return nil
+}
+
+// convertToTeamRequest creates a TeamRequest from a Team (isolated for testing)
+func (r *TeamReconciler) convertToTeamRequest(team *authv1alpha1.Team) (litellm.TeamRequest, error) {
 	teamRequest := litellm.TeamRequest{
 		Blocked:               team.Spec.Blocked,
 		BudgetDuration:        team.Spec.BudgetDuration,
@@ -309,8 +293,8 @@ func createTeamRequest(team *authv1alpha1.Team) (litellm.TeamRequest, error) {
 	return teamRequest, nil
 }
 
-// updateStatus updates the status of the k8s Team from the litellm response
-func updateTeamStatus(team *authv1alpha1.Team, teamResponse litellm.TeamResponse) {
+// updateTeamStatus updates the status of the k8s Team from the litellm response
+func (r *TeamReconciler) updateTeamStatus(team *authv1alpha1.Team, teamResponse litellm.TeamResponse) {
 	team.Status.Blocked = teamResponse.Blocked
 	team.Status.BudgetDuration = teamResponse.BudgetDuration
 	team.Status.BudgetResetAt = teamResponse.BudgetResetAt
@@ -330,4 +314,25 @@ func updateTeamStatus(team *authv1alpha1.Team, teamResponse litellm.TeamResponse
 	team.Status.TeamMemberPermissions = teamResponse.TeamMemberPermissions
 	team.Status.TPMLimit = teamResponse.TPMLimit
 	team.Status.UpdatedAt = teamResponse.UpdatedAt
+}
+
+// convertToK8sTeamMemberWithRole converts the Litellm TeamMemberWithRole to TeamMemberWithRole
+func convertToK8sTeamMemberWithRole(membersWithRole []litellm.TeamMemberWithRole) []authv1alpha1.TeamMemberWithRole {
+	k8sMembersWithRole := []authv1alpha1.TeamMemberWithRole{}
+	for _, member := range membersWithRole {
+		k8sMembersWithRole = append(k8sMembersWithRole, authv1alpha1.TeamMemberWithRole{
+			UserID:    member.UserID,
+			UserEmail: member.UserEmail,
+			Role:      member.Role,
+		})
+	}
+	return k8sMembersWithRole
+}
+
+func (r *TeamReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	return ctrl.NewControllerManagedBy(mgr).
+		For(&authv1alpha1.Team{}).
+		WithEventFilter(predicate.GenerationChangedPredicate{}).
+		Named("litellm-team").
+		Complete(r)
 }

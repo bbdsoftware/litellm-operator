@@ -322,6 +322,16 @@ type ModelList struct {
 	Items           []Model `json:"items"`
 }
 
+// GetConditions returns the conditions slice
+func (m *Model) GetConditions() []metav1.Condition {
+	return m.Status.Conditions
+}
+
+// SetConditions sets the conditions slice
+func (m *Model) SetConditions(conditions []metav1.Condition) {
+	m.Status.Conditions = conditions
+}
+
 func init() {
 	SchemeBuilder.Register(&Model{}, &ModelList{})
 }

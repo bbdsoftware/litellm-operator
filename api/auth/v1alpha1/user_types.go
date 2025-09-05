@@ -168,6 +168,9 @@ type UserStatus struct {
 	// UserRole is the role of the user
 	UserRole string `json:"userRole,omitempty"`
 
+	// ObservedGeneration represents the .metadata.generation that the condition was set based upon
+	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
+
 	// +operator-sdk:csv:customresourcedefinitions:type=status
 	Conditions []metav1.Condition `json:"conditions,omitempty" patchStrategy:"merge" patchMergeKey:"type" protobuf:"bytes,1,rep,name=conditions"`
 }
@@ -198,6 +201,16 @@ type UserList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
 	Items           []User `json:"items"`
+}
+
+// GetConditions returns the conditions slice
+func (u *User) GetConditions() []metav1.Condition {
+	return u.Status.Conditions
+}
+
+// SetConditions sets the conditions slice
+func (u *User) SetConditions(conditions []metav1.Condition) {
+	u.Status.Conditions = conditions
 }
 
 func init() {

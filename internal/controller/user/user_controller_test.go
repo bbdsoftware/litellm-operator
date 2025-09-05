@@ -153,11 +153,8 @@ var _ = Describe("User Controller", func() {
 		})
 		It("should successfully reconcile the resource", func() {
 			By("Reconciling the created resource")
-			controllerReconciler := &UserReconciler{
-				Client:        k8sClient,
-				Scheme:        k8sClient.Scheme(),
-				LitellmClient: &FakeLitellmUserClient{},
-			}
+			controllerReconciler := NewUserReconciler(k8sClient, k8sClient.Scheme())
+			controllerReconciler.LitellmClient = &FakeLitellmUserClient{}
 
 			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
 				NamespacedName: typeNamespacedName,

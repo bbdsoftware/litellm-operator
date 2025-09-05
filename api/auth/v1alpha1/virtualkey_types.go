@@ -158,6 +158,9 @@ type VirtualKeyStatus struct {
 	// UserID identifies the user associated with the key
 	UserID string `json:"userID,omitempty"`
 
+	// ObservedGeneration tracks the generation observed by the controller
+	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
+
 	// +operator-sdk:csv:customresourcedefinitions:type=status
 	Conditions []metav1.Condition `json:"conditions,omitempty" patchStrategy:"merge" patchMergeKey:"type" protobuf:"bytes,1,rep,name=conditions"`
 }
@@ -188,6 +191,16 @@ type VirtualKeyList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
 	Items           []VirtualKey `json:"items"`
+}
+
+// GetConditions returns the conditions slice
+func (v *VirtualKey) GetConditions() []metav1.Condition {
+	return v.Status.Conditions
+}
+
+// SetConditions sets the conditions slice
+func (v *VirtualKey) SetConditions(conditions []metav1.Condition) {
+	v.Status.Conditions = conditions
 }
 
 func init() {
