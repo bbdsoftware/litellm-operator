@@ -18,7 +18,6 @@ package base
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
@@ -27,7 +26,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
@@ -95,7 +93,8 @@ type StatusConditionObject interface {
 // BaseController provides common controller functionality
 type BaseController[T StatusConditionObject] struct {
 	client.Client
-	Scheme *runtime.Scheme
+	Scheme         *runtime.Scheme
+	DefaultTimeout time.Duration
 }
 
 // ============================================================================
@@ -103,8 +102,16 @@ type BaseController[T StatusConditionObject] struct {
 // ============================================================================
 
 // PatchStatus updates the status subresource
+// For most controller use cases, this method provides the correct behavior
 func (b *BaseController[T]) PatchStatus(ctx context.Context, obj T) error {
 	return b.Status().Update(ctx, obj)
+}
+
+// PatchStatusFrom updates the status subresource using a strategic merge patch
+// This is useful when you have both the original and modified objects
+func (b *BaseController[T]) PatchStatusFrom(ctx context.Context, original, modified T) error {
+	patch := client.MergeFromWithOptions(original, client.MergeFromWithOptimisticLock{})
+	return b.Status().Patch(ctx, modified, patch)
 }
 
 // SetCondition sets a single condition on the resource status
@@ -160,6 +167,27 @@ func (b *BaseController[T]) SetProgressingConditions(obj T, message string) {
 // TemporaryError marks an error as retryable
 // Use the standard library's error wrapping and interface idioms for retriable errors.
 
+// HandleCommonErrors implements standard error classification: conflicts → retry; not found → ignore; others → retryable
+func (b *BaseController[T]) HandleCommonErrors(ctx context.Context, obj T, err error) (ctrl.Result, error) {
+	log := log.FromContext(ctx)
+
+	// Handle conflicts by returning error for controller-runtime retry
+	if kerrors.IsConflict(err) {
+		log.V(1).Info("Conflict detected, will retry", "error", err)
+		return ctrl.Result{}, err
+	}
+
+	// Handle not found errors gracefully
+	if kerrors.IsNotFound(err) {
+		log.V(1).Info("Resource not found, ignoring", "error", err)
+		return ctrl.Result{}, nil
+	}
+
+	// For other errors, treat as retryable
+	log.Error(err, "Handling error with retry")
+	return b.HandleErrorRetryable(ctx, obj, err, ReasonReconcileError)
+}
+
 // HandleError is a common error handling pattern with status update
 func (b *BaseController[T]) HandleErrorRetryable(ctx context.Context, obj T, err error, reason string) (ctrl.Result, error) {
 
@@ -194,34 +222,51 @@ func (b *BaseController[T]) HandleProgressing(ctx context.Context, obj T, messag
 // Finalizer Management
 // ============================================================================
 
-// EnsureFinalizer adds a finalizer to the resource if it doesn't already exist
-func (b *BaseController[T]) EnsureFinalizer(ctx context.Context, obj T, finalizerName string) error {
-	log := log.FromContext(ctx)
-
-	if !controllerutil.ContainsFinalizer(obj, finalizerName) {
-		controllerutil.AddFinalizer(obj, finalizerName)
-		if err := b.Update(ctx, obj); err != nil {
-			log.Error(err, "Failed to add finalizer", "finalizer", finalizerName)
-			return fmt.Errorf("failed to add finalizer %s: %w", finalizerName, err)
-		}
-		log.V(1).Info("Finalizer added", "finalizer", finalizerName, "resource", obj.GetName())
+func (b *BaseController[T]) WithTimeout(ctx context.Context) (context.Context, context.CancelFunc) {
+	to := b.DefaultTimeout
+	if to == 0 {
+		to = 20 * time.Second
 	}
-	return nil
+	return context.WithTimeout(ctx, to)
 }
 
-// RemoveFinalizer removes a finalizer from the resource if it exists
-func (b *BaseController[T]) RemoveFinalizer(ctx context.Context, obj T, finalizerName string) error {
-	log := log.FromContext(ctx)
-
-	if controllerutil.ContainsFinalizer(obj, finalizerName) {
-		controllerutil.RemoveFinalizer(obj, finalizerName)
-		if err := b.Update(ctx, obj); err != nil {
-			log.Error(err, "Failed to remove finalizer", "finalizer", finalizerName)
-			return fmt.Errorf("failed to remove finalizer %s: %w", finalizerName, err)
+func (b *BaseController[T]) AddFinalizer(ctx context.Context, obj client.Object, name string) error {
+	for _, f := range obj.GetFinalizers() {
+		if f == name {
+			return nil
 		}
-		log.V(1).Info("Finalizer removed", "finalizer", finalizerName, "resource", obj.GetName())
 	}
-	return nil
+	patch := client.MergeFrom(obj.DeepCopyObject().(client.Object))
+	obj.SetFinalizers(append(obj.GetFinalizers(), name))
+	return b.Client.Patch(ctx, obj, patch)
+}
+
+func (b *BaseController[T]) RemoveFinalizer(ctx context.Context, obj client.Object, name string) error {
+	finalizers := obj.GetFinalizers()
+	out := finalizers[:0]
+	found := false
+	for _, f := range finalizers {
+		if f == name {
+			found = true
+			continue
+		}
+		out = append(out, f)
+	}
+	if !found {
+		return nil
+	}
+	patch := client.MergeFrom(obj.DeepCopyObject().(client.Object))
+	obj.SetFinalizers(out)
+	return b.Client.Patch(ctx, obj, patch)
+}
+
+func (b *BaseController[T]) HasFinalizer(obj client.Object, name string) bool {
+	for _, f := range obj.GetFinalizers() {
+		if f == name {
+			return true
+		}
+	}
+	return false
 }
 
 // ============================================================================
@@ -251,38 +296,16 @@ func (b *BaseController[T]) FetchResource(ctx context.Context, namespacedName cl
 // ============================================================================
 
 // UpdateObservedGeneration updates the observed generation on the status
+// This is a helper method that controllers can call to set ObservedGeneration
+// Individual controllers should implement this based on their status structure
 func (b *BaseController[T]) UpdateObservedGeneration(obj T) {
-	// This method assumes the status has an ObservedGeneration field
-	// Individual controllers can override this if needed
+	// This method is intentionally empty as different CRDs have different status structures
+	// Controllers should set obj.Status.ObservedGeneration = obj.GetGeneration() directly
 }
 
-// ============================================================================
-// Common Deletion Handling Pattern
-// ============================================================================
-
-// HandleDeletionWithFinalizer provides a standard pattern for handling resource deletion
-func (b *BaseController[T]) HandleDeletionWithFinalizer(ctx context.Context, obj T, finalizerName string, deletionFunc func(context.Context, T) error) (ctrl.Result, error) {
-	log := log.FromContext(ctx)
-
-	if !controllerutil.ContainsFinalizer(obj, finalizerName) {
-		return ctrl.Result{}, nil
-	}
-
-	log.Info("Handling resource deletion", "resource", obj.GetName())
-
-	// Execute the custom deletion logic
-	if deletionFunc != nil {
-		if err := deletionFunc(ctx, obj); err != nil {
-			log.Error(err, "Failed to execute deletion logic")
-			return ctrl.Result{RequeueAfter: time.Second * 30}, b.HandleError(ctx, obj, err, ReasonDeleteFailed)
-		}
-	}
-
-	// Remove finalizer
-	if err := b.RemoveFinalizer(ctx, obj, finalizerName); err != nil {
-		return ctrl.Result{}, err
-	}
-
-	log.Info("Successfully completed resource deletion", "resource", obj.GetName())
-	return ctrl.Result{}, nil
+// EnsureObservedGenerationAndUpdate sets ObservedGeneration and updates status
+// This is a convenience method that combines setting ObservedGeneration with status update
+func (b *BaseController[T]) EnsureObservedGenerationAndUpdate(ctx context.Context, obj T, setObservedGeneration func(T)) error {
+	setObservedGeneration(obj)
+	return b.PatchStatus(ctx, obj)
 }

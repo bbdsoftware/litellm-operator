@@ -30,6 +30,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	litellmv1alpha1 "github.com/bbdsoftware/litellm-operator/api/litellm/v1alpha1"
+	"github.com/bbdsoftware/litellm-operator/internal/controller/base"
 	"github.com/bbdsoftware/litellm-operator/internal/controller/common"
 	"github.com/bbdsoftware/litellm-operator/internal/litellm"
 	"github.com/bbdsoftware/litellm-operator/internal/util"
@@ -197,7 +198,7 @@ var _ = Describe("ModelReconciler", func() {
 		}
 	}
 
-	Context("Model reconcile flows", func() {
+	Context("Model reconciliation behaviour", func() {
 		var fakeClient *FakeLitellmModelClient
 		var reconciler *ModelReconciler
 
@@ -205,11 +206,8 @@ var _ = Describe("ModelReconciler", func() {
 			createConnectionSecret()
 			createModelSecret()
 			fakeClient = &FakeLitellmModelClient{}
-			reconciler = &ModelReconciler{
-				Client:             k8sClient,
-				Scheme:             k8sClient.Scheme(),
-				LitellmModelClient: fakeClient,
-			}
+			reconciler = NewModelReconciler(k8sClient, k8sClient.Scheme())
+			reconciler.LitellmModelClient = fakeClient
 		})
 
 		AfterEach(func() {
@@ -234,7 +232,7 @@ var _ = Describe("ModelReconciler", func() {
 			cleanupModelSecret()
 		})
 
-		It("creates model via LiteLLM and updates status", func() {
+		It("creates model via LiteLLM and correctly updates status", func() {
 			// Arrange: create CR without status
 			model := newModelCR()
 			Expect(k8sClient.Create(ctx, model)).To(Succeed())
@@ -264,20 +262,19 @@ var _ = Describe("ModelReconciler", func() {
 			Expect(*fetched.Status.ModelId).To(Equal(id))
 			Expect(fetched.Status.ModelName).NotTo(BeNil())
 			Expect(*fetched.Status.ModelName).To(Equal(resourceName))
-			// Ready condition true
+
+			// Verify Ready condition is set correctly
 			Eventually(func() bool {
-				for _, c := range fetched.Status.Conditions {
-					if c.Type == "Ready" && c.Status == metav1.ConditionTrue {
-						return true
-					}
-				}
-				// refetch in case status updated by controller after first read
 				_ = k8sClient.Get(ctx, types.NamespacedName{Name: resourceName, Namespace: namespace}, fetched)
-				return false
+				readyCondition := findCondition(fetched.Status.Conditions, base.CondReady)
+				return readyCondition != nil && readyCondition.Status == metav1.ConditionTrue
 			}, time.Second*5, time.Millisecond*200).Should(BeTrue())
+
+			// Verify ObservedGeneration is set
+			Expect(fetched.Status.ObservedGeneration).To(Equal(fetched.Generation))
 		})
 
-		It("updates existing model when IsModelUpdateNeeded is true", func() {
+		It("correctly recognises when existing model needs updating", func() {
 			// Arrange: create CR with existing status ID
 			model := newModelCR()
 			// set initial status to simulate existing model
@@ -289,25 +286,32 @@ var _ = Describe("ModelReconciler", func() {
 
 			created.Status.ModelId = &id
 			created.Status.Conditions = append(created.Status.Conditions, metav1.Condition{
-				Type:               "Ready",
+				Type:               base.CondReady,
 				Status:             metav1.ConditionTrue,
-				Reason:             "InitialCreation",
+				Reason:             base.ReasonReady,
 				Message:            "Model created successfully",
 				LastTransitionTime: metav1.Now(),
+				ObservedGeneration: created.Generation,
 			})
 			Expect(k8sClient.Status().Update(ctx, created)).To(Succeed())
 
-			// fake GetModel and update-needed
-			fakeClient.GetModelFunc = func(ctx context.Context, gotID string) (litellm.ModelResponse, error) {
+			// fake GetModelInfo and update-needed
+			fakeClient.GetModelInfoFunc = func(ctx context.Context, gotID string) (litellm.ModelResponse, error) {
 				Expect(gotID).To(Equal(id))
-				return litellm.ModelResponse{ModelName: resourceName}, nil
+				return litellm.ModelResponse{
+					ModelName: resourceName,
+					ModelInfo: &litellm.ModelInfo{ID: &id},
+				}, nil
 			}
 			fakeClient.IsModelUpdateNeededFunc = func(ctx context.Context, existing *litellm.ModelResponse, req *litellm.ModelRequest) (litellm.ModelUpdateNeeded, error) {
 				return litellm.ModelUpdateNeeded{NeedsUpdate: true}, nil
 			}
 			fakeClient.UpdateModelFunc = func(ctx context.Context, req *litellm.ModelRequest) (litellm.ModelResponse, error) {
 				Expect(req.ModelName).To(Equal(common.AppendModelSourceTag(resourceName, common.ModelTagCRD)))
-				return litellm.ModelResponse{ModelName: common.AppendModelSourceTag(resourceName, common.ModelTagCRD)}, nil
+				return litellm.ModelResponse{
+					ModelName: common.AppendModelSourceTag(resourceName, common.ModelTagCRD),
+					ModelInfo: &litellm.ModelInfo{ID: &id},
+				}, nil
 			}
 
 			// Act
@@ -318,7 +322,7 @@ var _ = Describe("ModelReconciler", func() {
 			Expect(fakeClient.UpdateCalled).To(BeTrue())
 		})
 
-		It("deletes model on resource deletion when finalizer present", func() {
+		It("properly finalises model deletion when finalizer is present", func() {
 			// Arrange: create CR and add finalizer + status id, then mark for deletion
 			model := newModelCR()
 			id := "to-delete"
@@ -352,3 +356,13 @@ var _ = Describe("ModelReconciler", func() {
 
 // helpers
 func strPtr(s string) *string { return &s }
+
+// findCondition finds a condition by type in the conditions slice
+func findCondition(conditions []metav1.Condition, condType string) *metav1.Condition {
+	for _, cond := range conditions {
+		if cond.Type == condType {
+			return &cond
+		}
+	}
+	return nil
+}

@@ -168,6 +168,9 @@ type UserStatus struct {
 	// UserRole is the role of the user
 	UserRole string `json:"userRole,omitempty"`
 
+	// ObservedGeneration represents the .metadata.generation that the condition was set based upon
+	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
+
 	// +operator-sdk:csv:customresourcedefinitions:type=status
 	Conditions []metav1.Condition `json:"conditions,omitempty" patchStrategy:"merge" patchMergeKey:"type" protobuf:"bytes,1,rep,name=conditions"`
 }

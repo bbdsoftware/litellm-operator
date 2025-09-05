@@ -24,8 +24,6 @@ import (
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	meta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -33,8 +31,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
 	authv1alpha1 "github.com/bbdsoftware/litellm-operator/api/auth/v1alpha1"
+	"github.com/bbdsoftware/litellm-operator/internal/controller/base"
 	"github.com/bbdsoftware/litellm-operator/internal/controller/common"
 	"github.com/bbdsoftware/litellm-operator/internal/litellm"
 	"github.com/bbdsoftware/litellm-operator/internal/util"
@@ -42,11 +42,29 @@ import (
 
 // VirtualKeyReconciler reconciles a VirtualKey object
 type VirtualKeyReconciler struct {
-	client.Client
-	Scheme                *runtime.Scheme
+	*base.BaseController[*authv1alpha1.VirtualKey]
 	LitellmClient         litellm.LitellmVirtualKey
 	litellmResourceNaming *util.LitellmResourceNaming
 	OverrideLiteLLMURL    string
+}
+
+// NewVirtualKeyReconciler creates a new VirtualKeyReconciler instance
+func NewVirtualKeyReconciler(client client.Client, scheme *runtime.Scheme) *VirtualKeyReconciler {
+	return &VirtualKeyReconciler{
+		BaseController: &base.BaseController[*authv1alpha1.VirtualKey]{
+			Client:         client,
+			Scheme:         scheme,
+			DefaultTimeout: 20 * time.Second,
+		},
+		LitellmClient:         nil,
+		litellmResourceNaming: nil,
+		OverrideLiteLLMURL:    "",
+	}
+}
+
+type ExternalData struct {
+	Key      string `json:"key"`
+	KeyAlias string `json:"keyAlias"`
 }
 
 // +kubebuilder:rbac:groups=auth.litellm.ai,resources=virtualkeys,verbs=get;list;watch;create;update;patch;delete
@@ -54,38 +72,77 @@ type VirtualKeyReconciler struct {
 // +kubebuilder:rbac:groups=auth.litellm.ai,resources=virtualkeys/finalizers,verbs=update
 // +kubebuilder:rbac:groups=core,resources=secrets,verbs=get;list;watch;create;update;patch;delete
 
-// Reconcile is part of the main kubernetes reconciliation loop which aims to
-// move the current state of the cluster closer to the desired state.
-// TODO(user): Modify the Reconcile function to compare the state specified by
-// the VirtualKey object against the actual cluster state, and then
-// perform operations to make the cluster state reflect the state specified by
-// the user.
-//
-// For more details, check Reconcile and its Result here:
-// - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.19.0/pkg/reconcile
+// Reconcile implements the single-loop ensure* pattern with finalizer, conditions, and drift sync
 func (r *VirtualKeyReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+	// Add timeout to avoid long-running reconciliation
+	ctx, cancel := r.WithTimeout(ctx)
+	defer cancel()
+
 	log := log.FromContext(ctx)
 
-	// TODO(user): your logic here
+	// Phase 1: Fetch and validate the resource
 	virtualKey := &authv1alpha1.VirtualKey{}
-	if err := r.Get(ctx, req.NamespacedName, virtualKey); err != nil {
-		// If the custom resource is not found then, it usually means that it was deleted or not created
-		// In this way, we will stop the reconciliation
-		if apierrors.IsNotFound(err) {
-			log.Info("VirtualKey resource not found. Ignoring since object must be deleted")
-			return ctrl.Result{}, nil
-		}
-		// Error reading the object - requeue the request.
+	virtualKey, err := r.FetchResource(ctx, req.NamespacedName, virtualKey)
+	if err != nil {
 		log.Error(err, "Failed to get VirtualKey")
 		return ctrl.Result{}, err
 	}
+	if virtualKey == nil {
+		return ctrl.Result{}, nil
+	}
 
-	// Initialize connection handler if not already done
-	// If a LitellmClient was injected (tests), reuse it; otherwise create one from connection details
+	// Phase 2: Set up connections and clients
+	if err := r.ensureConnectionSetup(ctx, virtualKey); err != nil {
+		log.Error(err, "Failed to setup connections")
+		return r.HandleErrorRetryable(ctx, virtualKey, err, base.ReasonConnectionError)
+	}
+
+	// Phase 3: Handle deletion if resource is being deleted
+	if !virtualKey.DeletionTimestamp.IsZero() {
+		return r.reconcileDelete(ctx, virtualKey)
+	}
+
+	// Phase 4: Upsert branch - ensure finalizer
+	if err := r.AddFinalizer(ctx, virtualKey, util.FinalizerName); err != nil {
+		return ctrl.Result{}, err
+	}
+
+	var externalData ExternalData
+	// Phase 5: Ensure external resource (create/patch/repair drift)
+	if res, err := r.ensureExternal(ctx, virtualKey, &externalData); res.Requeue || res.RequeueAfter > 0 || err != nil {
+		return res, err
+	}
+
+	// Phase 6: Ensure in-cluster children (owned -> GC on delete)
+	if err := r.ensureChildren(ctx, virtualKey, &externalData); err != nil {
+		return r.HandleCommonErrors(ctx, virtualKey, err)
+	}
+
+	// Phase 7: Mark Ready and persist ObservedGeneration
+	r.SetSuccessConditions(virtualKey, "VirtualKey is in desired state")
+	virtualKey.Status.ObservedGeneration = virtualKey.GetGeneration()
+	if err := r.PatchStatus(ctx, virtualKey); err != nil {
+		return ctrl.Result{}, err
+	}
+
+	// Phase 8: Periodic drift sync (external might change out of band)
+	return ctrl.Result{RequeueAfter: 60 * time.Second}, nil
+}
+
+func (r *VirtualKeyReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	return ctrl.NewControllerManagedBy(mgr).
+		For(&authv1alpha1.VirtualKey{}).
+		WithEventFilter(predicate.GenerationChangedPredicate{}).
+		Named("litellm-virtualkey").
+		Complete(r)
+}
+
+// ensureConnectionSetup configures the LiteLLM client and resource naming
+func (r *VirtualKeyReconciler) ensureConnectionSetup(ctx context.Context, virtualKey *authv1alpha1.VirtualKey) error {
 	if r.LitellmClient == nil {
 		litellmConnectionHandler, err := common.NewLitellmConnectionHandler(r.Client, ctx, virtualKey.Spec.ConnectionRef, virtualKey.Namespace)
 		if err != nil {
-			return ctrl.Result{RequeueAfter: time.Second * 30}, err
+			return err
 		}
 		r.LitellmClient = litellmConnectionHandler.GetLitellmClient()
 	}
@@ -94,216 +151,167 @@ func (r *VirtualKeyReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		r.litellmResourceNaming = util.NewLitellmResourceNaming(&virtualKey.Spec.ConnectionRef)
 	}
 
-	// If the VirtualKey is being deleted, delete the key from litellm
-	if virtualKey.GetDeletionTimestamp() != nil {
-		if controllerutil.ContainsFinalizer(virtualKey, util.FinalizerName) {
-			log.Info("Deleting VirtualKey: " + virtualKey.Status.KeyAlias + " from litellm")
-			return r.deleteVirtualKey(ctx, virtualKey)
-		}
+	return nil
+}
+
+// reconcileDelete handles the deletion branch with idempotent external cleanup
+func (r *VirtualKeyReconciler) reconcileDelete(ctx context.Context, virtualKey *authv1alpha1.VirtualKey) (ctrl.Result, error) {
+	log := log.FromContext(ctx)
+
+	if !r.HasFinalizer(virtualKey, util.FinalizerName) {
 		return ctrl.Result{}, nil
 	}
 
+	// Set deleting condition and update status
+	r.SetCondition(virtualKey, base.CondReady, metav1.ConditionFalse, "Deleting", "VirtualKey is being deleted")
+	if err := r.PatchStatus(ctx, virtualKey); err != nil {
+		log.Error(err, "Failed to update status during deletion")
+		// Continue with deletion even if status update fails
+	}
+
+	// Idempotent external cleanup
+	if virtualKey.Status.KeyAlias != "" {
+		if err := r.LitellmClient.DeleteVirtualKey(ctx, virtualKey.Status.KeyAlias); err != nil {
+			log.Error(err, "Failed to delete virtual key from LiteLLM")
+			return r.HandleErrorRetryable(ctx, virtualKey, err, base.ReasonDeleteFailed)
+		}
+		log.Info("Successfully deleted virtual key from LiteLLM", "keyAlias", virtualKey.Status.KeyAlias)
+	}
+
+	// Remove finalizer
+	if err := r.RemoveFinalizer(ctx, virtualKey, util.FinalizerName); err != nil {
+		log.Error(err, "Failed to remove finalizer")
+		return r.HandleErrorRetryable(ctx, virtualKey, err, base.ReasonDeleteFailed)
+	}
+
+	log.Info("Successfully deleted virtual key", "virtualKey", virtualKey.Name)
+	return ctrl.Result{}, nil
+}
+
+// ensureExternal manages the external virtual key resource (create/patch/repair drift)
+func (r *VirtualKeyReconciler) ensureExternal(ctx context.Context, virtualKey *authv1alpha1.VirtualKey, externalData *ExternalData) (ctrl.Result, error) {
+	log := log.FromContext(ctx)
+	log.Info("Ensuring external virtual key resource", "virtualKey", virtualKey.Name)
+
+	// Set progressing condition
+	r.SetProgressingConditions(virtualKey, "Reconciling virtual key in LiteLLM")
+	if err := r.PatchStatus(ctx, virtualKey); err != nil {
+		log.Error(err, "Failed to update progressing status")
+		// Continue despite status update failure
+	}
+
+	desiredVirtualKey, err := r.convertToVirtualKeyRequest(virtualKey)
+	if err != nil {
+		log.Error(err, "Failed to create virtual key request")
+		return r.HandleErrorRetryable(ctx, virtualKey, err, base.ReasonInvalidSpec)
+	}
+
+	// Check if key exists in LiteLLM
 	exists, err := r.LitellmClient.CheckVirtualKeyExists(ctx, virtualKey.Spec.KeyAlias)
 	if err != nil {
-		log.Error(err, "Failed to check if VirtualKey exists")
-		if _, updateErr := r.updateConditions(ctx, virtualKey, metav1.Condition{
-			Type:    "Ready",
-			Status:  metav1.ConditionFalse,
-			Reason:  "UnableToCheckVirtualKeyExists",
-			Message: err.Error(),
-		}); updateErr != nil {
-			log.Error(updateErr, "Failed to update conditions")
-		}
-		return ctrl.Result{}, err
+		log.Error(err, "Failed to check if virtual key exists")
+		return r.HandleErrorRetryable(ctx, virtualKey, err, base.ReasonLitellmError)
 	}
 
+	// Create if no external key exists
 	if !exists {
-		// Key does not exist, generate it
-		log.Info("Generating new VirtualKey: " + virtualKey.Spec.KeyAlias + " in litellm")
-		return r.generateVirtualKey(ctx, virtualKey)
-	}
-
-	// sync key if required
-	err = r.syncVirtualKey(ctx, virtualKey)
-	if err != nil {
-		log.Error(err, "Failed to sync virtual key")
-		return ctrl.Result{}, err
-	}
-
-	return ctrl.Result{}, nil
-}
-
-// SetupWithManager sets up the controller with the Manager.
-func (r *VirtualKeyReconciler) SetupWithManager(mgr ctrl.Manager) error {
-	return ctrl.NewControllerManagedBy(mgr).
-		For(&authv1alpha1.VirtualKey{}).
-		Owns(&corev1.Secret{}).
-		Complete(r)
-}
-
-// updateConditions updates the VirtualKey status with the given condition
-func (r *VirtualKeyReconciler) updateConditions(ctx context.Context, virtualKey *authv1alpha1.VirtualKey, condition metav1.Condition) (ctrl.Result, error) {
-	log := log.FromContext(ctx)
-
-	if meta.SetStatusCondition(&virtualKey.Status.Conditions, condition) {
-		if err := r.Status().Update(ctx, virtualKey); err != nil {
-			log.Error(err, "unable to update VirtualKey status with condition")
-			return ctrl.Result{}, err
+		log.Info("Creating new virtual key in LiteLLM", "keyAlias", virtualKey.Spec.KeyAlias)
+		createResponse, err := r.LitellmClient.GenerateVirtualKey(ctx, &desiredVirtualKey)
+		if err != nil {
+			log.Error(err, "Failed to create virtual key in LiteLLM")
+			return r.HandleErrorRetryable(ctx, virtualKey, err, base.ReasonLitellmError)
 		}
-	}
 
-	return ctrl.Result{}, nil
-}
+		externalData.Key = createResponse.Key
+		externalData.KeyAlias = createResponse.KeyAlias
 
-// deleteVirtualKey handles the deletion of a virtual key from the litellm service
-func (r *VirtualKeyReconciler) deleteVirtualKey(ctx context.Context, virtualKey *authv1alpha1.VirtualKey) (ctrl.Result, error) {
-	log := log.FromContext(ctx)
-
-	if err := r.LitellmClient.DeleteVirtualKey(ctx, virtualKey.Status.KeyAlias); err != nil {
-		return r.updateConditions(ctx, virtualKey, metav1.Condition{
-			Type:    "Deleted",
-			Status:  metav1.ConditionFalse,
-			Reason:  "DeletionFailed",
-			Message: err.Error(),
-		})
-	}
-
-	controllerutil.RemoveFinalizer(virtualKey, util.FinalizerName)
-	if err := r.Update(ctx, virtualKey); err != nil {
-		log.Error(err, "Failed to remove finalizer")
-		return ctrl.Result{}, err
-	}
-	log.Info("Deleted VirtualKey: " + virtualKey.Status.KeyAlias + " from litellm")
-	return ctrl.Result{}, nil
-}
-
-// generateVirtualKey generates a new virtual key for the litellm service
-func (r *VirtualKeyReconciler) generateVirtualKey(ctx context.Context, virtualKey *authv1alpha1.VirtualKey) (ctrl.Result, error) {
-	log := log.FromContext(ctx)
-
-	virtualKeyRequest, err := createVirtualKeyRequest(virtualKey)
-	if err != nil {
-		if _, err := r.updateConditions(ctx, virtualKey, metav1.Condition{
-			Type:    "Ready",
-			Status:  metav1.ConditionFalse,
-			Reason:  "InvalidSpec",
-			Message: err.Error(),
-		}); err != nil {
-			return ctrl.Result{}, err
+		secretName := r.litellmResourceNaming.GenerateSecretName(createResponse.KeyAlias)
+		r.updateVirtualKeyStatus(virtualKey, createResponse, secretName)
+		if err := r.PatchStatus(ctx, virtualKey); err != nil {
+			log.Error(err, "Failed to update status after creation")
+			return r.HandleErrorRetryable(ctx, virtualKey, err, base.ReasonReconcileError)
 		}
-		return ctrl.Result{}, err
+		log.Info("Successfully created virtual key in LiteLLM", "keyAlias", createResponse.KeyAlias)
+		return ctrl.Result{}, nil
 	}
 
-	virtualKeyResponse, err := r.LitellmClient.GenerateVirtualKey(ctx, &virtualKeyRequest)
+	// Key exists, check for drift and repair if needed
+	log.V(1).Info("Checking for drift", "keyAlias", virtualKey.Spec.KeyAlias)
+	key, err := r.getKeyFromSecret(ctx, virtualKey)
 	if err != nil {
-		return r.updateConditions(ctx, virtualKey, metav1.Condition{
-			Type:    "Ready",
-			Status:  metav1.ConditionFalse,
-			Reason:  "LitellmError",
-			Message: err.Error(),
-		})
+		log.Error(err, "Failed to get key from secret")
+		return r.HandleErrorRetryable(ctx, virtualKey, err, base.ReasonReconcileError)
 	}
 
-	secretName := r.litellmResourceNaming.GenerateSecretName(virtualKeyResponse.KeyAlias)
-
-	updateVirtualKeyStatus(virtualKey, virtualKeyResponse, secretName)
-	_, err = r.updateConditions(ctx, virtualKey, metav1.Condition{
-		Type:    "Ready",
-		Status:  metav1.ConditionTrue,
-		Reason:  "LitellmSuccess",
-		Message: "VirtualKey generated in Litellm",
-	})
+	observedVirtualKey, err := r.LitellmClient.GetVirtualKey(ctx, key)
 	if err != nil {
-		return ctrl.Result{}, err
+		log.Error(err, "Failed to get virtual key from LiteLLM")
+		return r.HandleErrorRetryable(ctx, virtualKey, err, base.ReasonLitellmError)
 	}
 
-	controllerutil.AddFinalizer(virtualKey, util.FinalizerName)
-	if err := r.Update(ctx, virtualKey); err != nil {
-		log.Error(err, "Failed to add finalizer")
-		return ctrl.Result{}, err
+	updateNeeded := r.LitellmClient.IsVirtualKeyUpdateNeeded(ctx, &observedVirtualKey, &desiredVirtualKey)
+	if updateNeeded {
+		log.Info("Repairing drift in LiteLLM", "keyAlias", virtualKey.Spec.KeyAlias)
+		// When updating a key, we need to pass the key in the request
+		desiredVirtualKey.Key = key
+		updateResponse, err := r.LitellmClient.UpdateVirtualKey(ctx, &desiredVirtualKey)
+		if err != nil {
+			log.Error(err, "Failed to update virtual key in LiteLLM")
+			return r.HandleErrorRetryable(ctx, virtualKey, err, base.ReasonLitellmError)
+		}
+
+		externalData.Key = updateResponse.Key
+		externalData.KeyAlias = updateResponse.KeyAlias
+		r.updateVirtualKeyStatus(virtualKey, updateResponse, virtualKey.Status.KeySecretRef)
+		if err := r.PatchStatus(ctx, virtualKey); err != nil {
+			log.Error(err, "Failed to update status after update")
+			return r.HandleErrorRetryable(ctx, virtualKey, err, base.ReasonReconcileError)
+		}
+		log.Info("Successfully repaired drift in LiteLLM", "keyAlias", virtualKey.Spec.KeyAlias)
+	} else {
+		log.V(1).Info("Virtual key is up to date in LiteLLM", "keyAlias", virtualKey.Spec.KeyAlias)
+		// Still need to populate external data for secret management
+		externalData.Key = key
+		externalData.KeyAlias = virtualKey.Status.KeyAlias
 	}
 
-	if err := r.createSecret(ctx, virtualKey, secretName, virtualKeyResponse.Key); err != nil {
-		log.Error(err, "Failed to create secret")
-		return ctrl.Result{}, err
-	}
-
-	log.Info("Generated VirtualKey: " + virtualKey.Status.KeyAlias + " in litellm")
 	return ctrl.Result{}, nil
 }
 
-// createSecret stores the secret key in a Kubernetes Secret that is owned by the VirtualKey
-func (r *VirtualKeyReconciler) createSecret(ctx context.Context, virtualKey *authv1alpha1.VirtualKey, secretName string, key string) error {
+// ensureChildren manages in-cluster child resources using CreateOrUpdate pattern
+func (r *VirtualKeyReconciler) ensureChildren(ctx context.Context, virtualKey *authv1alpha1.VirtualKey, externalData *ExternalData) error {
+	if virtualKey.Status.KeySecretRef == "" {
+		return nil // No secret to create
+	}
+
+	secretName := r.litellmResourceNaming.GenerateSecretName(virtualKey.Spec.KeyAlias)
 	secret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      secretName,
 			Namespace: virtualKey.Namespace,
-			OwnerReferences: []metav1.OwnerReference{
-				{
-					APIVersion: "auth.litellm.ai/v1alpha1",
-					Kind:       "VirtualKey",
-					Name:       virtualKey.Name,
-					UID:        virtualKey.UID,
-				},
-			},
-		},
-		Data: map[string][]byte{
-			"key": []byte(key),
 		},
 	}
 
-	return r.Create(ctx, secret)
-}
-
-// syncVirtualKey syncs the virtual key with the litellm service should changes be detected
-func (r *VirtualKeyReconciler) syncVirtualKey(ctx context.Context, virtualKey *authv1alpha1.VirtualKey) error {
-	log := log.FromContext(ctx)
-
-	key, err := r.getKeyFromSecret(ctx, virtualKey)
-	if err != nil {
-		log.Error(err, "Failed to get key from secret")
-		return err
-	}
-
-	virtualKeyRequest, err := createVirtualKeyRequest(virtualKey)
-	if err != nil {
-		log.Error(err, "Failed to create virtual key request")
-		return err
-	}
-
-	virtualKeyResponse, err := r.LitellmClient.GetVirtualKey(ctx, key)
-	if err != nil {
-		log.Error(err, "Failed to get virtual key from litellm")
-		return err
-	}
-
-	if r.LitellmClient.IsVirtualKeyUpdateNeeded(ctx, &virtualKeyResponse, &virtualKeyRequest) {
-		log.Info("Updating VirtualKey: " + virtualKey.Spec.KeyAlias + " in litellm")
-		// When updating a key, we need to pass the key in the request but this usually resides in the Secret
-		virtualKeyRequest.Key = key
-
-		updatedResponse, err := r.LitellmClient.UpdateVirtualKey(ctx, &virtualKeyRequest)
-		if err != nil {
-			log.Error(err, "Failed to update virtual key in litellm")
+	_, err := controllerutil.CreateOrUpdate(ctx, r.Client, secret, func() error {
+		// Set controller reference for garbage collection
+		if err := controllerutil.SetControllerReference(virtualKey, secret, r.Scheme); err != nil {
 			return err
 		}
 
-		updateVirtualKeyStatus(virtualKey, updatedResponse, virtualKey.Status.KeySecretRef)
-
-		if err := r.Status().Update(ctx, virtualKey); err != nil {
-			log.Error(err, "Failed to update VirtualKey status")
-			return err
-		} else {
-			log.Info("Updated VirtualKey: " + virtualKey.Spec.KeyAlias + " in litellm")
+		// Update secret data
+		if secret.Data == nil {
+			secret.Data = make(map[string][]byte)
 		}
-	}
+		secret.Data["key"] = []byte(externalData.Key)
 
-	return nil
+		return nil
+	})
+
+	return err
 }
 
 // getKeyFromSecret gets the key from the secret associated with the VirtualKey
 func (r *VirtualKeyReconciler) getKeyFromSecret(ctx context.Context, virtualKey *authv1alpha1.VirtualKey) (string, error) {
-
 	namespacedName := types.NamespacedName{
 		Name:      r.litellmResourceNaming.GenerateSecretName(virtualKey.Spec.KeyAlias),
 		Namespace: virtualKey.Namespace,
@@ -315,8 +323,8 @@ func (r *VirtualKeyReconciler) getKeyFromSecret(ctx context.Context, virtualKey 
 	return string(secret.Data["key"]), nil
 }
 
-// createVirtualKeyRequest creates a VirtualKeyRequest from a VirtualKey
-func createVirtualKeyRequest(virtualKey *authv1alpha1.VirtualKey) (litellm.VirtualKeyRequest, error) {
+// convertToVirtualKeyRequest creates a VirtualKeyRequest from a VirtualKey (isolated for testing)
+func (r *VirtualKeyReconciler) convertToVirtualKeyRequest(virtualKey *authv1alpha1.VirtualKey) (litellm.VirtualKeyRequest, error) {
 	virtualKeyRequest := litellm.VirtualKeyRequest{
 		Aliases:              virtualKey.Spec.Aliases,
 		AllowedCacheControls: virtualKey.Spec.AllowedCacheControls,
@@ -364,7 +372,7 @@ func createVirtualKeyRequest(virtualKey *authv1alpha1.VirtualKey) (litellm.Virtu
 }
 
 // updateVirtualKeyStatus updates the status of the k8s VirtualKey from the litellm response
-func updateVirtualKeyStatus(virtualKey *authv1alpha1.VirtualKey, virtualKeyResponse litellm.VirtualKeyResponse, secretKeyName string) {
+func (r *VirtualKeyReconciler) updateVirtualKeyStatus(virtualKey *authv1alpha1.VirtualKey, virtualKeyResponse litellm.VirtualKeyResponse, secretKeyName string) {
 	virtualKey.Status.Aliases = virtualKeyResponse.Aliases
 	virtualKey.Status.AllowedCacheControls = virtualKeyResponse.AllowedCacheControls
 	virtualKey.Status.AllowedRoutes = virtualKeyResponse.AllowedRoutes

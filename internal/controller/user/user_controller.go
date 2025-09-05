@@ -33,6 +33,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 )
@@ -48,28 +49,33 @@ type UserReconciler struct {
 func NewUserReconciler(client client.Client, scheme *runtime.Scheme) *UserReconciler {
 	return &UserReconciler{
 		BaseController: &base.BaseController[*authv1alpha1.User]{
-			Client: client,
-			Scheme: scheme,
+			Client:         client,
+			Scheme:         scheme,
+			DefaultTimeout: 20 * time.Second,
 		},
 		LitellmClient:         nil,
 		litellmResourceNaming: nil,
 	}
 }
 
+type ExternalData struct {
+	UserID    string `json:"userID"`
+	UserEmail string `json:"userEmail"`
+	UserRole  string `json:"userRole"`
+	Key       string `json:"key"`
+}
+
 // +kubebuilder:rbac:groups=auth.litellm.ai,resources=users,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=auth.litellm.ai,resources=users/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=auth.litellm.ai,resources=users/finalizers,verbs=update
+// +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch;create;update;patch;delete
 
-// Reconcile is part of the main kubernetes reconciliation loop which aims to
-// move the current state of the cluster closer to the desired state.
-// TODO(user): Modify the Reconcile function to compare the state specified by
-// the User object against the actual cluster state, and then
-// perform operations to make the cluster state reflect the state specified by
-// the user.
-//
-// For more details, check Reconcile and its Result here:
-// - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.19.0/pkg/reconcile
+// Reconcile implements the single-loop ensure* pattern with finalizer, conditions, and drift sync
 func (r *UserReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+	// Add timeout to avoid long-running reconciliation
+	ctx, cancel := r.WithTimeout(ctx)
+	defer cancel()
+
 	log := log.FromContext(ctx)
 
 	// Phase 1: Fetch and validate the resource
@@ -80,14 +86,53 @@ func (r *UserReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 		return ctrl.Result{}, err
 	}
 	if user == nil {
-		// Resource was deleted, stop reconciliation
 		return ctrl.Result{}, nil
 	}
 
+	// Phase 2: Set up connections and clients
+	if err := r.ensureConnectionSetup(ctx, user); err != nil {
+		log.Error(err, "Failed to setup connections")
+		return r.HandleErrorRetryable(ctx, user, err, base.ReasonConnectionError)
+	}
+
+	// Phase 3: Handle deletion if resource is being deleted
+	if !user.DeletionTimestamp.IsZero() {
+		return r.reconcileDelete(ctx, user)
+	}
+
+	// Phase 4: Upsert branch - ensure finalizer
+	if err := r.AddFinalizer(ctx, user, util.FinalizerName); err != nil {
+		return ctrl.Result{}, err
+	}
+
+	var externalData ExternalData
+	// Phase 5: Ensure external resource (create/patch/repair drift)
+	if res, err := r.ensureExternal(ctx, user, &externalData); res.Requeue || err != nil {
+		return res, err
+	}
+
+	// Phase 6: Ensure in-cluster children (owned -> GC on delete)
+	if err := r.ensureChildren(ctx, user, &externalData); err != nil {
+		return r.HandleCommonErrors(ctx, user, err)
+	}
+
+	// Phase 7: Mark Ready and persist ObservedGeneration
+	r.SetSuccessConditions(user, "User is in desired state")
+	user.Status.ObservedGeneration = user.GetGeneration()
+	if err := r.PatchStatus(ctx, user); err != nil {
+		return ctrl.Result{}, err
+	}
+
+	// Phase 8: Periodic drift sync (external might change out of band)
+	return ctrl.Result{RequeueAfter: 60 * time.Second}, nil
+}
+
+// ensureConnectionSetup configures the LiteLLM client and resource naming
+func (r *UserReconciler) ensureConnectionSetup(ctx context.Context, user *authv1alpha1.User) error {
 	if r.LitellmClient == nil {
 		litellmConnectionHandler, err := common.NewLitellmConnectionHandler(r.Client, ctx, user.Spec.ConnectionRef, user.Namespace)
 		if err != nil {
-			return ctrl.Result{RequeueAfter: time.Second * 30}, r.HandleError(ctx, user, err, base.ReasonConnectionError)
+			return err
 		}
 		r.LitellmClient = litellmConnectionHandler.GetLitellmClient()
 	}
@@ -96,213 +141,166 @@ func (r *UserReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 		r.litellmResourceNaming = util.NewLitellmResourceNaming(&user.Spec.ConnectionRef)
 	}
 
-
-	// Normal path: ensure finalizer
-	if cr.DeletionTimestamp.IsZero() {
-		if err := r.AddFinalizer(ctx, &cr, finalizerUser); err != nil {
-			return ctrl.Result{}, err
-		}
-		return r.reconcileUser(ctx, &cr)
-	}
-
-	// Phase 3: Handle deletion if resource is being deleted
-	if user.GetDeletionTimestamp() != nil {
-		return r.handleDeletion(ctx, user)
-	}
-
-	// Phase 4: Handle creation/update (normal reconciliation)
-	return r.handleCreateOrUpdateUser(ctx, user)
-
-}
-
-func (r *UserReconciler) userExistsInLitellm(ctx context.Context, user *authv1alpha1.User) (bool, error) {
-	userID, err := r.LitellmClient.GetUserID(ctx, user.Spec.UserEmail)
-	if err != nil {
-		return false, err
-	}
-	return userID != "", nil
-}
-
-// SetupWithManager sets up the controller with the Manager.
-func (r *UserReconciler) SetupWithManager(mgr ctrl.Manager) error {
-	return ctrl.NewControllerManagedBy(mgr).
-		For(&authv1alpha1.User{}).
-		WithEventFilter(predicate.GenerationChangedPredicate{}).
-		Named("litellm-user").
-		Complete(r)
-}
-
-// handleDeletion manages the user deletion process with proper finalizer handling
-func (r *UserReconciler) handleDeletion(ctx context.Context, user *authv1alpha1.User) (ctrl.Result, error) {
-	return r.HandleDeletionWithFinalizer(ctx, user, util.FinalizerName, func(ctx context.Context, user *authv1alpha1.User) error {
-		return r.deleteUserFromLitellm(ctx, user, r.LitellmClient)
-	})
-}
-
-func (r *UserReconciler) deleteUserFromLitellm(ctx context.Context, user *authv1alpha1.User, litellmClient litellm.LitellmUser) error {
-	log := log.FromContext(ctx)
-
-	if err := litellmClient.DeleteUser(ctx, user.Status.UserID); err != nil {
-		return err
-	}
-	log.Info("Deleted User: " + user.Status.UserAlias + " from litellm")
 	return nil
 }
 
-// handleCreateOrUpdateUser manages the complete user lifecycle (creation and updates)
-func (r *UserReconciler) reconcileUser(ctx context.Context, user *authv1alpha1.User) (ctrl.Result, error) {
+// reconcileDelete handles the deletion branch with idempotent external cleanup
+func (r *UserReconciler) reconcileDelete(ctx context.Context, user *authv1alpha1.User) (ctrl.Result, error) {
 	log := log.FromContext(ctx)
 
-	var observedUser litellm.UserResponse
-	if desiredUser, err := createUserRequest(user); err != nil {
-		log.Error(err, "Failed to create user request")
-		return ctrl.Result{}, err
+	if !r.HasFinalizer(user, util.FinalizerName) {
+		return ctrl.Result{}, nil
 	}
 
+	// Set deleting condition and update status
+	r.SetCondition(user, base.CondReady, metav1.ConditionFalse, "Deleting", "User is being deleted")
+	if err := r.PatchStatus(ctx, user); err != nil {
+		log.Error(err, "Failed to update status during deletion")
+		// Continue with deletion even if status update fails
+	}
 
-	if user.Status.UserID == "" {
-		
-		observedUser, err := r.LitellmClient.CreateUser(ctx, &desiredUser)
-		if err != nil {
-			log.Error(err, "Failed to create user in litellm")
-			return ctrl.Result{}, err
+	// Idempotent external cleanup
+	if user.Status.UserID != "" {
+		if err := r.LitellmClient.DeleteUser(ctx, user.Status.UserID); err != nil {
+			log.Error(err, "Failed to delete user from LiteLLM")
+			return r.HandleErrorRetryable(ctx, user, err, base.ReasonDeleteFailed)
 		}
-		updateUserStatus(user, userResponse, desiredUser.KeyAlias)
-		
-
-	}else{
-		observedUser, err := r.LitellmClient.GetUser(ctx, user.Status.UserID)
-		if err != nil {
-			log.Error(err, "Failed to get user from litellm")
-			return ctrl.Result{}, err
-		}
+		log.Info("Successfully deleted user from LiteLLM", "userID", user.Status.UserID)
 	}
 
-
-
-	observed : = 
-	// Ensure finalizer is present
-	if err := r.EnsureFinalizer(ctx, user, util.FinalizerName); err != nil {
-		return ctrl.Result{}, err
+	// Remove finalizer
+	if err := r.RemoveFinalizer(ctx, user, util.FinalizerName); err != nil {
+		log.Error(err, "Failed to remove finalizer")
+		return r.HandleErrorRetryable(ctx, user, err, base.ReasonDeleteFailed)
 	}
 
-	// Check that the teamIDs exist before attempting to create the user
+	log.Info("Successfully deleted user", "user", user.Name)
+	return ctrl.Result{}, nil
+}
+
+// ensureExternal manages the external user resource (create/patch/repair drift)
+func (r *UserReconciler) ensureExternal(ctx context.Context, user *authv1alpha1.User, externalData *ExternalData) (ctrl.Result, error) {
+	log := log.FromContext(ctx)
+	log.Info("Ensuring external user resource", "user", user.Name)
+
+	// Set progressing condition
+	r.SetProgressingConditions(user, "Reconciling user in LiteLLM")
+	if err := r.PatchStatus(ctx, user); err != nil {
+		log.Error(err, "Failed to update progressing status")
+		// Continue despite status update failure
+	}
+
+	// Validate that all referenced teams exist
 	for _, teamID := range user.Spec.Teams {
 		_, err := r.LitellmClient.GetTeam(ctx, teamID)
 		if err != nil {
-			return r.HandleErrorRetryable(ctx, user, err, "TeamCheckFailed", "TeamCheckFailed")
+			log.Error(err, "Failed to validate team existence", "teamID", teamID)
+			return r.HandleErrorRetryable(ctx, user, err, base.ReasonConfigError)
 		}
 	}
 
-	userExists, err := r.userExistsInLitellm(ctx, user)
+	desiredUser, err := r.convertToUserRequest(user)
 	if err != nil {
-		log.Error(err, "Failed to check if User exists")
-		return r.HandleErrorRetryable(ctx, user, err, base.ReasonConnectionError, "ConnectionError")
-	}
-
-	// Create the user if it doesn't exist
-	if !userExists {
-		log.Info("Creating User: " + user.Spec.UserAlias + " in litellm")
-		return r.handleCreateUser(ctx, user)
-	}
-
-	if userExists {
-		log.Info("Updating User: " + user.Spec.UserAlias + " in litellm")
-		return r.handleUpdateUser(ctx, user)
-	}
-
-	return ctrl.Result{}, nil
-}
-
-// createUser creates a new user for the litellm service
-func (r *UserReconciler) handleCreateUser(ctx context.Context, user *authv1alpha1.User) (ctrl.Result, error) {
-	log := log.FromContext(ctx)
-
-	userRequest, err := createUserRequest(user)
-	if err != nil {
+		log.Error(err, "Failed to create user request")
 		return r.HandleErrorRetryable(ctx, user, err, base.ReasonInvalidSpec)
 	}
 
-	userResponse, err := r.LitellmClient.CreateUser(ctx, &userRequest)
+	// Create if no external ID exists
+	if user.Status.UserID == "" {
+		log.Info("Creating new user in LiteLLM", "userAlias", user.Spec.UserAlias)
+		createResponse, err := r.LitellmClient.CreateUser(ctx, &desiredUser)
+		if err != nil {
+			log.Error(err, "Failed to create user in LiteLLM")
+			return r.HandleErrorRetryable(ctx, user, err, base.ReasonLitellmError)
+		}
+
+		externalData.UserID = createResponse.UserID
+		externalData.UserEmail = createResponse.UserEmail
+		externalData.UserRole = createResponse.UserRole
+		externalData.Key = createResponse.Key
+
+		r.updateUserStatus(user, createResponse, desiredUser.KeyAlias)
+		if err := r.PatchStatus(ctx, user); err != nil {
+			log.Error(err, "Failed to update status after creation")
+			return r.HandleErrorRetryable(ctx, user, err, base.ReasonReconcileError)
+		}
+		log.Info("Successfully created user in LiteLLM", "userID", createResponse.UserID)
+		return ctrl.Result{}, nil
+	}
+
+	// User exists, check for drift and repair if needed
+	log.V(1).Info("Checking for drift", "userID", user.Status.UserID)
+	observedUser, err := r.LitellmClient.GetUser(ctx, user.Status.UserID)
 	if err != nil {
+		log.Error(err, "Failed to get user from LiteLLM")
 		return r.HandleErrorRetryable(ctx, user, err, base.ReasonLitellmError)
 	}
 
-	secretName := r.litellmResourceNaming.GenerateSecretName(userResponse.UserAlias)
-	if err := r.createSecret(ctx, user, secretName, userResponse.Key); err != nil {
-		log.Error(err, "Failed to create secret")
-		return r.HandleErrorRetryable(ctx, user, err, "SecretCreateFailed")
-	}
-
-	updateUserStatus(user, userResponse, secretName)
-
-	log.Info("Created User: " + user.Spec.UserAlias + " in litellm")
-	return r.HandleSuccess(ctx, user, "User created in LiteLLM")
-}
-
-// updateUserInLitellm updates the user with the litellm service should changes be detected
-func (r *UserReconciler) handleUpdateUser(ctx context.Context, user *authv1alpha1.User) (ctrl.Result, error) {
-	log := log.FromContext(ctx)
-
-	userRequest, err := createUserRequest(user)
+	updateNeeded, err := r.LitellmClient.IsUserUpdateNeeded(ctx, &observedUser, &desiredUser)
 	if err != nil {
-		return ctrl.Result{}, err
+		log.Error(err, "Failed to check if user needs update")
+		return r.HandleErrorRetryable(ctx, user, err, base.ReasonLitellmError)
 	}
 
-	userResponse, err := r.LitellmClient.GetUser(ctx, user.Status.UserID)
-	if err != nil {
-		log.Error(err, "Failed to get user from litellm")
-		return ctrl.Result{}, err
-	}
-
-	userUpdateNeeded, err := r.LitellmClient.IsUserUpdateNeeded(ctx, &userResponse, &userRequest)
-	if err != nil {
-		log.Error(err, "Failed to check if user needs to be updated")
-		return ctrl.Result{}, err
-	}
-
-	if userUpdateNeeded.NeedsUpdate {
-		log.Info("Updating User: "+user.Spec.UserAlias+" in litellm", "Fields changed", userUpdateNeeded.ChangedFields)
-		updatedResponse, err := r.LitellmClient.UpdateUser(ctx, &userRequest)
+	if updateNeeded.NeedsUpdate {
+		log.Info("Repairing drift in LiteLLM", "userAlias", user.Spec.UserAlias, "changedFields", updateNeeded.ChangedFields)
+		updateResponse, err := r.LitellmClient.UpdateUser(ctx, &desiredUser)
 		if err != nil {
-			log.Error(err, "Failed to update user in litellm")
-			return ctrl.Result{}, err
+			log.Error(err, "Failed to update user in LiteLLM")
+			return r.HandleErrorRetryable(ctx, user, err, base.ReasonLitellmError)
 		}
 
-		updateUserStatus(user, updatedResponse, user.Status.KeySecretRef)
-
-		log.Info("Updated User: " + user.Spec.UserAlias + " in litellm")
-		return r.HandleSuccess(ctx, user, "User updated in LiteLLM")
+		externalData.UserID = updateResponse.UserID
+		externalData.UserEmail = updateResponse.UserEmail
+		externalData.UserRole = updateResponse.UserRole
+		externalData.Key = updateResponse.Key
+		r.updateUserStatus(user, updateResponse, user.Status.KeySecretRef)
+		if err := r.PatchStatus(ctx, user); err != nil {
+			log.Error(err, "Failed to update status after update")
+			return r.HandleErrorRetryable(ctx, user, err, base.ReasonReconcileError)
+		}
+		log.Info("Successfully repaired drift in LiteLLM", "userID", user.Status.UserID)
+	} else {
+		log.V(1).Info("User is up to date in LiteLLM", "userID", user.Status.UserID)
 	}
 
 	return ctrl.Result{}, nil
 }
 
-// createSecret stores the secret key in a Kubernetes Secret that is owned by the User
-func (r *UserReconciler) createSecret(ctx context.Context, user *authv1alpha1.User, secretName string, key string) error {
+// ensureChildren manages in-cluster child resources using CreateOrUpdate pattern
+func (r *UserReconciler) ensureChildren(ctx context.Context, user *authv1alpha1.User, externalData *ExternalData) error {
+	if user.Status.KeySecretRef == "" {
+		return nil // No secret to create
+	}
+
+	secretName := r.litellmResourceNaming.GenerateSecretName(user.Spec.KeyAlias)
 	secret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      secretName,
 			Namespace: user.Namespace,
-			OwnerReferences: []metav1.OwnerReference{
-				{
-					APIVersion: "auth.litellm.ai/v1alpha1",
-					Kind:       "User",
-					Name:       user.Name,
-					UID:        user.UID,
-				},
-			},
-		},
-		Data: map[string][]byte{
-			"key": []byte(key),
 		},
 	}
 
-	return r.Create(ctx, secret)
+	_, err := controllerutil.CreateOrUpdate(ctx, r.Client, secret, func() error {
+		// Set controller reference for garbage collection
+		if err := controllerutil.SetControllerReference(user, secret, r.Scheme); err != nil {
+			return err
+		}
+
+		// Update secret data
+		if secret.Data == nil {
+			secret.Data = make(map[string][]byte)
+		}
+		secret.Data["key"] = []byte(externalData.Key)
+
+		return nil
+	})
+
+	return err
 }
 
-// createUserRequest creates a UserRequest from a User
-func createUserRequest(user *authv1alpha1.User) (litellm.UserRequest, error) {
+// convertToUserRequest creates a UserRequest from a User (isolated for testing)
+func (r *UserReconciler) convertToUserRequest(user *authv1alpha1.User) (litellm.UserRequest, error) {
 	userRequest := litellm.UserRequest{
 		Aliases:              user.Spec.Aliases,
 		AllowedCacheControls: user.Spec.AllowedCacheControls,
@@ -349,7 +347,7 @@ func createUserRequest(user *authv1alpha1.User) (litellm.UserRequest, error) {
 }
 
 // updateUserStatus updates the status of the k8s User from the litellm response
-func updateUserStatus(user *authv1alpha1.User, userResponse litellm.UserResponse, secretKeyName string) {
+func (r *UserReconciler) updateUserStatus(user *authv1alpha1.User, userResponse litellm.UserResponse, secretKeyName string) {
 	user.Status.Aliases = userResponse.Aliases
 	user.Status.AllowedCacheControls = userResponse.AllowedCacheControls
 	user.Status.AllowedRoutes = userResponse.AllowedRoutes
@@ -385,4 +383,12 @@ func updateUserStatus(user *authv1alpha1.User, userResponse litellm.UserResponse
 	user.Status.UserEmail = userResponse.UserEmail
 	user.Status.UserID = userResponse.UserID
 	user.Status.UserRole = userResponse.UserRole
+}
+
+func (r *UserReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	return ctrl.NewControllerManagedBy(mgr).
+		For(&authv1alpha1.User{}).
+		WithEventFilter(predicate.GenerationChangedPredicate{}).
+		Named("litellm-user").
+		Complete(r)
 }

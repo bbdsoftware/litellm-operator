@@ -154,10 +154,8 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err = (&virtualkey.VirtualKeyReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
-	}).SetupWithManager(mgr); err != nil {
+	virtualKeyReconciler := virtualkey.NewVirtualKeyReconciler(mgr.GetClient(), mgr.GetScheme())
+	if err = virtualKeyReconciler.SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "VirtualKey")
 		os.Exit(1)
 	}
@@ -166,17 +164,13 @@ func main() {
 		setupLog.Error(err, "unable to create controller", "controller", "User")
 		os.Exit(1)
 	}
-	if err = (&team.TeamReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
-	}).SetupWithManager(mgr); err != nil {
+	teamReconciler := team.NewTeamReconciler(mgr.GetClient(), mgr.GetScheme())
+	if err = teamReconciler.SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Team")
 		os.Exit(1)
 	}
-	if err = (&association.TeamMemberAssociationReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
-	}).SetupWithManager(mgr); err != nil {
+	teamMemberAssociationReconciler := association.NewTeamMemberAssociationReconciler(mgr.GetClient(), mgr.GetScheme())
+	if err = teamMemberAssociationReconciler.SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "TeamMemberAssociation")
 		os.Exit(1)
 	}

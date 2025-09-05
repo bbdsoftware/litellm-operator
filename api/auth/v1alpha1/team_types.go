@@ -175,6 +175,11 @@ type TeamStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 
+	// ObservedGeneration is the most recent generation observed for this Team. It corresponds to the
+	// Team's generation, which is updated on mutation by the API Server.
+	// +optional
+	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
+
 	// Blocked is a flag indicating if the team is blocked or not
 	Blocked bool `json:"blocked,omitempty"`
 	// BudgetDuration - Budget is reset at the end of specified duration. If not set, budget is never reset.
@@ -245,6 +250,16 @@ type TeamList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
 	Items           []Team `json:"items"`
+}
+
+// GetConditions returns the conditions slice
+func (t *Team) GetConditions() []metav1.Condition {
+	return t.Status.Conditions
+}
+
+// SetConditions sets the conditions slice
+func (t *Team) SetConditions(conditions []metav1.Condition) {
+	t.Status.Conditions = conditions
 }
 
 func init() {

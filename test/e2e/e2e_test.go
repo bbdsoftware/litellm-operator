@@ -115,5 +115,6 @@ var _ = AfterSuite(func() {
 })
 
 var _ = Describe("controller", Ordered, func() {
-
+	// Additional e2e test files are included automatically via init() functions
+	// in user_e2e_test.go, team_e2e_test.go, virtualkey_e2e_test.go, and integration_e2e_test.go
 })

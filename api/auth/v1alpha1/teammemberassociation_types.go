@@ -38,6 +38,7 @@ type TeamMemberAssociationSpec struct {
 	// +kubebuilder:validation:Required
 	// +kubebuilder:validation:XValidation:rule="self == oldSelf",message="TeamAlias is immutable"
 	TeamAlias string `json:"teamAlias,omitempty"`
+
 	// UserEmail is the email of the user
 	// +kubebuilder:validation:Required
 	// +kubebuilder:validation:XValidation:rule="self == oldSelf",message="UserEmail is immutable"
@@ -91,6 +92,16 @@ type TeamMemberAssociationList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
 	Items           []TeamMemberAssociation `json:"items"`
+}
+
+// GetConditions returns the conditions slice
+func (t *TeamMemberAssociation) GetConditions() []metav1.Condition {
+	return t.Status.Conditions
+}
+
+// SetConditions sets the conditions slice
+func (t *TeamMemberAssociation) SetConditions(conditions []metav1.Condition) {
+	t.Status.Conditions = conditions
 }
 
 func init() {
