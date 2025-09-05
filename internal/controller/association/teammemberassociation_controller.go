@@ -84,6 +84,7 @@ func (r *TeamMemberAssociationReconciler) Reconcile(ctx context.Context, req ctr
 		return ctrl.Result{}, nil
 	}
 
+	log.Info("Reconciling external team member association resource", "teamMemberAssociation", teamMemberAssociation.Name) // Add timeout to avoid long-running reconciliation
 	// Phase 2: Set up connections and clients
 	if err := r.ensureConnectionSetup(ctx, teamMemberAssociation); err != nil {
 		log.Error(err, "Failed to setup connections")

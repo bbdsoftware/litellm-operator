@@ -89,6 +89,7 @@ func (r *UserReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 		return ctrl.Result{}, nil
 	}
 
+	log.Info("Reconciling external user resource", "user", user.Name) // Add timeout to avoid long-running reconciliation
 	// Phase 2: Set up connections and clients
 	if err := r.ensureConnectionSetup(ctx, user); err != nil {
 		log.Error(err, "Failed to setup connections")

@@ -88,6 +88,7 @@ func (r *ModelReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 		return ctrl.Result{}, nil
 	}
 
+	log.Info("Reconciling external model resource", "model", model.Name) // Add timeout to avoid long-running reconciliation
 	// Phase 2: Set up connections and clients
 	if err := r.ensureConnectionSetup(ctx, model); err != nil {
 		log.Error(err, "Failed to setup connections")

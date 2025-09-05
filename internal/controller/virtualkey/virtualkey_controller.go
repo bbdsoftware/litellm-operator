@@ -73,7 +73,7 @@ type ExternalData struct {
 
 // Reconcile implements the single-loop ensure* pattern with finalizer, conditions, and drift sync
 func (r *VirtualKeyReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	// Add timeout to avoid long-running reconciliation
+
 	ctx, cancel := r.WithTimeout(ctx)
 	defer cancel()
 
@@ -90,6 +90,7 @@ func (r *VirtualKeyReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		return ctrl.Result{}, nil
 	}
 
+	log.Info("Reconciling external virtual key resource", "virtualKey", virtualKey.Name) // Add timeout to avoid long-running reconciliation
 	// Phase 2: Set up connections and clients
 	if err := r.ensureConnectionSetup(ctx, virtualKey); err != nil {
 		log.Error(err, "Failed to setup connections")

@@ -172,6 +172,8 @@ func (r *LiteLLMInstanceReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		return RequeueWithError(client.IgnoreNotFound(err))
 	}
 
+	log.Info("Reconciling external LiteLLM instance resource", "litellmInstance", llm.Name) // Add timeout to avoid long-running reconciliation
+
 	if r.litellmResourceNaming == nil {
 		r.litellmResourceNaming = util.NewLitellmResourceNaming(llm.Name)
 	}
