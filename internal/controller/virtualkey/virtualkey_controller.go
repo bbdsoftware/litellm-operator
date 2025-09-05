@@ -212,7 +212,7 @@ func (r *VirtualKeyReconciler) ensureExternal(ctx context.Context, virtualKey *a
 	}
 
 	var observedVirtualKeyDetails litellm.VirtualKeyResponse
-	
+
 	if len(observedVirtualKeys) == 0 {
 		// Create if no external key exists
 		log.Info("Creating new virtual key in LiteLLM", "keyAlias", virtualKey.Spec.KeyAlias)
