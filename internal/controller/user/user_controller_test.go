@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package controller
+package user
 
 import (
 	"context"
@@ -67,8 +67,17 @@ func (l *FakeLitellmUserClient) GetTeam(ctx context.Context, teamID string) (lit
 	}, nil
 }
 
-func (l *FakeLitellmUserClient) IsUserUpdateNeeded(ctx context.Context, userResponse *litellm.UserResponse, userRequest *litellm.UserRequest) bool {
-	return false
+func (l *FakeLitellmUserClient) IsUserUpdateNeeded(ctx context.Context, userResponse *litellm.UserResponse, userRequest *litellm.UserRequest) (litellm.UserUpdateNeeded, error) {
+	return litellm.UserUpdateNeeded{
+		NeedsUpdate: false,
+		ChangedFields: []litellm.FieldChange{
+			{
+				FieldName:     "User is up to date",
+				CurrentValue:  "User is up to date",
+				ExpectedValue: "User is up to date",
+			},
+		},
+	}, nil
 }
 
 func (l *FakeLitellmUserClient) UpdateUser(ctx context.Context, req *litellm.UserRequest) (litellm.UserResponse, error) {
@@ -144,11 +153,8 @@ var _ = Describe("User Controller", func() {
 		})
 		It("should successfully reconcile the resource", func() {
 			By("Reconciling the created resource")
-			controllerReconciler := &UserReconciler{
-				Client:      k8sClient,
-				Scheme:      k8sClient.Scheme(),
-				LitellmUser: &FakeLitellmUserClient{},
-			}
+			controllerReconciler := NewUserReconciler(k8sClient, k8sClient.Scheme())
+			controllerReconciler.LitellmClient = &FakeLitellmUserClient{}
 
 			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
 				NamespacedName: typeNamespacedName,

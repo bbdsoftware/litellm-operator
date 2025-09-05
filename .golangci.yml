@@ -2,6 +2,7 @@ version: "2"
 run:
   timeout: 5m
   allow-parallel-runners: true
+  go: "1.23"
 
 linters:
   enable:
@@ -18,3 +19,16 @@ linters:
     - unconvert
     - unparam
     - unused
+  disable:
+    # These linters have issues with Go 1.23 range-over-function patterns
+    - staticcheck
+
+issues:
+  exclude-rules:
+    # Exclude staticcheck issues related to range-over-function patterns
+    - linters:
+        - staticcheck
+      text: "Cannot range over.*func\\(yield func"
+    - linters:
+        - staticcheck  
+      text: "internal error.*unhandled type.*ir\\.ArrayConst"

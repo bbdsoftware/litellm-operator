@@ -37,8 +37,12 @@ import (
 
 	authv1alpha1 "github.com/bbdsoftware/litellm-operator/api/auth/v1alpha1"
 	litellmv1alpha1 "github.com/bbdsoftware/litellm-operator/api/litellm/v1alpha1"
-	"github.com/bbdsoftware/litellm-operator/internal/controller"
-	litellmcontroller "github.com/bbdsoftware/litellm-operator/internal/controller/litellm"
+	"github.com/bbdsoftware/litellm-operator/internal/controller/association"
+	"github.com/bbdsoftware/litellm-operator/internal/controller/litellm"
+	"github.com/bbdsoftware/litellm-operator/internal/controller/model"
+	"github.com/bbdsoftware/litellm-operator/internal/controller/team"
+	"github.com/bbdsoftware/litellm-operator/internal/controller/user"
+	"github.com/bbdsoftware/litellm-operator/internal/controller/virtualkey"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -62,6 +66,7 @@ func main() {
 	var secureMetrics bool
 	var enableHTTP2 bool
 	var tlsOpts []func(*tls.Config)
+	var overRideLiteLLMURL string
 	flag.StringVar(&metricsAddr, "metrics-bind-address", "0", "The address the metrics endpoint binds to. "+
 		"Use :8443 for HTTPS or :8080 for HTTP, or leave as 0 to disable the metrics service.")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
@@ -72,8 +77,10 @@ func main() {
 		"If set, the metrics endpoint is served securely via HTTPS. Use --metrics-secure=false to use HTTP instead.")
 	flag.BoolVar(&enableHTTP2, "enable-http2", false,
 		"If set, HTTP/2 will be enabled for the metrics and webhook servers")
+	flag.StringVar(&overRideLiteLLMURL, "override-litellm-url", "",
+		"If set, the LiteLLM URL will be overridden with the provided value.")
 	opts := zap.Options{
-		Development: true,
+		Development: false,
 	}
 	opts.BindFlags(flag.CommandLine)
 	flag.Parse()
@@ -147,39 +154,36 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err = (&controller.VirtualKeyReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
-	}).SetupWithManager(mgr); err != nil {
+	virtualKeyReconciler := virtualkey.NewVirtualKeyReconciler(mgr.GetClient(), mgr.GetScheme())
+	if err = virtualKeyReconciler.SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "VirtualKey")
 		os.Exit(1)
 	}
-	if err = (&controller.UserReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
-	}).SetupWithManager(mgr); err != nil {
+	userReconciler := user.NewUserReconciler(mgr.GetClient(), mgr.GetScheme())
+	if err = userReconciler.SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "User")
 		os.Exit(1)
 	}
-	if err = (&controller.TeamReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
-	}).SetupWithManager(mgr); err != nil {
+	teamReconciler := team.NewTeamReconciler(mgr.GetClient(), mgr.GetScheme())
+	if err = teamReconciler.SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Team")
 		os.Exit(1)
 	}
-	if err = (&controller.TeamMemberAssociationReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
-	}).SetupWithManager(mgr); err != nil {
+	teamMemberAssociationReconciler := association.NewTeamMemberAssociationReconciler(mgr.GetClient(), mgr.GetScheme())
+	if err = teamMemberAssociationReconciler.SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "TeamMemberAssociation")
 		os.Exit(1)
 	}
-	if err := (&litellmcontroller.LiteLLMInstanceReconciler{
+	if err := (&litellm.LiteLLMInstanceReconciler{
 		Client: mgr.GetClient(),
 		Scheme: mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "LiteLLMInstance")
+		os.Exit(1)
+	}
+	modelReconciler := model.NewModelReconciler(mgr.GetClient(), mgr.GetScheme())
+	if err := modelReconciler.SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "Model")
 		os.Exit(1)
 	}
 	// +kubebuilder:scaffold:builder

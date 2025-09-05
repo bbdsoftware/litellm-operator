@@ -22,14 +22,14 @@ kind-cluster-delete: ## Delete a Kind cluster.
 	fi
 
 
-.PHONY: install-samples-extra
-install-samples-extra: ## Install extra samples into the K8s cluster specified in ~/.kube/config.
-	$(KUBECTL) apply -k config/samples/extra
-
 ## Deploy and patch the image pull policy to Never for the controller image. Wait for pods to be ready.
-.PHONY: deploy-dev
-deploy-dev: deploy
-	$(KUBECTL) patch deployment litellm-operator-controller-manager -n litellm-operator-system --type=json -p='[{"op": "replace", "path": "/spec/template/spec/containers/0/imagePullPolicy", "value": "Never"}]'
+.PHONY: deploy-controller-dev
+deploy-controller-dev: manifests kustomize
+	$(KUSTOMIZE) build config/default | $(KUBECTL) apply -f -
+	$(KUBECTL) patch deployment litellm-operator-controller-manager -n litellm-operator-system --type=json -p='[{"op": "replace", "path": "/spec/template/spec/containers/0/imagePullPolicy", "value": "Never"},{"op": "replace", "path": "/spec/template/spec/containers/0/image", "value": "controller:dev"}]'
+
+.PHONY: deploy-manifests-dev
+deploy-manifests-dev: manifests kustomize
 	$(KUBECTL) apply -k config/samples/extra/cnpg
 	sleep 10
 	$(KUBECTL) wait --for=condition=Ready --timeout=120s -n cnpg-system pod -l app.kubernetes.io/name=cloudnative-pg
@@ -41,11 +41,17 @@ deploy-dev: deploy
 
 
 .PHONY: dev-cluster-bootstrap
-dev-cluster-bootstrap: kind-cluster install install-samples-extra install-samples ## Bootstrap the development cluster.
+dev-cluster-bootstrap-debug: kind-cluster install install-samples  deploy-manifests-dev install-samples  
 
 .PHONY: dev-cluster-bootstrap-full
 dev-cluster-bootstrap-full: IMG=controller:dev
-dev-cluster-bootstrap-full: kind-cluster docker-build docker-load install deploy-dev install-samples ## bootstrap the cluster and deploy a locally built controller image
+dev-cluster-bootstrap-full: kind-cluster docker-build docker-load install deploy-controller-dev deploy-manifests-dev install-samples 
 
-.PHONY: dev-cluster-recreate
-dev-cluster-recreate: kind-cluster-delete dev-cluster-bootstrap ## Recreate the Kind cluster and bootstrap
+.PHONY: dev-cluster-bootstrap-full-recreate
+dev-cluster-bootstrap-full-recreate: kind-cluster-delete dev-cluster-bootstrap-full ## Recreate the Kind cluster and bootstrap
+
+.PHONY: dev-cluster-bootstrap-debug-recreate
+dev-cluster-bootstrap-debug-recreate: kind-cluster-delete dev-cluster-bootstrap-debug ## Recreate the Kind cluster and bootstrap
+
+dev-port-forward-litellm:
+	$(KUBECTL) port-forward svc/litellm-example-service 8000:80 -n litellm > /dev/null 2>&1 &

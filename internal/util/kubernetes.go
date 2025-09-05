@@ -29,7 +29,21 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	logf "sigs.k8s.io/controller-runtime/pkg/log"
 )
+
+func GetMapFromSecret(ctx context.Context, c client.Client, secretRef client.ObjectKey) (map[string]string, error) {
+	secret := &corev1.Secret{}
+	err := c.Get(ctx, secretRef, secret)
+	if err != nil {
+		return nil, err
+	}
+	secretMap := make(map[string]string)
+	for key, value := range secret.Data {
+		secretMap[key] = string(value) // Convert []byte to string
+	}
+	return secretMap, nil
+}
 
 // CreateOrUpdateWithRetry creates or updates a Kubernetes resource with retry logic.
 // It implements optimistic concurrency control with exponential backoff to handle
@@ -37,6 +51,8 @@ import (
 func CreateOrUpdateWithRetry(ctx context.Context, c client.Client, scheme *runtime.Scheme, obj client.Object, owner client.Object) (bool, error) {
 	const maxRetries = 5
 	restart := false
+	log := logf.FromContext(ctx)
+
 	for attempt := 0; attempt < maxRetries; attempt++ {
 		// Try to get the existing object
 		existing := obj.DeepCopyObject().(client.Object)
@@ -44,12 +60,19 @@ func CreateOrUpdateWithRetry(ctx context.Context, c client.Client, scheme *runti
 
 		if err != nil {
 			if client.IgnoreNotFound(err) == nil {
-				// Object doesn't exist, create it
 				if err := ctrl.SetControllerReference(owner, obj, scheme); err != nil {
+					log.Error(err, "failed to set controller reference for new object")
 					return false, err
 				}
-				return false, c.Create(ctx, obj)
+				if createErr := c.Create(ctx, obj); createErr != nil {
+					log.Error(createErr, "failed to create object", "name", obj.GetName(), "namespace", obj.GetNamespace())
+					return false, fmt.Errorf("create %s/%s: %w", obj.GetNamespace(), obj.GetName(), createErr)
+				}
+				log.Info("Created new object", "name", obj.GetName(), "namespace", obj.GetNamespace())
+				return false, nil
 			}
+			// Any other get error (e.g. RBAC/forbidden) should be surfaced
+			log.Error(err, "Error getting object")
 			return false, err
 		}
 
@@ -66,6 +89,7 @@ func CreateOrUpdateWithRetry(ctx context.Context, c client.Client, scheme *runti
 
 		// Set controller reference for the update
 		if err := ctrl.SetControllerReference(owner, obj, scheme); err != nil {
+			log.Error(err, "Error setting controller reference")
 			return restart, err
 		}
 
@@ -77,6 +101,7 @@ func CreateOrUpdateWithRetry(ctx context.Context, c client.Client, scheme *runti
 
 		// Check if it's a conflict error
 		if isConflictError(err) {
+			log.Info("Conflict detected, retrying...", "attempt", attempt+1)
 			if attempt < maxRetries-1 {
 				// Wait a bit before retrying (exponential backoff)
 				time.Sleep(time.Duration(attempt+1) * 100 * time.Millisecond)

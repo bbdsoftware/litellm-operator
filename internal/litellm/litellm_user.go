@@ -3,6 +3,8 @@ package litellm
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"reflect"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
@@ -15,7 +17,7 @@ type LitellmUser interface {
 	GetUser(ctx context.Context, userID string) (UserResponse, error)
 	GetUserID(ctx context.Context, userEmail string) (string, error)
 	GetTeam(ctx context.Context, teamID string) (TeamResponse, error)
-	IsUserUpdateNeeded(ctx context.Context, user *UserResponse, req *UserRequest) bool
+	IsUserUpdateNeeded(ctx context.Context, user *UserResponse, req *UserRequest) (UserUpdateNeeded, error)
 	UpdateUser(ctx context.Context, req *UserRequest) (UserResponse, error)
 }
 
@@ -218,112 +220,65 @@ func (l *LitellmClient) GetUser(ctx context.Context, userID string) (UserRespons
 }
 
 // IsUserUpdateNeeded checks if a user needs to be updated in the Litellm service
-func (l *LitellmClient) IsUserUpdateNeeded(ctx context.Context, user *UserResponse, req *UserRequest) bool {
+// Returns a boolean indicating if an update is needed and a slice of field names that have changed
+
+type FieldChange struct {
+	FieldName     string
+	CurrentValue  interface{}
+	ExpectedValue interface{}
+}
+
+type UserUpdateNeeded struct {
+	NeedsUpdate   bool
+	ChangedFields []FieldChange
+}
+
+func (l *LitellmClient) IsUserUpdateNeeded(ctx context.Context, user *UserResponse, req *UserRequest) (UserUpdateNeeded, error) {
 	log := log.FromContext(ctx)
+	var changedFields UserUpdateNeeded
 
-	if !cmp.Equal(user.Aliases, req.Aliases, cmpopts.EquateEmpty()) {
-		log.Info("Aliases changed")
-		return true
+	// Helper function to check field changes
+	checkField := func(fieldName, logName string, current, expected interface{}, equateEmpty bool, needsUpdate bool) {
+		var changed bool
+		if equateEmpty {
+			changed = !cmp.Equal(current, expected, cmpopts.EquateEmpty())
+		} else {
+			changed = !reflect.DeepEqual(current, expected)
+		}
+
+		if changed {
+			log.Info(fmt.Sprintf("%s changed", logName))
+			if needsUpdate {
+				changedFields.NeedsUpdate = true
+			}
+			changedFields.ChangedFields = append(changedFields.ChangedFields, FieldChange{
+				FieldName:     fieldName,
+				CurrentValue:  current,
+				ExpectedValue: expected,
+			})
+		}
 	}
 
-	if !cmp.Equal(user.AllowedCacheControls, req.AllowedCacheControls, cmpopts.EquateEmpty()) {
-		log.Info("AllowedCacheControls changed")
-		return true
-	}
+	// Check all fields using the helper
+	checkField("aliases", "Aliases", user.Aliases, req.Aliases, true, false)
+	checkField("allowed_cache_controls", "AllowedCacheControls", user.AllowedCacheControls, req.AllowedCacheControls, true, false)
+	checkField("blocked", "Blocked", user.Blocked, req.Blocked, false, false)
+	checkField("budget_duration", "BudgetDuration", user.BudgetDuration, req.BudgetDuration, false, false)
+	checkField("config", "Config", user.Config, req.Config, true, false)
+	checkField("duration", "Duration", user.Duration, req.Duration, false, true)
+	checkField("guardrails", "Guardrails", user.Guardrails, req.Guardrails, true, true)
+	checkField("max_budget", "MaxBudget", user.MaxBudget, req.MaxBudget, false, false)
+	checkField("max_parallel_requests", "MaxParallelRequests", user.MaxParallelRequests, req.MaxParallelRequests, false, true)
+	checkField("models", "Models", user.Models, req.Models, true, false)
+	checkField("permissions", "Permissions", user.Permissions, req.Permissions, true, false)
+	checkField("rpm_limit", "RPMLimit", user.RPMLimit, req.RPMLimit, false, true)
+	checkField("send_invite_email", "SendInviteEmail", user.SendInviteEmail, req.SendInviteEmail, false, true)
+	checkField("sso_user_id", "SSOUserID", user.SSOUserID, req.SSOUserID, false, true)
+	checkField("teams", "Teams", user.Teams, req.Teams, true, false)
+	checkField("tpm_limit", "TPMLimit", user.TPMLimit, req.TPMLimit, false, false)
+	checkField("user_alias", "UserAlias", user.UserAlias, req.UserAlias, false, true)
+	checkField("user_email", "UserEmail", user.UserEmail, req.UserEmail, false, true)
+	checkField("user_role", "UserRole", user.UserRole, req.UserRole, false, true)
 
-	// AutoCreateKey is absent in the response so don't check it
-
-	if user.Blocked != req.Blocked {
-		log.Info("Blocked changed")
-		return true
-	}
-
-	if user.BudgetDuration != req.BudgetDuration {
-		log.Info("BudgetDuration changed")
-		return true
-	}
-
-	if !cmp.Equal(user.Config, req.Config, cmpopts.EquateEmpty()) {
-		log.Info("Config changed")
-		return true
-	}
-
-	if user.Duration != req.Duration {
-		log.Info("Duration changed")
-		return true
-	}
-
-	if !cmp.Equal(user.Guardrails, req.Guardrails, cmpopts.EquateEmpty()) {
-		log.Info("Guardrails changed")
-		return true
-	}
-
-	// KeyAlias returns in a different format in the response so don't check it
-
-	if user.MaxBudget != req.MaxBudget {
-		log.Info("MaxBudget changed")
-		return true
-	}
-
-	if user.MaxParallelRequests != req.MaxParallelRequests {
-		log.Info("MaxParallelRequests changed")
-		return true
-	}
-
-	if !cmp.Equal(user.Models, req.Models, cmpopts.EquateEmpty()) {
-		log.Info("Models changed")
-		return true
-	}
-
-	if !cmp.Equal(user.Permissions, req.Permissions, cmpopts.EquateEmpty()) {
-		log.Info("Permissions changed")
-		return true
-	}
-
-	if user.RPMLimit != req.RPMLimit {
-		log.Info("RPMLimit changed")
-		return true
-	}
-
-	if user.SendInviteEmail != req.SendInviteEmail {
-		log.Info("SendInviteEmail changed")
-		return true
-	}
-
-	if user.SSOUserID != req.SSOUserID {
-		log.Info("SSOUserID changed")
-		return true
-	}
-
-	if !cmp.Equal(user.Teams, req.Teams, cmpopts.EquateEmpty()) {
-		log.Info("Teams changed")
-		return true
-	}
-
-	if user.TPMLimit != req.TPMLimit {
-		log.Info("TPMLimit changed")
-		return true
-	}
-
-	if user.UserAlias != req.UserAlias {
-		log.Info("UserAlias changed")
-		return true
-	}
-
-	if user.UserEmail != req.UserEmail {
-		log.Info("UserEmail changed")
-		return true
-	}
-
-	if user.UserID != req.UserID {
-		log.Info("UserID changed")
-		return true
-	}
-
-	if user.UserRole != req.UserRole {
-		log.Info("UserRole changed")
-		return true
-	}
-
-	return false
+	return changedFields, nil
 }

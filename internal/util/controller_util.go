@@ -29,3 +29,53 @@ func EnsureMetadata(metadata map[string]string) map[string]string {
 	}
 	return operatorMetadata
 }
+
+func StringPtrOrNil(s string) *string {
+	if s == "" {
+		return nil
+	}
+	return &s
+}
+
+func BoolPtr(v bool) *bool {
+	return &v
+}
+
+func IntPtrOrNil(i int) *int {
+	if i == 0 {
+		return nil
+	}
+	return &i
+}
+
+// DerefString returns the value of a *string or "" if nil.
+func DerefString(s *string) string {
+	if s == nil {
+		return ""
+	}
+	return *s
+}
+
+// DerefInt returns the value of a *int or 0 if nil.
+func DerefInt(i *int) int {
+	if i == nil {
+		return 0
+	}
+	return *i
+}
+
+// DerefFloat64 returns the value of a *float64 or 0.0 if nil.
+func DerefFloat64(f *float64) float64 {
+	if f == nil {
+		return 0.0
+	}
+	return *f
+}
+
+// DerefBool returns the value of a *bool or false if nil.
+func DerefBool(b *bool) bool {
+	if b == nil {
+		return false
+	}
+	return *b
+}

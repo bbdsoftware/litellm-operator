@@ -24,7 +24,7 @@ metadata:
 spec:
   userEmail: "alice@example.com"
   userAlias: "alice"
-  userRole: "customer"
+  userRole: "internal_user_viewer"
   keyAlias: "alice-key"
   autoCreateKey: true
   models:
@@ -67,8 +67,8 @@ spec:
 |-------|------|-------------|----------|
 | `userEmail` | string | User's email address | Yes |
 | `userAlias` | string | User alias/username | Yes |
-| `userRole` | string | User role (customer, admin) | Yes |
-| `keyAlias` | string | Alias for the virtual key | Yes |
+| `userRole` | string | User role (one of "proxy_admin", "proxy_admin_viewer", "internal_user", "internal_user_viewer") | Yes |
+| `keyAlias` | string | Alias for the virtual key | No |
 | `autoCreateKey` | boolean | Automatically create virtual key | Yes |
 | `models` | []string | Allowed models for this user | No |
 | `maxBudget` | string | Maximum spend limit in dollars | Yes |
@@ -101,23 +101,8 @@ kubectl patch user alice --type='merge' -p='{"spec":{"maxBudget":"200"}}'
 kubectl delete user alice
 ```
 
-## User Roles
-
-### Customer User
-- Can create virtual keys
-- Limited to personal budget
-- Cannot manage other users
-- Access to specified models only
-
-### Admin User
-- Can manage all users and teams
-- Can create system-wide policies
-- Access to admin endpoints
-- Full model access
-
 ## Best Practices
 
-- Use email addresses as user identifiers for consistency
 - Set appropriate budget limits based on usage patterns
 - Use meaningful key aliases for easy identification
 - Enable autoCreateKey for seamless user onboarding

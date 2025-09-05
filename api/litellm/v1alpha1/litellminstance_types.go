@@ -17,7 +17,9 @@ limitations under the License.
 package v1alpha1
 
 import (
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 )
 
 // LiteLLMInstanceSpec defines the desired state of LiteLLMInstance.
@@ -29,58 +31,21 @@ type LiteLLMInstanceSpec struct {
 	RedisSecretRef    RedisSecretRef    `json:"redisSecretRef,omitempty"`
 	Ingress           Ingress           `json:"ingress,omitempty"`
 	Gateway           Gateway           `json:"gateway,omitempty"`
-	Models            []Model           `json:"models,omitempty"`
+
+	// +kubebuilder:default=1
+	Replicas     int32               `json:"replicas,omitempty"`
+	Models       []InitModelInstance `json:"models,omitempty"`
+	ExtraEnvVars []corev1.EnvVar     `json:"extraEnvVars,omitempty"`
 }
 
-type Model struct {
-	ModelName        string                   `json:"modelName,omitempty"`
-	RequiresAuth     bool                     `json:"requiresAuth"`
-	Identifier       string                   `json:"identifier"`
-	ModelCredentials ModelCredentialSecretRef `json:"modelCredentials,omitempty"`
-	LiteLLMParams    LiteLLMParams            `json:"liteLLMParams,omitempty"`
-}
-
-type LiteLLMParams struct {
-	ApiKey                           string              `json:"apiKey,omitempty"`
-	ApiBase                          string              `json:"apiBase,omitempty"`
-	AwsAccessKeyID                   string              `json:"awsAccessKeyId,omitempty"`
-	AwsSecretAccessKey               string              `json:"awsSecretAccessKey,omitempty"`
-	AwsRegionName                    string              `json:"awsRegionName,omitempty"`
-	AutoRouterConfigPath             string              `json:"autoRouterConfigPath,omitempty"`
-	AutoRouterConfig                 string              `json:"autoRouterConfig,omitempty"`
-	AutoRouterDefaultModel           string              `json:"autoRouterDefaultModel,omitempty"`
-	AutoRouterEmbeddingModel         string              `json:"autoRouterEmbeddingModel,omitempty"`
-	AdditionalProps                  map[string]string   `json:"additionalProps,omitempty"`
-	ApiVersion                       string              `json:"apiVersion,omitempty"`
-	BudgetDuration                   string              `json:"budgetDuration,omitempty"`
-	ConfigurableClientsideAuthParams []map[string]string `json:"configurableClientsideAuthParams,omitempty"`
-	CustomLLMProvider                string              `json:"customLLMProvider,omitempty"`
-	InputCostPerToken                string              `json:"inputCostPerToken,omitempty"`
-	InputCostPerPixel                string              `json:"inputCostPerPixel,omitempty"`
-	InputCostPerSecond               string              `json:"inputCostPerSecond,omitempty"`
-	LiteLLMTraceID                   string              `json:"litellmTraceId,omitempty"`
-	LiteLLMCredentialName            string              `json:"litellmCredentialName,omitempty"`
-	MaxFileSizeMB                    string              `json:"maxFileSizeMb,omitempty"`
-	MergeReasoningContentInChoices   bool                `json:"mergeReasoningContentInChoices,omitempty"`
-	MockResponse                     string              `json:"mockResponse,omitempty"`
-	Model                            string              `json:"model,omitempty"`
-	MaxBudget                        string              `json:"maxBudget,omitempty"`
-	MaxRetries                       int                 `json:"maxRetries,omitempty"`
-	Organization                     string              `json:"organization,omitempty"`
-	OutputCostPerToken               string              `json:"outputCostPerToken,omitempty"`
-	OutputCostPerSecond              string              `json:"outputCostPerSecond,omitempty"`
-	OutputCostPerPixel               string              `json:"outputCostPerPixel,omitempty"`
-	RegionName                       string              `json:"regionName,omitempty"`
-	RPM                              int                 `json:"rpm,omitempty"`
-	StreamTimeout                    int                 `json:"streamTimeout,omitempty"`
-	TPM                              int                 `json:"tpm,omitempty"`
-	Timeout                          int                 `json:"timeout,omitempty"`
-	UseInPassThrough                 bool                `json:"useInPassThrough,omitempty"`
-	UseLiteLLMProxy                  bool                `json:"useLiteLLMProxy,omitempty"`
-	VertexProject                    string              `json:"vertexProject,omitempty"`
-	VertexLocation                   string              `json:"vertexLocation,omitempty"`
-	VertexCredentials                string              `json:"vertexCredentials,omitempty"`
-	WatsonxRegionName                string              `json:"watsonxRegionName,omitempty"`
+// model instance used to create proxy server config map
+type InitModelInstance struct {
+	ModelName            string                   `json:"modelName,omitempty"`
+	RequiresAuth         bool                     `json:"requiresAuth"`
+	Identifier           string                   `json:"identifier"`
+	ModelCredentials     ModelCredentialSecretRef `json:"modelCredentials,omitempty"`
+	LiteLLMParams        LiteLLMParams            `json:"liteLLMParams,omitempty"`
+	AdditionalProperties runtime.RawExtension     `json:"additionalProperties,omitempty"`
 }
 
 type ModelCredentialSecretRef struct {
@@ -150,15 +115,12 @@ type LiteLLMInstanceStatus struct {
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
+// +kubebuilder:printcolumn:name="Ready",type="string",JSONPath=".status.conditions[?(@.type=='Ready')].status",description="The ready status of the instance"
+// +kubebuilder:printcolumn:name="Replicas",type="integer",JSONPath=".spec.replicas",description="Number of replicas"
 // +kubebuilder:printcolumn:name="Image",type="string",JSONPath=".spec.image",description="The LiteLLM image being used"
-// +kubebuilder:printcolumn:name="Redis",type="string",JSONPath=".spec.redisSecretRef.nameRef",description="Redis secret reference"
-// +kubebuilder:printcolumn:name="Ingress",type="string",JSONPath=".spec.ingress.enabled",description="Whether ingress is enabled"
-// +kubebuilder:printcolumn:name="Gateway",type="string",JSONPath=".spec.gateway.enabled",description="Whether gateway is enabled"
-// +kubebuilder:printcolumn:name="Secret",type="string",JSONPath=".status.secretCreated",description="Secret creation status"
-// +kubebuilder:printcolumn:name="Deployment",type="string",JSONPath=".status.deploymentCreated",description="Deployment creation status"
-// +kubebuilder:printcolumn:name="Service",type="string",JSONPath=".status.serviceCreated",description="Service creation status"
-// +kubebuilder:printcolumn:name="Ingress Created",type="string",JSONPath=".status.ingressCreated",description="Ingress creation status"
-// +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp",description="Age of the LiteLLM instance"
+// +kubebuilder:printcolumn:name="Database",type="string",JSONPath=".spec.databaseSecretRef.nameRef",description="Database secret reference"
+// +kubebuilder:printcolumn:name="Ingress",type="boolean",JSONPath=".spec.ingress.enabled",description="Whether ingress is enabled"
+// +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp",description="Time since creation"
 
 // LiteLLMInstance is the Schema for the litellminstances API.
 type LiteLLMInstance struct {

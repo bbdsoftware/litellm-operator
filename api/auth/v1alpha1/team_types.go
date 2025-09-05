@@ -17,6 +17,7 @@ limitations under the License.
 package v1alpha1
 
 import (
+	"github.com/bbdsoftware/litellm-operator/internal/interfaces"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -59,6 +60,16 @@ type SecretKeys struct {
 	URL string `json:"url"`
 }
 
+// GetMasterKey returns the master key field name
+func (s SecretKeys) GetMasterKey() string {
+	return s.MasterKey
+}
+
+// GetURL returns the URL field name
+func (s SecretKeys) GetURL() string {
+	return s.URL
+}
+
 // InstanceRef references a LiteLLM instance
 type InstanceRef struct {
 	// Name is the name of the LiteLLM instance
@@ -66,6 +77,56 @@ type InstanceRef struct {
 
 	// Namespace is the namespace of the LiteLLM instance (defaults to the same namespace as the Team)
 	Namespace string `json:"namespace,omitempty"`
+}
+
+// GetSecretRef returns the SecretRef if it exists
+func (c ConnectionRef) GetSecretRef() interface{} {
+	return c.SecretRef
+}
+
+// GetInstanceRef returns the InstanceRef if it exists
+func (c ConnectionRef) GetInstanceRef() interface{} {
+	return c.InstanceRef
+}
+
+// HasSecretRef checks if SecretRef is specified
+func (c ConnectionRef) HasSecretRef() bool {
+	return c.SecretRef != nil
+}
+
+// HasInstanceRef checks if InstanceRef is specified
+func (c ConnectionRef) HasInstanceRef() bool {
+	return c.InstanceRef != nil
+}
+
+// GetSecretName returns the secret name
+func (s *SecretRef) GetSecretName() string {
+	return s.Name
+}
+
+// GetNamespace returns the namespace (empty for auth SecretRef)
+func (s *SecretRef) GetNamespace() string {
+	return ""
+}
+
+// GetKeys returns the keys structure
+func (s *SecretRef) GetKeys() interfaces.KeysInterface {
+	return s.Keys
+}
+
+// HasKeys returns true since auth SecretRef always has keys
+func (s *SecretRef) HasKeys() bool {
+	return true
+}
+
+// GetInstanceName returns the instance name
+func (i *InstanceRef) GetInstanceName() string {
+	return i.Name
+}
+
+// GetNamespace returns the namespace
+func (i *InstanceRef) GetNamespace() string {
+	return i.Namespace
 }
 
 // TeamSpec defines the desired state of Team
@@ -114,6 +175,11 @@ type TeamStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 
+	// ObservedGeneration is the most recent generation observed for this Team. It corresponds to the
+	// Team's generation, which is updated on mutation by the API Server.
+	// +optional
+	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
+
 	// Blocked is a flag indicating if the team is blocked or not
 	Blocked bool `json:"blocked,omitempty"`
 	// BudgetDuration - Budget is reset at the end of specified duration. If not set, budget is never reset.
@@ -159,18 +225,14 @@ type TeamStatus struct {
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
-// +kubebuilder:printcolumn:name="Team ID",type="string",JSONPath=".spec.teamID",description="The unique team identifier"
-// +kubebuilder:printcolumn:name="Team Alias",type="string",JSONPath=".spec.teamAlias",description="The team alias"
-// +kubebuilder:printcolumn:name="Organization",type="string",JSONPath=".spec.organizationID",description="The organisation ID"
+// +kubebuilder:printcolumn:name="Ready",type="string",JSONPath=".status.conditions[?(@.type=='Ready')].status",description="The ready status of the team"
+// +kubebuilder:printcolumn:name="Alias",type="string",JSONPath=".spec.teamAlias",description="The team alias"
+// +kubebuilder:printcolumn:name="Organisation",type="string",JSONPath=".spec.organizationID",description="The organisation ID"
 // +kubebuilder:printcolumn:name="Blocked",type="boolean",JSONPath=".spec.blocked",description="Whether the team is blocked"
-// +kubebuilder:printcolumn:name="Max Budget",type="string",JSONPath=".spec.maxBudget",description="Maximum budget for the team"
-// +kubebuilder:printcolumn:name="RPM Limit",type="integer",JSONPath=".spec.rpmLimit",description="Requests per minute limit"
-// +kubebuilder:printcolumn:name="TPM Limit",type="integer",JSONPath=".spec.tpmLimit",description="Tokens per minute limit"
-// +kubebuilder:printcolumn:name="Models",type="string",JSONPath=".spec.models",description="Allowed models for the team"
-// +kubebuilder:printcolumn:name="Members",type="integer",JSONPath=".status.membersWithRole",description="Number of team members"
+// +kubebuilder:printcolumn:name="Members",type="integer",JSONPath=".status.membersWithRole[*]",description="Number of team members"
+// +kubebuilder:printcolumn:name="Budget",type="string",JSONPath=".spec.maxBudget",description="Maximum budget for the team"
 // +kubebuilder:printcolumn:name="Spend",type="string",JSONPath=".status.spend",description="Current team spend"
-// +kubebuilder:printcolumn:name="Created",type="string",JSONPath=".status.createdAt",description="Team creation date"
-// +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp",description="Age of the team"
+// +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp",description="Time since creation"
 
 // Team is the Schema for the teams API
 type Team struct {
@@ -188,6 +250,16 @@ type TeamList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
 	Items           []Team `json:"items"`
+}
+
+// GetConditions returns the conditions slice
+func (t *Team) GetConditions() []metav1.Condition {
+	return t.Status.Conditions
+}
+
+// SetConditions sets the conditions slice
+func (t *Team) SetConditions(conditions []metav1.Condition) {
+	t.Status.Conditions = conditions
 }
 
 func init() {

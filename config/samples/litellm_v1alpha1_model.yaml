@@ -1,0 +1,55 @@
+apiVersion: litellm.litellm.ai/v1alpha1
+kind: Model
+metadata:
+  name: gpt-5-model
+  namespace: litellm
+spec:
+  modelName: "gpt-5"
+  litellmParams:
+    customLLMProvider: "openai"
+    inputCostPerToken: "0.00003"
+    outputCostPerToken: "0.00006"
+    tpm: 10000
+    rpm: 100
+    model: "gpt-5"
+    timeout: 60
+    maxRetries: 3
+    organization: "your-org-id"
+    useInPassThrough: false
+    useLitellmProxy: true
+  connectionRef:
+    instanceRef:
+      name: litellm-example
+      namespace: litellm
+  modelSecretRef:
+    secretName: openai-credentials
+    namespace: litellm
+---
+apiVersion: litellm.litellm.ai/v1alpha1
+kind: Model
+metadata:
+  name: claude-3-model
+  namespace: litellm
+spec:
+  modelName: "claude-3-sonnet"
+  litellmParams:
+    model: "bedrock/claude-3-sonnet"
+    inputCostPerToken: "0.000015"
+    outputCostPerToken: "0.000075"
+    tpm: 5000
+    rpm: 50
+    timeout: 120
+    maxRetries: 2
+    organization: "your-org-id"
+    useInPassThrough: false
+    useLitellmProxy: true
+  modelInfo:
+    teamId: "team-123"
+    teamPublicModelName: "claude-3-sonnet-public"
+  connectionRef:
+    instanceRef:
+      name: litellm-example
+      namespace: litellm  
+  modelSecretRef:
+    secretName: bedrock-model-credentials
+    namespace: litellm

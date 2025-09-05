@@ -49,6 +49,7 @@ metadata:
 spec:
   image: "ghcr.io/berriai/litellm-database:main-v1.74.9.rc.1"
   masterKey: "sk-1234567890abcdef"
+  replicas: 3
   redisSecretRef:
     nameRef: redis-production
     keys:
@@ -70,6 +71,31 @@ spec:
     host: "gateway.litellm.example.com"
 ```
 
+### High Availability Instance
+
+```yaml
+apiVersion: litellm.litellm.ai/v1alpha1
+kind: LiteLLMInstance
+metadata:
+  name: litellm-ha
+  namespace: litellm
+spec:
+  replicas: 5
+  redisSecretRef:
+    nameRef: redis-ha
+    keys:
+      hostSecret: host
+      portSecret: port
+      passwordSecret: password
+  databaseSecretRef:
+    nameRef: postgres-ha
+    keys:
+      hostSecret: host
+      passwordSecret: password
+      usernameSecret: username
+      dbnameSecret: dbname
+```
+
 ## Specification Reference
 
 | Field | Type | Description | Required |
@@ -80,6 +106,7 @@ spec:
 | `redisSecretRef` | object | Redis cache configuration | No |
 | `ingress` | object | Kubernetes ingress configuration | No |
 | `gateway` | object | Gateway configuration | No |
+| `replicas` | integer | Number of replicas for the LiteLLM deployment | No (default: 1) |
 
 ### Database Configuration
 
@@ -144,6 +171,18 @@ kubectl patch litellminstance litellm-example --type='merge' -p='{"spec":{"maste
 
 ```bash
 kubectl delete litellminstance litellm-example
+```
+
+### Scaling Instances
+
+You can scale LiteLLM instances by updating the replicas field:
+
+```bash
+# Scale to 3 replicas
+kubectl patch litellminstance litellm-example --type='merge' -p='{"spec":{"replicas":3}}'
+
+# Scale to 1 replica
+kubectl patch litellminstance litellm-example --type='merge' -p='{"spec":{"replicas":1}}'
 ```
 
 ## Status Information
@@ -224,6 +263,8 @@ Ensure your PostgreSQL database is accessible and contains the necessary tables 
 - Configure appropriate resource limits
 - Monitor database connection pools
 - Set up proper backup strategies
+- Scale replicas based on load requirements
+- Consider horizontal pod autoscaling for dynamic workloads
 
 ### Monitoring
 - Enable ingress for external access
@@ -290,6 +331,7 @@ metadata:
   name: litellm-example
   namespace: litellm
 spec:
+  replicas: 2
   redisSecretRef:
     nameRef: redis-secret
     keys:
@@ -312,7 +354,7 @@ metadata:
 spec:
   userEmail: "alice@example.com"
   userAlias: "alice"
-  userRole: "customer"
+  userRole: "internal_user_viewer"
   keyAlias: "alice-key"
   autoCreateKey: true
   models:

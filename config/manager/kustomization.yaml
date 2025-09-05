@@ -5,4 +5,4 @@ kind: Kustomization
 images:
 - name: controller
   newName: ghcr.io/bbdsoftware/litellm-operator
-  newTag: 0.2.1-rc
+  newTag: 0.3.0-rc
