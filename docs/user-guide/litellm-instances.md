@@ -354,7 +354,7 @@ metadata:
 spec:
   userEmail: "alice@example.com"
   userAlias: "alice"
-  userRole: "customer"
+  userRole: "internal_user_viewer"
   keyAlias: "alice-key"
   autoCreateKey: true
   models:

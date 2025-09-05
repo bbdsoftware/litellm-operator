@@ -14,39 +14,27 @@ spec:
   scope: Namespaced
   versions:
   - additionalPrinterColumns:
+    - description: The ready status of the instance
+      jsonPath: .status.conditions[?(@.type=='Ready')].status
+      name: Ready
+      type: string
+    - description: Number of replicas
+      jsonPath: .spec.replicas
+      name: Replicas
+      type: integer
     - description: The LiteLLM image being used
       jsonPath: .spec.image
       name: Image
       type: string
-    - description: Redis secret reference
-      jsonPath: .spec.redisSecretRef.nameRef
-      name: Redis
+    - description: Database secret reference
+      jsonPath: .spec.databaseSecretRef.nameRef
+      name: Database
       type: string
     - description: Whether ingress is enabled
       jsonPath: .spec.ingress.enabled
       name: Ingress
-      type: string
-    - description: Whether gateway is enabled
-      jsonPath: .spec.gateway.enabled
-      name: Gateway
-      type: string
-    - description: Secret creation status
-      jsonPath: .status.secretCreated
-      name: Secret
-      type: string
-    - description: Deployment creation status
-      jsonPath: .status.deploymentCreated
-      name: Deployment
-      type: string
-    - description: Service creation status
-      jsonPath: .status.serviceCreated
-      name: Service
-      type: string
-    - description: Ingress creation status
-      jsonPath: .status.ingressCreated
-      name: Ingress Created
-      type: string
-    - description: Age of the LiteLLM instance
+      type: boolean
+    - description: Time since creation
       jsonPath: .metadata.creationTimestamp
       name: Age
       type: date
@@ -99,6 +87,123 @@ spec:
                 - keys
                 - nameRef
                 type: object
+              extraEnvVars:
+                items:
+                  description: EnvVar represents an environment variable present in
+                    a Container.
+                  properties:
+                    name:
+                      description: Name of the environment variable. Must be a C_IDENTIFIER.
+                      type: string
+                    value:
+                      description: |-
+                        Variable references $(VAR_NAME) are expanded
+                        using the previously defined environment variables in the container and
+                        any service environment variables. If a variable cannot be resolved,
+                        the reference in the input string will be unchanged. Double $$ are reduced
+                        to a single $, which allows for escaping the $(VAR_NAME) syntax: i.e.
+                        "$$(VAR_NAME)" will produce the string literal "$(VAR_NAME)".
+                        Escaped references will never be expanded, regardless of whether the variable
+                        exists or not.
+                        Defaults to "".
+                      type: string
+                    valueFrom:
+                      description: Source for the environment variable's value. Cannot
+                        be used if value is not empty.
+                      properties:
+                        configMapKeyRef:
+                          description: Selects a key of a ConfigMap.
+                          properties:
+                            key:
+                              description: The key to select.
+                              type: string
+                            name:
+                              default: ""
+                              description: |-
+                                Name of the referent.
+                                This field is effectively required, but due to backwards compatibility is
+                                allowed to be empty. Instances of this type with an empty value here are
+                                almost certainly wrong.
+                                More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                              type: string
+                            optional:
+                              description: Specify whether the ConfigMap or its key
+                                must be defined
+                              type: boolean
+                          required:
+                          - key
+                          type: object
+                          x-kubernetes-map-type: atomic
+                        fieldRef:
+                          description: |-
+                            Selects a field of the pod: supports metadata.name, metadata.namespace, `metadata.labels['<KEY>']`, `metadata.annotations['<KEY>']`,
+                            spec.nodeName, spec.serviceAccountName, status.hostIP, status.podIP, status.podIPs.
+                          properties:
+                            apiVersion:
+                              description: Version of the schema the FieldPath is
+                                written in terms of, defaults to "v1".
+                              type: string
+                            fieldPath:
+                              description: Path of the field to select in the specified
+                                API version.
+                              type: string
+                          required:
+                          - fieldPath
+                          type: object
+                          x-kubernetes-map-type: atomic
+                        resourceFieldRef:
+                          description: |-
+                            Selects a resource of the container: only resources limits and requests
+                            (limits.cpu, limits.memory, limits.ephemeral-storage, requests.cpu, requests.memory and requests.ephemeral-storage) are currently supported.
+                          properties:
+                            containerName:
+                              description: 'Container name: required for volumes,
+                                optional for env vars'
+                              type: string
+                            divisor:
+                              anyOf:
+                              - type: integer
+                              - type: string
+                              description: Specifies the output format of the exposed
+                                resources, defaults to "1"
+                              pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                              x-kubernetes-int-or-string: true
+                            resource:
+                              description: 'Required: resource to select'
+                              type: string
+                          required:
+                          - resource
+                          type: object
+                          x-kubernetes-map-type: atomic
+                        secretKeyRef:
+                          description: Selects a key of a secret in the pod's namespace
+                          properties:
+                            key:
+                              description: The key of the secret to select from.  Must
+                                be a valid secret key.
+                              type: string
+                            name:
+                              default: ""
+                              description: |-
+                                Name of the referent.
+                                This field is effectively required, but due to backwards compatibility is
+                                allowed to be empty. Instances of this type with an empty value here are
+                                almost certainly wrong.
+                                More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                              type: string
+                            optional:
+                              description: Specify whether the Secret or its key must
+                                be defined
+                              type: boolean
+                          required:
+                          - key
+                          type: object
+                          x-kubernetes-map-type: atomic
+                      type: object
+                  required:
+                  - name
+                  type: object
+                type: array
               gateway:
                 properties:
                   enabled:
@@ -126,96 +231,159 @@ spec:
                 type: string
               models:
                 items:
+                  description: model instance used to create proxy server config map
                   properties:
+                    additionalProperties:
+                      type: object
+                      x-kubernetes-preserve-unknown-fields: true
                     identifier:
                       type: string
                     liteLLMParams:
+                      description: LiteLLMParams defines the LiteLLM parameters for
+                        a model.
                       properties:
-                        additionalProps:
-                          additionalProperties:
-                            type: string
+                        additionalProp1:
+                          description: AdditionalProps contains additional properties
                           type: object
+                          x-kubernetes-preserve-unknown-fields: true
                         apiBase:
+                          description: APIBase is the base URL for the API
                           type: string
                         apiKey:
+                          description: APIKey is the API key for the model
                           type: string
                         apiVersion:
+                          description: APIVersion is the version of the API
                           type: string
                         autoRouterConfig:
+                          description: AutoRouterConfig is the auto router config
                           type: string
                         autoRouterConfigPath:
+                          description: AutoRouterConfigPath is the auto router config
+                            path
                           type: string
                         autoRouterDefaultModel:
+                          description: AutoRouterDefaultModel is the auto router default
+                            model
                           type: string
                         autoRouterEmbeddingModel:
+                          description: AutoRouterEmbeddingModel is the auto router
+                            embedding model
                           type: string
                         awsAccessKeyId:
+                          description: AWSAccessKeyID is the AWS access key ID
                           type: string
                         awsRegionName:
+                          description: AWSRegionName is the AWS region name
                           type: string
                         awsSecretAccessKey:
+                          description: AWSSecretAccessKey is the AWS secret access
+                            key
                           type: string
                         budgetDuration:
+                          description: BudgetDuration is the budget duration
                           type: string
                         configurableClientsideAuthParams:
+                          description: ConfigurableClientsideAuthParams are configurable
+                            client-side auth parameters
                           items:
-                            additionalProperties:
-                              type: string
                             type: object
+                            x-kubernetes-preserve-unknown-fields: true
                           type: array
                         customLLMProvider:
+                          description: CustomLLMProvider is the custom LLM provider
                           type: string
                         inputCostPerPixel:
+                          description: InputCostPerPixel is the cost per pixel for
+                            input
                           type: string
                         inputCostPerSecond:
+                          description: InputCostPerSecond is the cost per second for
+                            input
                           type: string
                         inputCostPerToken:
+                          description: InputCostPerToken is the cost per input token
                           type: string
                         litellmCredentialName:
+                          description: LiteLLMCredentialName is the LiteLLM credential
+                            name
                           type: string
                         litellmTraceId:
+                          description: LiteLLMTraceID is the LiteLLM trace ID
                           type: string
                         maxBudget:
+                          description: MaxBudget is the maximum budget
                           type: string
                         maxFileSizeMb:
-                          type: string
+                          description: MaxFileSizeMB is the maximum file size in MB
+                          type: integer
                         maxRetries:
+                          description: MaxRetries is the maximum number of retries
                           type: integer
                         mergeReasoningContentInChoices:
+                          description: MergeReasoningContentInChoices indicates if
+                            to merge reasoning content in choices
                           type: boolean
                         mockResponse:
+                          description: MockResponse is the mock response
                           type: string
                         model:
+                          description: Model is the model name
                           type: string
+                        modelInfo:
+                          description: ModelInfo contains additional model information
+                          type: object
+                          x-kubernetes-preserve-unknown-fields: true
                         organization:
+                          description: Organization is the organization name
                           type: string
                         outputCostPerPixel:
+                          description: OutputCostPerPixel is the cost per pixel for
+                            output
                           type: string
                         outputCostPerSecond:
+                          description: OutputCostPerSecond is the cost per second
+                            for output
                           type: string
                         outputCostPerToken:
+                          description: OutputCostPerToken is the cost per output token
                           type: string
                         regionName:
+                          description: RegionName is the region name for the service
                           type: string
                         rpm:
+                          description: RPM is requests per minute
                           type: integer
                         streamTimeout:
+                          description: StreamTimeout is the stream timeout in seconds
                           type: integer
                         timeout:
+                          description: Timeout is the timeout in seconds
                           type: integer
                         tpm:
+                          description: TPM is tokens per minute
                           type: integer
                         useInPassThrough:
+                          description: UseInPassThrough indicates if to use in pass
+                            through
                           type: boolean
-                        useLiteLLMProxy:
+                        useLitellmProxy:
+                          description: UseLiteLLMProxy indicates if to use LiteLLM
+                            proxy
                           type: boolean
                         vertexCredentials:
+                          description: VertexCredentials is the credentials for Vertex
+                            AI
                           type: string
                         vertexLocation:
+                          description: VertexLocation is the location for Vertex AI
                           type: string
                         vertexProject:
+                          description: VertexProject is the Google Cloud project for
+                            Vertex AI
                           type: string
                         watsonxRegionName:
+                          description: WatsonXRegionName is the WatsonX region name
                           type: string
                       type: object
                     modelCredentials:
@@ -271,6 +439,10 @@ spec:
                 - keys
                 - nameRef
                 type: object
+              replicas:
+                default: 1
+                format: int32
+                type: integer
             required:
             - image
             type: object
