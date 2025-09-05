@@ -211,12 +211,8 @@ func (r *VirtualKeyReconciler) ensureExternal(ctx context.Context, virtualKey *a
 		return r.HandleErrorRetryable(ctx, virtualKey, err, base.ReasonLitellmError)
 	}
 
-	observedVirtualKeyDetails, err := r.LitellmClient.GetVirtualKeyInfo(ctx, observedVirtualKeys[0])
-	if err != nil {
-		log.Error(err, "Failed to get virtual key info from LiteLLM")
-		return r.HandleErrorRetryable(ctx, virtualKey, err, base.ReasonLitellmError)
-	}
-
+	var observedVirtualKeyDetails litellm.VirtualKeyResponse
+	
 	if len(observedVirtualKeys) == 0 {
 		// Create if no external key exists
 		log.Info("Creating new virtual key in LiteLLM", "keyAlias", virtualKey.Spec.KeyAlias)
@@ -237,6 +233,14 @@ func (r *VirtualKeyReconciler) ensureExternal(ctx context.Context, virtualKey *a
 		}
 		log.Info("Successfully created virtual key in LiteLLM", "keyAlias", createResponse.KeyAlias)
 		return ctrl.Result{}, nil
+	} else {
+		// Get virtual key details for existing key
+		var err error
+		observedVirtualKeyDetails, err = r.LitellmClient.GetVirtualKeyInfo(ctx, observedVirtualKeys[0])
+		if err != nil {
+			log.Error(err, "Failed to get virtual key info from LiteLLM")
+			return r.HandleErrorRetryable(ctx, virtualKey, err, base.ReasonLitellmError)
+		}
 	}
 
 	updateNeeded := r.LitellmClient.IsVirtualKeyUpdateNeeded(ctx, &observedVirtualKeyDetails, &desiredVirtualKey)

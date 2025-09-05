@@ -90,14 +90,29 @@ func (m *mockLitellmVirtualKeyClient) GetVirtualKeyFromAlias(ctx context.Context
 	if m.getError != nil {
 		return []string{}, m.getError
 	}
-	return []string{m.virtualKeys[keyAlias].Key}, nil
+
+	vk, exists := m.virtualKeys[keyAlias]
+	if !exists {
+		// Return empty slice when virtual key doesn't exist, matching real implementation
+		return []string{}, nil
+	}
+
+	return []string{vk.Key}, nil
 }
 
 func (m *mockLitellmVirtualKeyClient) GetVirtualKeyInfo(ctx context.Context, key string) (litellm.VirtualKeyResponse, error) {
 	if m.getError != nil {
 		return litellm.VirtualKeyResponse{}, m.getError
 	}
-	return *m.virtualKeys[key], nil
+
+	// Find by key value
+	for _, vk := range m.virtualKeys {
+		if vk.Key == key {
+			return *vk, nil
+		}
+	}
+
+	return litellm.VirtualKeyResponse{}, fmt.Errorf("virtual key not found: %s", key)
 }
 
 func (m *mockLitellmVirtualKeyClient) GetVirtualKey(ctx context.Context, key string) (litellm.VirtualKeyResponse, error) {
@@ -451,7 +466,7 @@ var _ = Describe("VirtualKey Controller", func() {
 			})
 
 			It("should handle connection errors", func() {
-				mockClient.checkExistsError = fmt.Errorf("connection error")
+				mockClient.getError = fmt.Errorf("connection error")
 
 				result, err := reconciler.Reconcile(ctx, ctrl.Request{
 					NamespacedName: types.NamespacedName{
