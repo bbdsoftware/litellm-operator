@@ -233,7 +233,7 @@ var _ = Describe("Integration E2E Tests", Ordered, func() {
 				Namespace: modelTestNamespace,
 			}, updatedAssociationCR)).To(Succeed())
 
-			updatedAssociationCR.Spec.TeamAlias = "new-team-alias"
+			updatedAssociationCR.Spec.TeamRef.Name = "new-team-alias"
 			err := k8sClient.Update(context.Background(), updatedAssociationCR)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("TeamAlias is immutable"))
@@ -327,9 +327,19 @@ func createTeamMemberAssociationCR(name, teamAlias, userEmail string) *authv1alp
 					Name:      "e2e-test-instance",
 				},
 			},
+			TeamRef: authv1alpha1.CRDRef{
+				Name:      teamAlias,
+				Namespace: modelTestNamespace,
+			},
+			UserRef: authv1alpha1.CRDRef{
+				Name:      userEmail, // using email as name for simple e2e helper
+				Namespace: modelTestNamespace,
+			},
+			Role: "user",
+		},
+		Status: authv1alpha1.TeamMemberAssociationStatus{
 			TeamAlias: teamAlias,
 			UserEmail: userEmail,
-			Role:      "user",
 		},
 	}
 }

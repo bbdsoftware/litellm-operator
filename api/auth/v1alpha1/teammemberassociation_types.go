@@ -34,19 +34,23 @@ type TeamMemberAssociationSpec struct {
 
 	// MaxBudgetInTeam is the maximum budget for the user in the team
 	MaxBudgetInTeam string `json:"maxBudgetInTeam,omitempty"`
-	// TeamID is the ID of the team
-	// +kubebuilder:validation:Required
-	// +kubebuilder:validation:XValidation:rule="self == oldSelf",message="TeamAlias is immutable"
-	TeamAlias string `json:"teamAlias,omitempty"`
-
-	// UserEmail is the email of the user
-	// +kubebuilder:validation:Required
-	// +kubebuilder:validation:XValidation:rule="self == oldSelf",message="UserEmail is immutable"
-	UserEmail string `json:"userEmail,omitempty"`
 	// Role is the role of the user - one of "admin" or "user"
 	// +kubebuilder:validation:Required
 	// +kubebuilder:validation:Enum=admin;user
 	Role string `json:"role,omitempty"`
+
+	// TeamRef is a reference to the team
+	// +kubebuilder:validation:Required
+	TeamRef CRDRef `json:"teamRef,omitempty"`
+
+	// UserRef is a reference to the user
+	// +kubebuilder:validation:Required
+	UserRef CRDRef `json:"userRef,omitempty"`
+}
+
+type CRDRef struct {
+	Name      string `json:"name,omitempty"`
+	Namespace string `json:"namespace,omitempty"`
 }
 
 // TeamMemberAssociationStatus defines the observed state of TeamMemberAssociation
@@ -63,6 +67,10 @@ type TeamMemberAssociationStatus struct {
 	// UserID is the ID of the user
 	UserID string `json:"userID,omitempty"`
 
+	TeamExists         bool `json:"teamExists,omitempty"`
+	UserExists         bool `json:"userExists,omitempty"`
+	AssociationIsValid bool `json:"associationIsValid,omitempty"`
+
 	// +operator-sdk:csv:customresourcedefinitions:type=status
 	Conditions []metav1.Condition `json:"conditions,omitempty" patchStrategy:"merge" patchMergeKey:"type" protobuf:"bytes,1,rep,name=conditions"`
 }
@@ -70,8 +78,8 @@ type TeamMemberAssociationStatus struct {
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
 // +kubebuilder:printcolumn:name="Ready",type="string",JSONPath=".status.conditions[?(@.type=='Ready')].status",description="The ready status of the association"
-// +kubebuilder:printcolumn:name="Team",type="string",JSONPath=".spec.teamAlias",description="The team alias"
-// +kubebuilder:printcolumn:name="User",type="string",JSONPath=".spec.userEmail",description="The user's email address"
+// +kubebuilder:printcolumn:name="Team",type="string",JSONPath=".status.teamAlias",description="The team alias"
+// +kubebuilder:printcolumn:name="User",type="string",JSONPath=".status.userEmail",description="The user's email address"
 // +kubebuilder:printcolumn:name="Role",type="string",JSONPath=".spec.role",description="The user's role in the team"
 // +kubebuilder:printcolumn:name="Budget",type="string",JSONPath=".spec.maxBudgetInTeam",description="Maximum budget for user in team"
 // +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp",description="Time since creation"
