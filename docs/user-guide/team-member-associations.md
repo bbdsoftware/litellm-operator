@@ -28,6 +28,12 @@ spec:
   role: admin
   teamAlias: ai-team
   userEmail: alice@example.com
+  teamRef:
+    name: ai-team
+    namespace: litellm
+  userRef:
+    name: alice
+    namespace: litellm
 ```
 
 ### Member Association
@@ -45,6 +51,12 @@ spec:
   role: member
   teamAlias: ai-team
   userEmail: bob@example.com
+  teamRef:
+    name: ai-team
+    namespace: litellm
+  userRef:
+    name: bob
+    namespace: litellm
 ```
 
 ## Specification Reference
@@ -55,6 +67,8 @@ spec:
 | `role` | string | User role within the team (admin, member) | Yes |
 | `teamAlias` | string | Team identifier to associate with | Yes |
 | `userEmail` | string | User's email address | Yes |
+| `teamRef` | object | Reference to an existing `Team` resource (name + optional namespace). Use instead of `teamAlias`. | yes |
+| `userRef` | object | Reference to an existing `User` resource (name + optional namespace). Use instead of `userEmail`. | yes |
 
 ## Managing Team Member Associations
 
@@ -105,6 +119,8 @@ Before creating a Team Member Association, ensure:
 1. **Team exists**: The team referenced by `teamAlias` must already exist
 2. **User exists**: The user referenced by `userEmail` must already exist
 3. **LiteLLM Instance**: The referenced LiteLLM instance must be available
+
+If you use `teamRef` or `userRef`, the referenced `Team` and `User` resources must exist in the cluster (the namespace may be omitted to use the same namespace as the association).
 
 ### Complete Workflow Example
 
