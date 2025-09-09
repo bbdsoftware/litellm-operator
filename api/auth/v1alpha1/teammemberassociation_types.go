@@ -47,6 +47,19 @@ type TeamMemberAssociationSpec struct {
 	// +kubebuilder:validation:Required
 	// +kubebuilder:validation:Enum=admin;user
 	Role string `json:"role,omitempty"`
+
+	// TeamRef is a reference to the team
+	// +kubebuilder:validation:Required
+	TeamRef CRDRef `json:"teamRef,omitempty"`
+
+	// UserRef is a reference to the user
+	// +kubebuilder:validation:Required
+	UserRef CRDRef `json:"userRef,omitempty"`
+}
+
+type CRDRef struct {
+	Name      string `json:"name,omitempty"`
+	Namespace string `json:"namespace,omitempty"`
 }
 
 // TeamMemberAssociationStatus defines the observed state of TeamMemberAssociation
@@ -62,6 +75,10 @@ type TeamMemberAssociationStatus struct {
 	UserEmail string `json:"userEmail,omitempty"`
 	// UserID is the ID of the user
 	UserID string `json:"userID,omitempty"`
+
+	TeamExists         bool `json:"teamExists,omitempty"`
+	UserExists         bool `json:"userExists,omitempty"`
+	AssociationIsValid bool `json:"associationIsValid,omitempty"`
 
 	// +operator-sdk:csv:customresourcedefinitions:type=status
 	Conditions []metav1.Condition `json:"conditions,omitempty" patchStrategy:"merge" patchMergeKey:"type" protobuf:"bytes,1,rep,name=conditions"`

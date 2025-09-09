@@ -125,22 +125,42 @@ spec:
                 x-kubernetes-validations:
                 - message: TeamAlias is immutable
                   rule: self == oldSelf
+              teamRef:
+                description: TeamRef is a reference to the team
+                properties:
+                  name:
+                    type: string
+                  namespace:
+                    type: string
+                type: object
               userEmail:
                 description: UserEmail is the email of the user
                 type: string
                 x-kubernetes-validations:
                 - message: UserEmail is immutable
                   rule: self == oldSelf
+              userRef:
+                description: UserRef is a reference to the user
+                properties:
+                  name:
+                    type: string
+                  namespace:
+                    type: string
+                type: object
             required:
             - connectionRef
             - role
             - teamAlias
+            - teamRef
             - userEmail
+            - userRef
             type: object
           status:
             description: TeamMemberAssociationStatus defines the observed state of
               TeamMemberAssociation
             properties:
+              associationIsValid:
+                type: boolean
               conditions:
                 items:
                   description: Condition contains details for one aspect of the current
@@ -200,12 +220,16 @@ spec:
               teamAlias:
                 description: TeamAlias is the alias of the team
                 type: string
+              teamExists:
+                type: boolean
               teamID:
                 description: TeamID is the ID of the team
                 type: string
               userEmail:
                 description: UserEmail is the email of the user
                 type: string
+              userExists:
+                type: boolean
               userID:
                 description: UserID is the ID of the user
                 type: string

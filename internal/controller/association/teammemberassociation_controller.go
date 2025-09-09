@@ -26,8 +26,10 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	authv1alpha1 "github.com/bbdsoftware/litellm-operator/api/auth/v1alpha1"
 	"github.com/bbdsoftware/litellm-operator/internal/controller/base"
@@ -84,6 +86,37 @@ func (r *TeamMemberAssociationReconciler) Reconcile(ctx context.Context, req ctr
 		return ctrl.Result{}, nil
 	}
 
+	//Phase 1.1 : validate Team and User readiness
+	team := &authv1alpha1.Team{}
+	if err := r.Client.Get(ctx, client.ObjectKey{Namespace: teamMemberAssociation.Namespace, Name: teamMemberAssociation.Spec.TeamRef.Name}, team); err != nil {
+		log.Error(err, "Failed to get referenced Team", "teamRef", teamMemberAssociation.Spec.TeamRef.Name)
+		return r.HandleErrorRetryable(ctx, teamMemberAssociation, err, base.ReasonConfigError)
+	}
+	if !IsConditionTrue(team.Status.Conditions, base.CondReady) {
+		err := errors.New("referenced Team is not ready")
+		log.Error(err, "Referenced Team is not ready", "teamRef", teamMemberAssociation.Spec.TeamRef.Name)
+		return ctrl.Result{RequeueAfter: 10 * time.Second}, err
+	}
+
+	user := &authv1alpha1.User{}
+	if err := r.Client.Get(ctx, client.ObjectKey{Namespace: teamMemberAssociation.Namespace, Name: teamMemberAssociation.Spec.UserRef.Name}, user); err != nil {
+		log.Error(err, "Failed to get referenced User", "userRef", teamMemberAssociation.Spec.UserRef.Name)
+		return r.HandleErrorRetryable(ctx, teamMemberAssociation, err, base.ReasonConfigError)
+	}
+	if !IsConditionTrue(user.Status.Conditions, base.CondReady) {
+		err := errors.New("referenced User is not ready")
+		log.Error(err, "Referenced User is not ready", "userRef", teamMemberAssociation.Spec.UserRef.Name)
+		return ctrl.Result{RequeueAfter: 10 * time.Second}, err
+	}
+	teamMemberAssociation.Status.TeamExists = true
+	teamMemberAssociation.Status.UserExists = true
+	teamMemberAssociation.Status.AssociationIsValid = true
+
+	if err := r.PatchStatus(ctx, teamMemberAssociation); err != nil {
+		log.Error(err, "Failed to update status after validating references")
+		return r.HandleErrorRetryable(ctx, teamMemberAssociation, err, base.ReasonReconcileError)
+	}
+
 	log.Info("Reconciling external team member association resource", "teamMemberAssociation", teamMemberAssociation.Name) // Add timeout to avoid long-running reconciliation
 	// Phase 2: Set up connections and clients
 	if err := r.ensureConnectionSetup(ctx, teamMemberAssociation); err != nil {
@@ -118,6 +151,15 @@ func (r *TeamMemberAssociationReconciler) Reconcile(ctx context.Context, req ctr
 
 	// Phase 8: Periodic drift sync (external might change out of band)
 	return ctrl.Result{RequeueAfter: 60 * time.Second}, nil
+}
+
+func IsConditionTrue(conditions []metav1.Condition, conditionType string) bool {
+	for _, condition := range conditions {
+		if condition.Type == conditionType && condition.Status == metav1.ConditionTrue {
+			return true
+		}
+	}
+	return false
 }
 
 // ensureConnectionSetup configures the LiteLLM client
@@ -275,6 +317,49 @@ func (r *TeamMemberAssociationReconciler) convertToTeamMemberAssociationRequest(
 	return teamMemberAssociationRequest, nil
 }
 
+// mapUserToAssociations finds all TeamAssociations that reference a specific User
+func (r *TeamMemberAssociationReconciler) mapUserToAssociations(obj client.Object) []reconcile.Request {
+	user := obj.(*authv1alpha1.User)
+	var requests []reconcile.Request
+
+	// List all TeamMemberAssociations in the same namespace
+	assocList := &authv1alpha1.TeamMemberAssociationList{}
+	if err := r.List(context.Background(), assocList, client.InNamespace(user.Namespace)); err != nil {
+		return []reconcile.Request{}
+	}
+
+	// Find associations that reference this user
+	for _, assoc := range assocList.Items {
+		if assoc.Spec.UserEmail == user.Spec.UserEmail {
+			requests = append(requests, reconcile.Request{
+				NamespacedName: client.ObjectKey{Name: assoc.Name, Namespace: assoc.Namespace},
+			})
+		}
+	}
+	return requests
+}
+
+func (r *TeamMemberAssociationReconciler) mapTeamToAssociations(obj client.Object) []reconcile.Request {
+	team := obj.(*authv1alpha1.Team)
+	var requests []reconcile.Request
+
+	// List all TeamMemberAssociations in the same namespace
+	assocList := &authv1alpha1.TeamMemberAssociationList{}
+	if err := r.List(context.Background(), assocList, client.InNamespace(team.Namespace)); err != nil {
+		return []reconcile.Request{}
+	}
+
+	// Find associations that reference this team
+	for _, assoc := range assocList.Items {
+		if assoc.Spec.TeamAlias == team.Spec.TeamAlias {
+			requests = append(requests, reconcile.Request{
+				NamespacedName: client.ObjectKey{Name: assoc.Name, Namespace: assoc.Namespace},
+			})
+		}
+	}
+	return requests
+}
+
 // updateTeamMemberAssociationStatus updates the status of the k8s TeamMemberAssociation from the external data
 func (r *TeamMemberAssociationReconciler) updateTeamMemberAssociationStatus(teamMemberAssociation *authv1alpha1.TeamMemberAssociation, externalData *ExternalData) {
 	teamMemberAssociation.Status.TeamAlias = externalData.TeamAlias
@@ -284,8 +369,20 @@ func (r *TeamMemberAssociationReconciler) updateTeamMemberAssociationStatus(team
 }
 
 func (r *TeamMemberAssociationReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	// Create typed EventHandler for User objects
+	userHandler := handler.EnqueueRequestsFromMapFunc(func(ctx context.Context, obj client.Object) []reconcile.Request {
+		return r.mapUserToAssociations(obj)
+	})
+
+	// Create typed EventHandler for Team objects
+	teamHandler := handler.EnqueueRequestsFromMapFunc(func(ctx context.Context, obj client.Object) []reconcile.Request {
+		return r.mapTeamToAssociations(obj)
+	})
+
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&authv1alpha1.TeamMemberAssociation{}).
+		Watches(&authv1alpha1.User{}, userHandler).
+		Watches(&authv1alpha1.Team{}, teamHandler).
 		WithEventFilter(predicate.GenerationChangedPredicate{}).
 		Named("litellm-teammemberassociation").
 		Complete(r)
