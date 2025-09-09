@@ -25,11 +25,11 @@ jobs:
   run-tests:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
       with:
         fetch-depth: 0
 
-    - uses: actions/setup-go@v5
+    - uses: actions/setup-go@v6
       with:
         go-version: '1.21'
         cache: true
@@ -50,7 +50,7 @@ jobs:
       release_type: ${{ steps.release_type.outputs.release_type }}
       validated_version: ${{ steps.semver.outputs.version }}
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
       with:
         fetch-depth: 0
     - name: Validate semver tag
@@ -99,7 +99,7 @@ jobs:
           echo "   Build: ${{ steps.semver.outputs.build }}"
         fi
 
-    - uses: actions/setup-go@v5
+    - uses: actions/setup-go@v6
       with:
         go-version: '1.21'
         cache: true
@@ -176,7 +176,7 @@ jobs:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
   
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
       with:
         ref: main
         token: ${{ steps.github-app.outputs.token }}
