@@ -78,8 +78,8 @@ type TeamMemberAssociationStatus struct {
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
 // +kubebuilder:printcolumn:name="Ready",type="string",JSONPath=".status.conditions[?(@.type=='Ready')].status",description="The ready status of the association"
-// +kubebuilder:printcolumn:name="Team",type="string",JSONPath=".spec.teamAlias",description="The team alias"
-// +kubebuilder:printcolumn:name="User",type="string",JSONPath=".spec.userEmail",description="The user's email address"
+// +kubebuilder:printcolumn:name="Team",type="string",JSONPath=".status.teamAlias",description="The team alias"
+// +kubebuilder:printcolumn:name="User",type="string",JSONPath=".status.userEmail",description="The user's email address"
 // +kubebuilder:printcolumn:name="Role",type="string",JSONPath=".spec.role",description="The user's role in the team"
 // +kubebuilder:printcolumn:name="Budget",type="string",JSONPath=".spec.maxBudgetInTeam",description="Maximum budget for user in team"
 // +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp",description="Time since creation"
