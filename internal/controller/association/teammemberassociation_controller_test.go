@@ -356,7 +356,7 @@ var _ = Describe("TeamMemberAssociation Controller", func() {
 			})
 
 			// HandleErrorRetryable sets a requeue but returns nil error
-			Expect(err).To(BeNil())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(result.RequeueAfter).To(BeNumerically(">", 0))
 
 			// Create a Team with "not ready" condition

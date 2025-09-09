@@ -39,14 +39,13 @@ import (
 
 // mockLitellmVirtualKeyClient implements the LitellmVirtualKey interface for testing
 type mockLitellmVirtualKeyClient struct {
-	virtualKeys      map[string]*litellm.VirtualKeyResponse
-	createError      error
-	updateError      error
-	deleteError      error
-	getError         error
-	checkExistsError error
-	keyExists        bool
-	updateNeeded     bool
+	virtualKeys  map[string]*litellm.VirtualKeyResponse
+	createError  error
+	updateError  error
+	deleteError  error
+	getError     error
+	keyExists    bool
+	updateNeeded bool
 }
 
 func newMockLitellmVirtualKeyClient() *mockLitellmVirtualKeyClient {
