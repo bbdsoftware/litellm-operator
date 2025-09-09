@@ -90,7 +90,7 @@ jobs:
 
     - uses: actions/setup-go@v6
       with:
-        go-version: '1.21'
+        go-version: '1.24'
 
     - name: Set up Kind cluster
       uses: helm/kind-action@v1
@@ -151,7 +151,7 @@ jobs:
 
     - uses: actions/setup-go@v6
       with:
-        go-version: '1.21'
+        go-version: '1.24'
         cache: true
 
     - name: Set up Docker Buildx
