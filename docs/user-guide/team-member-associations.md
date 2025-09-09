@@ -67,8 +67,8 @@ spec:
 | `role` | string | User role within the team (admin, member) | Yes |
 | `teamAlias` | string | Team identifier to associate with | Yes |
 | `userEmail` | string | User's email address | Yes |
-| `teamRef` | object | Reference to an existing `Team` resource (name + optional namespace). Use instead of `teamAlias`. | yes |
-| `userRef` | object | Reference to an existing `User` resource (name + optional namespace). Use instead of `userEmail`. | yes |
+| `teamRef` | object | Reference to an existing `Team` resource  | yes |
+| `userRef` | object | Reference to an existing `User` resource  | yes |
 
 ## Managing Team Member Associations
 
