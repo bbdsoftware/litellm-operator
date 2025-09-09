@@ -119,12 +119,6 @@ spec:
                 - admin
                 - user
                 type: string
-              teamAlias:
-                description: TeamID is the ID of the team
-                type: string
-                x-kubernetes-validations:
-                - message: TeamAlias is immutable
-                  rule: self == oldSelf
               teamRef:
                 description: TeamRef is a reference to the team
                 properties:
@@ -133,12 +127,6 @@ spec:
                   namespace:
                     type: string
                 type: object
-              userEmail:
-                description: UserEmail is the email of the user
-                type: string
-                x-kubernetes-validations:
-                - message: UserEmail is immutable
-                  rule: self == oldSelf
               userRef:
                 description: UserRef is a reference to the user
                 properties:
@@ -150,9 +138,7 @@ spec:
             required:
             - connectionRef
             - role
-            - teamAlias
             - teamRef
-            - userEmail
             - userRef
             type: object
           status:

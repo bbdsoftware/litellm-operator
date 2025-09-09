@@ -19,7 +19,6 @@ package association
 import (
 	"context"
 	"errors"
-	"fmt"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -164,12 +163,15 @@ var _ = Describe("TeamMemberAssociation Controller", func() {
 				expectedConditionStatus metav1.ConditionStatus,
 				expectedConditionReason string,
 			) {
-				// Setup existing member if specified
+				// Setup existing member if specified. Resolve teamAlias from the referenced Team
 				if existingMember != nil {
-					if mockClient.associations[existingAssociation.Spec.TeamAlias] == nil {
-						mockClient.associations[existingAssociation.Spec.TeamAlias] = make(map[string]*litellm.TeamMemberWithRole)
+					teamObj := &authv1alpha1.Team{}
+					_ = reconciler.Get(context.Background(), types.NamespacedName{Name: existingAssociation.Spec.TeamRef.Name, Namespace: existingAssociation.Namespace}, teamObj)
+					teamAlias := teamObj.Spec.TeamAlias
+					if mockClient.associations[teamAlias] == nil {
+						mockClient.associations[teamAlias] = make(map[string]*litellm.TeamMemberWithRole)
 					}
-					mockClient.associations[existingAssociation.Spec.TeamAlias][existingMember.UserEmail] = existingMember
+					mockClient.associations[teamAlias][existingMember.UserEmail] = existingMember
 				}
 
 				// Setup error conditions
@@ -243,8 +245,8 @@ var _ = Describe("TeamMemberAssociation Controller", func() {
 				"user already correctly in team",
 				createTestTeamMemberAssociation("test-association"),
 				&litellm.TeamMemberWithRole{
-					UserID:    "user-test-association@example.com",
-					UserEmail: "test-association@example.com",
+					UserID:    "user-test@example.com",
+					UserEmail: "test@example.com",
 					Role:      "user",
 				},
 				nil, // No create error
@@ -275,9 +277,7 @@ var _ = Describe("TeamMemberAssociation Controller", func() {
 					Finalizers: []string{util.FinalizerName},
 				},
 				Spec: authv1alpha1.TeamMemberAssociationSpec{
-					TeamAlias: "test-team",
-					UserEmail: "test@example.com",
-					Role:      "user",
+					Role: "user",
 					TeamRef: authv1alpha1.CRDRef{
 						Name:      "test-team",
 						Namespace: "default",
@@ -550,8 +550,6 @@ var _ = Describe("TeamMemberAssociation Controller", func() {
 		It("should map associations by UserRef", func() {
 			// Create association
 			association := createTestTeamMemberAssociation("user-ref-map-test")
-			// Update email to match test-user
-			association.Spec.UserEmail = "test@example.com" // Must match the email in the test-user
 			err := reconciler.Create(context.Background(), association)
 			Expect(err).NotTo(HaveOccurred())
 
@@ -635,31 +633,8 @@ var _ = Describe("TeamMemberAssociation Controller", func() {
 				}
 			}
 
-			// Should not be found because the TeamAlias no longer matches
-			Expect(found).To(BeFalse(), "Association should not be reconciled as TeamAlias doesn't match anymore")
-
-			// Now update the association to use the new alias
-			updatedAssociation := &authv1alpha1.TeamMemberAssociation{}
-			err = reconciler.Get(context.Background(), types.NamespacedName{
-				Name:      association.Name,
-				Namespace: association.Namespace,
-			}, updatedAssociation)
-			Expect(err).NotTo(HaveOccurred())
-
-			updatedAssociation.Spec.TeamAlias = "updated-team-alias"
-			err = reconciler.Update(context.Background(), updatedAssociation)
-			Expect(err).NotTo(HaveOccurred())
-
-			// Now the mapTeamToAssociations should return our request
-			requests = reconciler.mapTeamToAssociations(team)
-			found = false
-			for _, req := range requests {
-				if req.Name == expectedRequest.Name && req.Namespace == expectedRequest.Namespace {
-					found = true
-					break
-				}
-			}
-			Expect(found).To(BeTrue(), "Association should be reconciled as TeamAlias now matches")
+			// The association should still be found because mapping uses TeamRef.Name (not TeamAlias)
+			Expect(found).To(BeTrue(), "Association should be found when mapping by team even after TeamAlias changes")
 		})
 
 		It("should reconcile when User is updated", func() {
@@ -710,31 +685,8 @@ var _ = Describe("TeamMemberAssociation Controller", func() {
 				}
 			}
 
-			// Should not be found because the UserEmail no longer matches
-			Expect(found).To(BeFalse(), "Association should not be reconciled as UserEmail doesn't match anymore")
-
-			// Now update the association to use the new email
-			updatedAssociation := &authv1alpha1.TeamMemberAssociation{}
-			err = reconciler.Get(context.Background(), types.NamespacedName{
-				Name:      association.Name,
-				Namespace: association.Namespace,
-			}, updatedAssociation)
-			Expect(err).NotTo(HaveOccurred())
-
-			updatedAssociation.Spec.UserEmail = "updated-user@example.com"
-			err = reconciler.Update(context.Background(), updatedAssociation)
-			Expect(err).NotTo(HaveOccurred())
-
-			// Now the mapUserToAssociations should return our request
-			requests = reconciler.mapUserToAssociations(user)
-			found = false
-			for _, req := range requests {
-				if req.Name == expectedRequest.Name && req.Namespace == expectedRequest.Namespace {
-					found = true
-					break
-				}
-			}
-			Expect(found).To(BeTrue(), "Association should be reconciled as UserEmail now matches")
+			// The association should still be found because mapping uses UserRef.Name (not UserEmail)
+			Expect(found).To(BeTrue(), "Association should be found when mapping by user even after UserEmail changes")
 		})
 	})
 })
@@ -816,9 +768,7 @@ func createTestTeamMemberAssociation(name string) *authv1alpha1.TeamMemberAssoci
 			Generation: 1,
 		},
 		Spec: authv1alpha1.TeamMemberAssociationSpec{
-			TeamAlias: "test-team",
-			UserEmail: fmt.Sprintf("%s@example.com", name),
-			Role:      "user",
+			Role: "user",
 			TeamRef: authv1alpha1.CRDRef{
 				Name:      "test-team",
 				Namespace: testNamespace,

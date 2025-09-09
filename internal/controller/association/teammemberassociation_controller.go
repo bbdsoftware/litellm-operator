@@ -220,10 +220,13 @@ func (r *TeamMemberAssociationReconciler) ensureExternal(ctx context.Context, te
 		// Continue despite status update failure
 	}
 
-	// Use team alias from spec, not status
-	teamAlias := teamMemberAssociation.Spec.TeamAlias
-
 	// Validate team existence
+	team := &authv1alpha1.Team{}
+	if err := r.Client.Get(ctx, client.ObjectKey{Namespace: teamMemberAssociation.Namespace, Name: teamMemberAssociation.Spec.TeamRef.Name}, team); err != nil {
+		log.Error(err, "Failed to get referenced Team", "teamRef", teamMemberAssociation.Spec.TeamRef.Name)
+		return r.HandleErrorRetryable(ctx, teamMemberAssociation, err, base.ReasonConfigError)
+	}
+	teamAlias := team.Spec.TeamAlias
 	teamID, err := r.LitellmClient.GetTeamID(ctx, teamAlias)
 	if err != nil {
 		log.Error(err, "Failed to validate team existence", "teamAlias", teamAlias)
@@ -238,15 +241,22 @@ func (r *TeamMemberAssociationReconciler) ensureExternal(ctx context.Context, te
 	}
 
 	// Check if user is already correctly in team
-	if r.isUserCorrectlyInTeam(teamResponse, teamMemberAssociation) {
-		log.V(1).Info("User is already correctly associated with team", "userEmail", teamMemberAssociation.Spec.UserEmail, "teamAlias", teamAlias)
+	user := &authv1alpha1.User{}
+	if err := r.Client.Get(ctx, client.ObjectKey{Namespace: teamMemberAssociation.Namespace, Name: teamMemberAssociation.Spec.UserRef.Name}, user); err != nil {
+		log.Error(err, "Failed to get referenced User", "userRef", teamMemberAssociation.Spec.UserRef.Name)
+		return r.HandleErrorRetryable(ctx, teamMemberAssociation, err, base.ReasonConfigError)
+	}
+	userEmail := user.Spec.UserEmail
+
+	if r.isUserCorrectlyInTeam(teamResponse, teamMemberAssociation, userEmail) {
+		log.V(1).Info("User is already correctly associated with team", "userEmail", userEmail, "teamAlias", teamAlias)
 		// Update status with current state
 		externalData.TeamAlias = teamAlias
 		externalData.TeamID = teamID
-		externalData.UserEmail = teamMemberAssociation.Spec.UserEmail
+		externalData.UserEmail = userEmail
 		// Find user ID from team members
 		for _, member := range teamResponse.MembersWithRole {
-			if member.UserEmail == teamMemberAssociation.Spec.UserEmail {
+			if member.UserEmail == userEmail {
 				externalData.UserID = member.UserID
 				break
 			}
@@ -260,9 +270,9 @@ func (r *TeamMemberAssociationReconciler) ensureExternal(ctx context.Context, te
 	}
 
 	// Create or update the association
-	log.Info("Creating team member association in LiteLLM", "userEmail", teamMemberAssociation.Spec.UserEmail, "teamAlias", teamAlias)
+	log.Info("Creating team member association in LiteLLM", "userEmail", userEmail, "teamAlias", teamAlias)
 
-	associationRequest, err := r.convertToTeamMemberAssociationRequest(teamMemberAssociation)
+	associationRequest, err := r.convertToTeamMemberAssociationRequest(teamMemberAssociation, userEmail, teamAlias)
 	if err != nil {
 		log.Error(err, "Failed to create team member association request")
 		return r.HandleErrorRetryable(ctx, teamMemberAssociation, err, base.ReasonInvalidSpec)
@@ -284,14 +294,14 @@ func (r *TeamMemberAssociationReconciler) ensureExternal(ctx context.Context, te
 		log.Error(err, "Failed to update status after creation")
 		return r.HandleErrorRetryable(ctx, teamMemberAssociation, err, base.ReasonReconcileError)
 	}
-	log.Info("Successfully created team member association in LiteLLM", "userEmail", teamMemberAssociation.Spec.UserEmail, "teamAlias", teamAlias)
+	log.Info("Successfully created team member association in LiteLLM", "userEmail", userEmail, "teamAlias", teamAlias)
 	return ctrl.Result{}, nil
 }
 
 // isUserCorrectlyInTeam checks if the User is already in the Team with the correct role
-func (r *TeamMemberAssociationReconciler) isUserCorrectlyInTeam(teamResponse litellm.TeamResponse, teamMemberAssociation *authv1alpha1.TeamMemberAssociation) bool {
+func (r *TeamMemberAssociationReconciler) isUserCorrectlyInTeam(teamResponse litellm.TeamResponse, teamMemberAssociation *authv1alpha1.TeamMemberAssociation, userEmail string) bool {
 	for _, member := range teamResponse.MembersWithRole {
-		if member.UserEmail == teamMemberAssociation.Spec.UserEmail {
+		if member.UserEmail == userEmail {
 			return member.Role == teamMemberAssociation.Spec.Role
 		}
 	}
@@ -299,10 +309,10 @@ func (r *TeamMemberAssociationReconciler) isUserCorrectlyInTeam(teamResponse lit
 }
 
 // convertToTeamMemberAssociationRequest creates a TeamMemberAssociationRequest from a TeamMemberAssociation (isolated for testing)
-func (r *TeamMemberAssociationReconciler) convertToTeamMemberAssociationRequest(teamMemberAssociation *authv1alpha1.TeamMemberAssociation) (litellm.TeamMemberAssociationRequest, error) {
+func (r *TeamMemberAssociationReconciler) convertToTeamMemberAssociationRequest(teamMemberAssociation *authv1alpha1.TeamMemberAssociation, userEmail string, teamAlias string) (litellm.TeamMemberAssociationRequest, error) {
 	teamMemberAssociationRequest := litellm.TeamMemberAssociationRequest{
-		TeamAlias: teamMemberAssociation.Spec.TeamAlias,
-		UserEmail: teamMemberAssociation.Spec.UserEmail,
+		TeamAlias: teamAlias,
+		UserEmail: userEmail,
 		Role:      teamMemberAssociation.Spec.Role,
 	}
 
@@ -330,10 +340,17 @@ func (r *TeamMemberAssociationReconciler) mapUserToAssociations(obj client.Objec
 
 	// Find associations that reference this user
 	for _, assoc := range assocList.Items {
-		if assoc.Spec.UserEmail == user.Spec.UserEmail {
-			requests = append(requests, reconcile.Request{
-				NamespacedName: client.ObjectKey{Name: assoc.Name, Namespace: assoc.Namespace},
-			})
+		// Match by userRef if present (name required, namespace optional)
+		if assoc.Spec.UserRef.Name != "" {
+			if assoc.Spec.UserRef.Name == user.Name {
+				// If the association omits a namespace, treat it as same-namespace as the association
+				if assoc.Spec.UserRef.Namespace == "" || assoc.Spec.UserRef.Namespace == user.Namespace {
+					requests = append(requests, reconcile.Request{
+						NamespacedName: client.ObjectKey{Name: assoc.Name, Namespace: assoc.Namespace},
+					})
+					continue
+				}
+			}
 		}
 	}
 	return requests
@@ -351,10 +368,16 @@ func (r *TeamMemberAssociationReconciler) mapTeamToAssociations(obj client.Objec
 
 	// Find associations that reference this team
 	for _, assoc := range assocList.Items {
-		if assoc.Spec.TeamAlias == team.Spec.TeamAlias {
-			requests = append(requests, reconcile.Request{
-				NamespacedName: client.ObjectKey{Name: assoc.Name, Namespace: assoc.Namespace},
-			})
+		// Match by teamRef if present
+		if assoc.Spec.TeamRef.Name != "" {
+			if assoc.Spec.TeamRef.Name == team.Name {
+				if assoc.Spec.TeamRef.Namespace == "" || assoc.Spec.TeamRef.Namespace == team.Namespace {
+					requests = append(requests, reconcile.Request{
+						NamespacedName: client.ObjectKey{Name: assoc.Name, Namespace: assoc.Namespace},
+					})
+					continue
+				}
+			}
 		}
 	}
 	return requests

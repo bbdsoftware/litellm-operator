@@ -9,8 +9,6 @@ spec:
       name: litellm-example
       namespace: litellm
   role: user
-  teamAlias: ai-team
-  userEmail: alice@example.com
   teamRef:
     name: ai-team
     namespace: litellm

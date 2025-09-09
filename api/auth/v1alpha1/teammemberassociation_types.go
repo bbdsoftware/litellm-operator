@@ -34,15 +34,6 @@ type TeamMemberAssociationSpec struct {
 
 	// MaxBudgetInTeam is the maximum budget for the user in the team
 	MaxBudgetInTeam string `json:"maxBudgetInTeam,omitempty"`
-	// TeamID is the ID of the team
-	// +kubebuilder:validation:Required
-	// +kubebuilder:validation:XValidation:rule="self == oldSelf",message="TeamAlias is immutable"
-	TeamAlias string `json:"teamAlias,omitempty"`
-
-	// UserEmail is the email of the user
-	// +kubebuilder:validation:Required
-	// +kubebuilder:validation:XValidation:rule="self == oldSelf",message="UserEmail is immutable"
-	UserEmail string `json:"userEmail,omitempty"`
 	// Role is the role of the user - one of "admin" or "user"
 	// +kubebuilder:validation:Required
 	// +kubebuilder:validation:Enum=admin;user
