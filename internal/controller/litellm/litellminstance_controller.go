@@ -33,9 +33,11 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
 	litellmv1alpha1 "github.com/bbdsoftware/litellm-operator/api/litellm/v1alpha1"
+	"github.com/bbdsoftware/litellm-operator/internal/controller/base"
 	"github.com/bbdsoftware/litellm-operator/internal/controller/common"
 	"github.com/bbdsoftware/litellm-operator/internal/util"
 	"github.com/google/uuid"
@@ -80,8 +82,7 @@ func RequeueAfter(duration time.Duration) (ctrl.Result, error) {
 // to run a LiteLLM proxy instance, including ConfigMaps, Secrets, Deployments,
 // Services, and optionally Ingress resources.
 type LiteLLMInstanceReconciler struct {
-	client.Client
-	Scheme                *runtime.Scheme
+	*base.BaseController[*litellmv1alpha1.LiteLLMInstance]
 	litellmResourceNaming *util.LitellmResourceNaming
 }
 
@@ -148,6 +149,16 @@ type ProxyConfig struct {
 	} `yaml:"general_settings"`
 }
 
+func NewLiteLLMInstanceReconciler(c client.Client, scheme *runtime.Scheme) *LiteLLMInstanceReconciler {
+	return &LiteLLMInstanceReconciler{
+		BaseController: &base.BaseController[*litellmv1alpha1.LiteLLMInstance]{
+			Client:         c,
+			Scheme:         scheme,
+			DefaultTimeout: 20 * time.Second,
+		},
+	}
+}
+
 // +kubebuilder:rbac:groups=litellm.litellm.ai,resources=litellminstances,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=litellm.litellm.ai,resources=litellminstances/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=litellm.litellm.ai,resources=litellminstances/finalizers,verbs=update
@@ -166,86 +177,47 @@ type ProxyConfig struct {
 func (r *LiteLLMInstanceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := logf.FromContext(ctx)
 
-	// Fetch the LiteLLMInstance
+	//Phase 1: Fetch and validate the resource
 	llm := &litellmv1alpha1.LiteLLMInstance{}
-	if err := r.Get(ctx, req.NamespacedName, llm); err != nil {
-		return RequeueWithError(client.IgnoreNotFound(err))
+	llm, err := r.FetchResource(ctx, req.NamespacedName, llm)
+	if err != nil {
+		log.Error(err, "Failed to get LiteLLMInstance")
+		return ctrl.Result{}, err
+	}
+	if llm == nil {
+		return ctrl.Result{}, nil
 	}
 
 	log.Info("Reconciling external LiteLLM instance resource", "litellmInstance", llm.Name) // Add timeout to avoid long-running reconciliation
 
-	if r.litellmResourceNaming == nil {
-		r.litellmResourceNaming = util.NewLitellmResourceNaming(llm.Name)
+	//Phase 2: Setup connections and clients
+	if err := r.ensureConnectionSetup(ctx, llm); err != nil {
+		log.Error(err, "Failed to setup connections")
+		return r.HandleErrorRetryable(ctx, llm, err, base.ReasonConnectionError)
 	}
 
-	if r.litellmResourceNaming == nil {
-		r.litellmResourceNaming = util.NewLitellmResourceNaming(llm.Name)
-	}
-
-	// Check if the instance is being deleted
+	// Phase 3: Handle deletion if resource is being deleted
 	if llm.DeletionTimestamp != nil {
 		return r.handleDeletion(ctx, llm)
 	}
 
-	// Add finalizer if it doesn't exist
-	if !util.ContainsString(llm.Finalizers, FinalizerName) {
-		llm.Finalizers = append(llm.Finalizers, FinalizerName)
-		if err := r.Update(ctx, llm); err != nil {
-			return RequeueWithError(err)
-		}
+	// Phase 4: Ensure finalizer
+	if err := r.AddFinalizer(ctx, llm, FinalizerName); err != nil {
+		return ctrl.Result{}, nil
 	}
 
-	_, err := validateModelListForDuplicates(llm)
-	if err != nil {
-		log.Error(err, "LLM Instance modelList is not valid")
-		return ctrl.Result{}, err
+	// Phase 5 : Ensure external resource (create/patch/repair drift)
+	if res, err := r.ensureExternal(ctx, llm); err != nil {
+		return res, err
 	}
 
-	// Create or update resources
-	configMap, err := r.createConfigMap(ctx, llm)
-	if err != nil {
-		log.Error(err, "Failed to create or update ConfigMap")
-		return util.HandleConflictError(err)
+	// Phase 6 : Ensure in-cluster children (owned -> GC on delete)
+	if err := r.ensureChildren(ctx, llm); err != nil {
+		return r.HandleCommonErrors(ctx, llm, err)
+
 	}
 
-	secret, err := r.createMasterKeySecret(ctx, llm)
-	if err != nil {
-		log.Error(err, "Failed to create or update Secret")
-		return util.HandleConflictError(err)
-	}
-
-	// Create ServiceAccount for the LiteLLM instance
-	serviceAccount, err := r.createServiceAccount(ctx, llm)
-	if err != nil {
-		log.Error(err, "Failed to create or update ServiceAccount")
-		return util.HandleConflictError(err)
-	}
-
-	// Create Role and RoleBinding for the ServiceAccount
-	if err := r.createRBAC(ctx, llm, serviceAccount); err != nil {
-		log.Error(err, "Failed to create RBAC resources")
-		return util.HandleConflictError(err)
-	}
-
-	deployment, err := r.createDeployment(ctx, llm, configMap, secret, serviceAccount)
-	if err != nil {
-		log.Error(err, "Failed to create or update Deployment")
-		return util.HandleConflictError(err)
-	}
-
-	service, err := r.createService(ctx, llm)
-	if err != nil {
-		log.Error(err, "Failed to create or update Service")
-		return util.HandleConflictError(err)
-	}
-
-	if llm.Spec.Ingress.Enabled {
-		if err := r.createIngress(ctx, llm); err != nil {
-			log.Error(err, "Failed to create or update Ingress")
-			return util.HandleConflictError(err)
-		}
-	}
-
+	// TODO : split allReady check to its own method
 	// Update status to reflect successful reconciliation
 	allReady, err := r.updateStatus(ctx, llm, deployment, service)
 	if err != nil {
@@ -263,26 +235,105 @@ func (r *LiteLLMInstanceReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	return DoNotRequeue()
 }
 
+func (r *LiteLLMInstanceReconciler) ensureConnectionSetup(ctx context.Context, llm *litellmv1alpha1.LiteLLMInstance) error {
+	// Setup connections and clients
+	if r.litellmResourceNaming == nil {
+		r.litellmResourceNaming = util.NewLitellmResourceNaming(llm.Name)
+	}
+
+	return nil
+}
+
+func (r *LiteLLMInstanceReconciler) ensureExternal(ctx context.Context, llm *litellmv1alpha1.LiteLLMInstance) (ctrl.Result, error) {
+	// Validate model list for duplicates
+	_, err := validateModelListForDuplicates(llm.Spec.Models)
+	if err != nil {
+		return r.HandleErrorFinal(ctx, llm, err, "LLM Instance Spec is invalid")
+	}
+
+	return ctrl.Result{}, nil
+}
+
+func (r *LiteLLMInstanceReconciler) ensureChildren(ctx context.Context, llm *litellmv1alpha1.LiteLLMInstance) error {
+	log := logf.FromContext(ctx)
+
+	//Create or update ConfigMap
+	configMap, err := r.createConfigMap(ctx, llm)
+	if err != nil {
+		log.Error(err, "Failed to create or update ConfigMap")
+		return err
+	}
+
+	//create Master key
+	secret, err := r.createMasterKeySecret(ctx, llm)
+	if err != nil {
+		log.Error(err, "Failed to create or update Secret")
+		return err
+	}
+
+	// Create ServiceAccount for the LiteLLM instance
+	serviceAccount, err := r.createServiceAccount(ctx, llm)
+	if err != nil {
+		log.Error(err, "Failed to create or update ServiceAccount")
+		return err
+	}
+
+	// Create Role and RoleBinding for the ServiceAccount
+	if err := r.createRBAC(ctx, llm, serviceAccount); err != nil {
+		log.Error(err, "Failed to create RBAC resources")
+		return err
+	}
+
+	_, err = r.createDeployment(ctx, llm, configMap, secret, serviceAccount)
+	if err != nil {
+		log.Error(err, "Failed to create or update Deployment")
+		return err
+	}
+
+	_, err = r.createService(ctx, llm)
+	if err != nil {
+		log.Error(err, "Failed to create or update Service")
+		return err
+	}
+
+	if llm.Spec.Ingress.Enabled {
+		if err := r.createIngress(ctx, llm); err != nil {
+			log.Error(err, "Failed to create or update Ingress")
+			return err
+		}
+	}
+
+	return nil
+}
+
 // handleDeletion removes the finalizer to allow the resource to be fully deleted.
 func (r *LiteLLMInstanceReconciler) handleDeletion(ctx context.Context, llm *litellmv1alpha1.LiteLLMInstance) (ctrl.Result, error) {
 	log := logf.FromContext(ctx)
 
-	// Remove finalizer if it exists
-	if util.ContainsString(llm.Finalizers, FinalizerName) {
-		llm.Finalizers = util.RemoveString(llm.Finalizers, FinalizerName)
-		if err := r.Update(ctx, llm); err != nil {
-			return RequeueWithError(err)
-		}
+	if !r.HasFinalizer(llm, FinalizerName) {
+		return ctrl.Result{}, nil
 	}
 
-	log.Info("LiteLLMInstance deletion completed", "name", llm.Name, "namespace", llm.Namespace)
-	return DoNotRequeue()
+	r.SetCondition(llm, base.CondReady, metav1.ConditionFalse, base.ReasonDeleting, "LiteLLM Instance is being deleted")
+	if err := r.PatchStatus(ctx, llm); err != nil {
+		log.Error(err, "Failed to update status during deletion")
+
+	}
+
+	// Remove finalizer if it exists
+	if err := r.RemoveFinalizer(ctx, llm, FinalizerName); err != nil {
+		log.Error(err, "Failed to remove finalizer during deletion")
+		return r.HandleErrorRetryable(ctx, llm, err, base.ReasonDeleteFailed)
+	}
+
+	log.Info("LiteLLMInstance successfully deleted", "name", llm.Name, "namespace", llm.Namespace)
+	return ctrl.Result{}, nil
 }
 
-func validateModelListForDuplicates(llm *litellmv1alpha1.LiteLLMInstance) (bool, error) {
+func validateModelListForDuplicates(llmModelList []litellmv1alpha1.InitModelInstance) (bool, error) {
 	seen := make(map[string]bool)
 
-	for _, model := range llm.Spec.Models {
+	for _, model := range llmModelList {
 		if seen[model.Identifier] {
 			err := fmt.Errorf("LLM Instance model list contains duplicate identifiers %s", model.Identifier)
 			return false, err
@@ -729,6 +780,19 @@ func (r *LiteLLMInstanceReconciler) createConfigMap(ctx context.Context, llm *li
 		}
 	}
 
+	// set controller reference for garbage collection
+	if err := controllerutil.SetControllerReference(llm, configMap, r.Scheme); err != nil {
+		log.Error(err, "Failed to set controller reference on ConfigMap")
+		return nil, err
+	}
+
+	// set ConfigMapCreated status
+	llm.Status.ConfigMapCreated = true
+	if err := r.Status().Update(ctx, llm); err != nil {
+		log.Error(err, "Failed to update status after creating ConfigMap")
+		return nil, err
+	}
+
 	return configMap, nil
 }
 
@@ -791,7 +855,24 @@ func (r *LiteLLMInstanceReconciler) createMasterKeySecret(ctx context.Context, l
 
 	data := buildSecretData(llm.Spec.MasterKey, existingSecret)
 
-	return createSecret(ctx, r.Client, r.Scheme, secretName, llm.Namespace, data, llm)
+	secret, err := createSecret(ctx, r.Client, r.Scheme, secretName, llm.Namespace, data, llm)
+	if err != nil {
+		return nil, err
+	}
+
+	// set owner reference
+	if err = controllerutil.SetControllerReference(llm, secret, r.Scheme); err != nil {
+		return nil, err
+	}
+
+	// set SecretCreated status
+	llm.Status.SecretCreated = true
+	if err := r.Status().Update(ctx, llm); err != nil {
+		logf.FromContext(ctx).Error(err, "Failed to update status after creating Secret")
+		return nil, err
+	}
+
+	return secret, nil
 }
 
 func createSecret(ctx context.Context, k8sClient client.Client, scheme *runtime.Scheme, name string, namespace string, data map[string][]byte, owner client.Object) (*corev1.Secret, error) {
@@ -858,12 +939,21 @@ func (r *LiteLLMInstanceReconciler) createDeployment(ctx context.Context, llm *l
 		return nil, err
 	}
 
+	// set deployment status
+	llm.Status.DeploymentCreated = true
+	if err := r.Status().Update(ctx, llm); err != nil {
+		log.Error(err, "Failed to update status after creating ConfigMap")
+		return nil, err
+	}
+
 	return deployment, nil
 }
 
 // createService creates or updates the Service for the LiteLLM instance.
 // It creates a Service that exposes the LiteLLM proxy on port 80.
 func (r *LiteLLMInstanceReconciler) createService(ctx context.Context, llm *litellmv1alpha1.LiteLLMInstance) (*corev1.Service, error) {
+	log := logf.FromContext(ctx)
+
 	service := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      r.litellmResourceNaming.GetServiceName(),
@@ -885,6 +975,12 @@ func (r *LiteLLMInstanceReconciler) createService(ctx context.Context, llm *lite
 	}
 
 	if _, err := util.CreateOrUpdateWithRetry(ctx, r.Client, r.Scheme, service, llm); err != nil {
+		return nil, err
+	}
+
+	llm.Status.ServiceCreated = true
+	if err := r.Status().Update(ctx, llm); err != nil {
+		log.Error(err, "Failed to update status after creating Service")
 		return nil, err
 	}
 
@@ -963,6 +1059,7 @@ func (r *LiteLLMInstanceReconciler) createRBAC(ctx context.Context, llm *litellm
 // createIngress creates or updates the Ingress for the LiteLLM instance.
 // It creates an Ingress resource to expose the LiteLLM proxy externally when enabled.
 func (r *LiteLLMInstanceReconciler) createIngress(ctx context.Context, llm *litellmv1alpha1.LiteLLMInstance) error {
+	log := logf.FromContext(ctx)
 	ingress := &networkingv1.Ingress{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      r.litellmResourceNaming.GetIngressName(),
@@ -981,6 +1078,11 @@ func (r *LiteLLMInstanceReconciler) createIngress(ctx context.Context, llm *lite
 		return err
 	}
 
+	llm.Status.IngressCreated = true
+	if err := r.Status().Update(ctx, llm); err != nil {
+		log.Error(err, "Failed to update status after creating Ingress")
+		return err
+	}
 	return nil
 }
 

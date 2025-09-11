@@ -51,6 +51,7 @@ const (
 	ReasonDependencyNotReady  = "DependencyNotReady"
 	ReasonReconcileError      = "ReconcileError"
 	ReasonReady               = "Ready"
+	ReasonDeleting            = "Deleting"
 	ReasonDeleted             = "Deleted"
 	ReasonConnectionError     = "ConnectionError"
 	ReasonDeleteFailed        = "DeleteFailed"

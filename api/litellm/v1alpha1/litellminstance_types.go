@@ -140,6 +140,16 @@ type LiteLLMInstanceList struct {
 	Items           []LiteLLMInstance `json:"items"`
 }
 
+// GetConditions returns the conditions slice
+func (m *LiteLLMInstance) GetConditions() []metav1.Condition {
+	return m.Status.Conditions
+}
+
+// SetConditions sets the conditions slice
+func (m *LiteLLMInstance) SetConditions(conditions []metav1.Condition) {
+	m.Status.Conditions = conditions
+}
+
 func init() {
 	SchemeBuilder.Register(&LiteLLMInstance{}, &LiteLLMInstanceList{})
 }
