@@ -14,7 +14,7 @@ controllerManager:
         - ALL
     image:
       repository: ghcr.io/bbdsoftware/litellm-operator
-      tag: 0.3.0-rc
+      tag: 0.4.1-rc
     resources:
       limits:
         cpu: 500m

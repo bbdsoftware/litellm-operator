@@ -299,6 +299,12 @@ spec:
                 items:
                   type: string
                 type: array
+              observedGeneration:
+                description: |-
+                  ObservedGeneration is the most recent generation observed for this Team. It corresponds to the
+                  Team's generation, which is updated on mutation by the API Server.
+                format: int64
+                type: integer
               organizationID:
                 description: OrganizationID is the ID of the organization that the
                   team belongs to
