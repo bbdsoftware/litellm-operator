@@ -30,6 +30,8 @@ import (
 
 	"gopkg.in/yaml.v2"
 
+	"k8s.io/apimachinery/pkg/api/equality"
+	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -50,10 +52,6 @@ import (
 )
 
 const (
-	// FinalizerName is the name of the finalizer added to LiteLLMInstance
-	// resources to ensure proper cleanup when the resource is deleted.
-	FinalizerName = "litellm.litellm.ai/finalizer"
-
 	// Container configuration constants
 	ContainerPort = 4000                                    // Port that the LiteLLM container listens on
 	ServicePort   = 80                                      // Port that the Service exposes
@@ -63,19 +61,6 @@ const (
 	LivenessPath  = "/health/liveness"  // Path for liveness probe
 	ReadinessPath = "/health/readiness" // Path for readiness probe
 )
-
-// Helper functions for descriptive return values
-func DoNotRequeue() (ctrl.Result, error) {
-	return ctrl.Result{}, nil
-}
-
-func RequeueWithError(err error) (ctrl.Result, error) {
-	return ctrl.Result{}, err
-}
-
-func RequeueAfter(duration time.Duration) (ctrl.Result, error) {
-	return ctrl.Result{RequeueAfter: duration}, nil
-}
 
 // LiteLLMInstanceReconciler reconciles a LiteLLMInstance object.
 // It is responsible for creating and managing the Kubernetes resources required
@@ -189,20 +174,19 @@ func (r *LiteLLMInstanceReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	}
 
 	log.Info("Reconciling external LiteLLM instance resource", "litellmInstance", llm.Name) // Add timeout to avoid long-running reconciliation
-
 	//Phase 2: Setup connections and clients
-	if err := r.ensureConnectionSetup(ctx, llm); err != nil {
+	if err := r.ensureConnectionSetup(llm); err != nil {
 		log.Error(err, "Failed to setup connections")
 		return r.HandleErrorRetryable(ctx, llm, err, base.ReasonConnectionError)
 	}
 
 	// Phase 3: Handle deletion if resource is being deleted
-	if llm.DeletionTimestamp != nil {
+	if !llm.DeletionTimestamp.IsZero() {
 		return r.handleDeletion(ctx, llm)
 	}
 
 	// Phase 4: Ensure finalizer
-	if err := r.AddFinalizer(ctx, llm, FinalizerName); err != nil {
+	if err := r.AddFinalizer(ctx, llm, util.FinalizerName); err != nil {
 		return ctrl.Result{}, nil
 	}
 
@@ -212,30 +196,37 @@ func (r *LiteLLMInstanceReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	}
 
 	// Phase 6 : Ensure in-cluster children (owned -> GC on delete)
-	if err := r.ensureChildren(ctx, llm); err != nil {
+	if _, err := r.ensureChildren(ctx, llm); err != nil {
 		return r.HandleCommonErrors(ctx, llm, err)
-
 	}
 
-	// TODO : split allReady check to its own method
-	// Update status to reflect successful reconciliation
-	allReady, err := r.updateStatus(ctx, llm, deployment, service)
-	if err != nil {
-		log.Error(err, "Failed to update LiteLLMInstance status")
-		return RequeueWithError(err)
+	// Phase 7: Recalculate and persist overall status conditions (success/failure)
+	// Re-fetch latest version to avoid conflicts and apply canonical condition updates here
+	latest := &litellmv1alpha1.LiteLLMInstance{}
+	if err := r.Get(ctx, client.ObjectKey{Name: llm.Name, Namespace: llm.Namespace}, latest); err != nil {
+		log.Error(err, "Failed to get latest version for final status update")
+		return r.HandleErrorRetryable(ctx, llm, err, base.ReasonReconcileError)
 	}
 
-	// Check if all resources are ready, if not, requeue after a short delay
-	if !allReady {
-		log.Info("Resources not ready yet, requeuing", "name", llm.Name)
-		return RequeueAfter(10 * time.Second)
+	// Copy resource-created flags from the working copy (ensureChildren patched them earlier)
+	latest.Status.ConfigMapCreated = llm.Status.ConfigMapCreated
+	latest.Status.SecretCreated = llm.Status.SecretCreated
+	latest.Status.DeploymentCreated = llm.Status.DeploymentCreated
+	latest.Status.ServiceCreated = llm.Status.ServiceCreated
+	latest.Status.IngressCreated = llm.Status.IngressCreated
+
+	// Update observed generation and timestamps via updateStatus helper which also sets conditions
+	if err := r.updateStatus(ctx, latest); err != nil {
+		log.Error(err, "Failed to update status in Phase 7")
+		return r.HandleErrorRetryable(ctx, latest, err, base.ReasonReconcileError)
 	}
 
-	log.Info("Successfully reconciled LiteLLMInstance", "name", llm.Name, "namespace", llm.Namespace)
-	return DoNotRequeue()
+	log.Info("Reconciliation complete, litellmInstance is in desired state", "litellmInstance", llm.Name)
+	// Phase 8: Periodic drift sync
+	return ctrl.Result{RequeueAfter: 60 * time.Second}, nil
 }
 
-func (r *LiteLLMInstanceReconciler) ensureConnectionSetup(ctx context.Context, llm *litellmv1alpha1.LiteLLMInstance) error {
+func (r *LiteLLMInstanceReconciler) ensureConnectionSetup(llm *litellmv1alpha1.LiteLLMInstance) error {
 	// Setup connections and clients
 	if r.litellmResourceNaming == nil {
 		r.litellmResourceNaming = util.NewLitellmResourceNaming(llm.Name)
@@ -244,8 +235,40 @@ func (r *LiteLLMInstanceReconciler) ensureConnectionSetup(ctx context.Context, l
 	return nil
 }
 
+// createOrUpdateResource handles common operations for creating or updating Kubernetes resources.
+// It sets controller reference, applies the resource, and logs the operation.
+// Returns the resource and any error that occurred.
+func (r *LiteLLMInstanceReconciler) createOrUpdateResource(
+	ctx context.Context,
+	llm *litellmv1alpha1.LiteLLMInstance,
+	resource client.Object,
+	resourceType string) (client.Object, bool, error) {
+
+	log := logf.FromContext(ctx)
+
+	// Set controller reference so resource is owned and will be garbage collected
+	if err := controllerutil.SetControllerReference(llm, resource, r.Scheme); err != nil {
+		log.Error(err, "Failed to set controller reference", "resourceType", resourceType)
+		return nil, false, fmt.Errorf("failed to set controller reference on %s: %w", resourceType, err)
+	}
+
+	// Create or update the resource with retry logic
+	result, err := util.CreateOrUpdateWithRetry(ctx, r.Client, r.Scheme, resource, llm)
+	if err != nil {
+		log.Error(err, "Failed to create or update resource", "resourceType", resourceType)
+		return nil, false, fmt.Errorf("failed to create or update %s: %w", resourceType, err)
+	}
+
+	log.Info("Successfully created or updated resource",
+		"resourceType", resourceType,
+		"name", resource.GetName(),
+		"namespace", resource.GetNamespace(),
+		"operation", result)
+
+	return resource, result, nil
+}
+
 func (r *LiteLLMInstanceReconciler) ensureExternal(ctx context.Context, llm *litellmv1alpha1.LiteLLMInstance) (ctrl.Result, error) {
-	// Validate model list for duplicates
 	_, err := validateModelListForDuplicates(llm.Spec.Models)
 	if err != nil {
 		return r.HandleErrorFinal(ctx, llm, err, "LLM Instance Spec is invalid")
@@ -254,74 +277,105 @@ func (r *LiteLLMInstanceReconciler) ensureExternal(ctx context.Context, llm *lit
 	return ctrl.Result{}, nil
 }
 
-func (r *LiteLLMInstanceReconciler) ensureChildren(ctx context.Context, llm *litellmv1alpha1.LiteLLMInstance) error {
+func (r *LiteLLMInstanceReconciler) ensureChildren(ctx context.Context, llm *litellmv1alpha1.LiteLLMInstance) (ctrl.Result, error) {
 	log := logf.FromContext(ctx)
 
-	//Create or update ConfigMap
-	configMap, err := r.createConfigMap(ctx, llm)
+	_, err := r.createConfigMap(ctx, llm)
 	if err != nil {
 		log.Error(err, "Failed to create or update ConfigMap")
-		return err
+		return r.HandleErrorRetryable(ctx, llm, err, base.ReasonReconcileError)
 	}
 
-	//create Master key
-	secret, err := r.createMasterKeySecret(ctx, llm)
+	_, err = r.createMasterKeySecret(ctx, llm)
 	if err != nil {
 		log.Error(err, "Failed to create or update Secret")
-		return err
+		return r.HandleErrorRetryable(ctx, llm, err, base.ReasonReconcileError)
 	}
 
-	// Create ServiceAccount for the LiteLLM instance
-	serviceAccount, err := r.createServiceAccount(ctx, llm)
+	_, err = r.createServiceAccount(ctx, llm)
 	if err != nil {
 		log.Error(err, "Failed to create or update ServiceAccount")
-		return err
+		return r.HandleErrorRetryable(ctx, llm, err, base.ReasonReconcileError)
 	}
 
-	// Create Role and RoleBinding for the ServiceAccount
-	if err := r.createRBAC(ctx, llm, serviceAccount); err != nil {
+	if err := r.createRBAC(ctx, llm); err != nil {
 		log.Error(err, "Failed to create RBAC resources")
-		return err
+		return r.HandleErrorRetryable(ctx, llm, err, base.ReasonReconcileError)
 	}
 
-	_, err = r.createDeployment(ctx, llm, configMap, secret, serviceAccount)
+	_, err = r.createDeployment(ctx, llm)
 	if err != nil {
 		log.Error(err, "Failed to create or update Deployment")
-		return err
+		return r.HandleErrorRetryable(ctx, llm, err, base.ReasonReconcileError)
 	}
 
 	_, err = r.createService(ctx, llm)
 	if err != nil {
 		log.Error(err, "Failed to create or update Service")
-		return err
+		return r.HandleErrorRetryable(ctx, llm, err, base.ReasonReconcileError)
 	}
 
 	if llm.Spec.Ingress.Enabled {
 		if err := r.createIngress(ctx, llm); err != nil {
 			log.Error(err, "Failed to create or update Ingress")
-			return err
+			return r.HandleErrorRetryable(ctx, llm, err, base.ReasonReconcileError)
 		}
 	}
 
-	return nil
+	// Before updating status, get the latest version of the resource to avoid conflicts
+	latest := &litellmv1alpha1.LiteLLMInstance{}
+	if err := r.Get(ctx, client.ObjectKey{Name: llm.Name, Namespace: llm.Namespace}, latest); err != nil {
+		log.Error(err, "Failed to get latest version of resource before updating status")
+		return r.HandleErrorRetryable(ctx, llm, err, base.ReasonReconcileError)
+	}
+
+	// Copy only the resource-created flags from our working copy to the latest version
+	// We persist these booleans but we avoid computing/updating overall conditions here.
+	original := latest.DeepCopy()
+	latest.Status.ConfigMapCreated = llm.Status.ConfigMapCreated
+	latest.Status.SecretCreated = llm.Status.SecretCreated
+	latest.Status.DeploymentCreated = llm.Status.DeploymentCreated
+	latest.Status.ServiceCreated = llm.Status.ServiceCreated
+	latest.Status.IngressCreated = llm.Status.IngressCreated
+
+	// Patch only the status subresource for the updated boolean flags to avoid
+	// recalculating or setting the overall Ready condition here. Phase 7 (in Reconcile)
+	// will be responsible for setting the overall success condition and ObservedGeneration.
+	if err := r.PatchStatusFrom(ctx, original, latest); err != nil {
+		log.Error(err, "Failed to patch status booleans after ensuring children")
+		return r.HandleErrorRetryable(ctx, latest, err, base.ReasonReconcileError)
+	}
+
+	return ctrl.Result{}, nil
 }
 
 // handleDeletion removes the finalizer to allow the resource to be fully deleted.
 func (r *LiteLLMInstanceReconciler) handleDeletion(ctx context.Context, llm *litellmv1alpha1.LiteLLMInstance) (ctrl.Result, error) {
 	log := logf.FromContext(ctx)
 
-	if !r.HasFinalizer(llm, FinalizerName) {
+	if !r.HasFinalizer(llm, util.FinalizerName) {
 		return ctrl.Result{}, nil
 	}
 
-	r.SetCondition(llm, base.CondReady, metav1.ConditionFalse, base.ReasonDeleting, "LiteLLM Instance is being deleted")
-	if err := r.PatchStatus(ctx, llm); err != nil {
-		log.Error(err, "Failed to update status during deletion")
-
+	// When handling deletion, get the latest version to avoid conflicts
+	latest := &litellmv1alpha1.LiteLLMInstance{}
+	if err := r.Get(ctx, client.ObjectKey{Name: llm.Name, Namespace: llm.Namespace}, latest); err != nil {
+		if !errors.Is(err, client.IgnoreNotFound(err)) {
+			log.Error(err, "Failed to get latest version during deletion", "name", llm.Name)
+		}
+		// Continue with deletion even if we can't update the status
+	} else {
+		r.SetCondition(latest, base.CondReady, metav1.ConditionFalse, base.ReasonDeleting, "LiteLLM Instance is being deleted")
+		if err := r.Status().Update(ctx, latest); err != nil {
+			log.Error(err, "Failed to update status during deletion", "name", latest.Name)
+			// Continue with deletion even if status update fails
+		}
+		// Use the latest version for finalizer removal
+		llm = latest
 	}
 
 	// Remove finalizer if it exists
-	if err := r.RemoveFinalizer(ctx, llm, FinalizerName); err != nil {
+	if err := r.RemoveFinalizer(ctx, llm, util.FinalizerName); err != nil {
 		log.Error(err, "Failed to remove finalizer during deletion")
 		return r.HandleErrorRetryable(ctx, llm, err, base.ReasonDeleteFailed)
 	}
@@ -525,82 +579,90 @@ func buildSecretData(masterKey string, existingSecret *corev1.Secret) map[string
 // updateStatus updates the LiteLLM instance status with current information.
 // It updates observed generation, last updated timestamp, resource creation status, and conditions.
 // Returns a combined status indicating whether all resources are ready.
-func (r *LiteLLMInstanceReconciler) updateStatus(ctx context.Context, llm *litellmv1alpha1.LiteLLMInstance, deployment *appsv1.Deployment, service *corev1.Service) (bool, error) {
-	// Update observed generation
-	llm.Status.ObservedGeneration = llm.Generation
+func (r *LiteLLMInstanceReconciler) updateStatus(ctx context.Context, llm *litellmv1alpha1.LiteLLMInstance) error {
+	log := logf.FromContext(ctx)
 
-	// Update last updated timestamp
+	log.Info("Updating status for LiteLLMInstance", "name", llm.Name, "namespace", llm.Namespace)
+
+	// Update observed generation and last updated timestamp
+	llm.Status.ObservedGeneration = llm.Generation
 	now := metav1.Now()
 	llm.Status.LastUpdated = &now
 
-	// Update resource creation status
-	llm.Status.ConfigMapCreated = true
-	llm.Status.SecretCreated = true
-	llm.Status.DeploymentCreated = deployment != nil
-	llm.Status.ServiceCreated = service != nil
-	llm.Status.IngressCreated = llm.Spec.Ingress.Enabled
+	// Update conditions
+	r.updateConditions(ctx, llm)
+	log.V(1).Info("Updating status conditions", "conditions", llm.Status.Conditions)
 
-	// Fetch the latest deployment status to ensure we have current information
-	var latestDeployment *appsv1.Deployment
-	if deployment != nil {
-		latestDeployment = &appsv1.Deployment{}
-		if err := r.Get(ctx, client.ObjectKey{Name: deployment.Name, Namespace: deployment.Namespace}, latestDeployment); err != nil {
-			// If we can't fetch the latest deployment, use the one we have
-			latestDeployment = deployment
-		}
-	}
-
-	// Update conditions with the latest deployment status
-	r.updateConditions(llm, latestDeployment, service)
-
+	// Use Status().Update which is more direct and simple
+	// We're already using the latest version of the resource from the API server
 	if err := r.Status().Update(ctx, llm); err != nil {
-		return false, err
+		log.Error(err, "Failed to update status",
+			"name", llm.Name,
+			"namespace", llm.Namespace,
+			"resourceVersion", llm.GetResourceVersion())
+		return err
 	}
 
-	// Determine if all resources are ready
-	allReady := true
+	log.Info("Status update successful", "name", llm.Name, "namespace", llm.Namespace)
+	return nil
+}
 
-	// Check deployment readiness
-	if latestDeployment != nil {
-		expectedReplicas := int32(1)
-		if latestDeployment.Spec.Replicas != nil {
-			expectedReplicas = *latestDeployment.Spec.Replicas
+// childResourcesAreReady checks if all child resources are ready based on the status fields.
+func (r *LiteLLMInstanceReconciler) childResourcesAreReady(llm *litellmv1alpha1.LiteLLMInstance) bool {
+	// Use computed conditions to determine readiness to avoid mismatches
+	required := []string{CondTypeConfigMapReady, CondTypeSecretReady, CondTypeDeploymentReady, CondTypeServiceReady}
+	for _, t := range required {
+		if !conditionIsTrue(llm, t) {
+			return false
 		}
+	}
 
-		if latestDeployment.Status.ReadyReplicas < expectedReplicas {
-			allReady = false
+	if llm.Spec.Ingress.Enabled && !conditionIsTrue(llm, CondTypeIngressReady) {
+		return false
+	}
+
+	return true
+}
+
+// conditionIsTrue returns true if the named condition exists on the resource and its Status is True.
+func conditionIsTrue(llm *litellmv1alpha1.LiteLLMInstance, t string) bool {
+	for _, c := range llm.Status.Conditions {
+		if c.Type == t {
+			return c.Status == metav1.ConditionTrue
 		}
-	} else {
-		allReady = false
 	}
+	return false
+}
 
-	// Check service readiness
-	if service == nil || service.Spec.ClusterIP == "" {
-		allReady = false
+// createCondition creates a standard condition with the given parameters.
+// This helper function reduces duplication in condition creation.
+func (r *LiteLLMInstanceReconciler) createCondition(
+	conditionType string,
+	status metav1.ConditionStatus,
+	gen int64,
+	reason, message string,
+) metav1.Condition {
+	return metav1.Condition{
+		Type:               conditionType,
+		Status:             status,
+		ObservedGeneration: gen,
+		LastTransitionTime: metav1.Now(),
+		Reason:             reason,
+		Message:            message,
 	}
-
-	// Check ingress readiness (if enabled)
-	if llm.Spec.Ingress.Enabled && !llm.Status.IngressCreated {
-		allReady = false
-	}
-
-	return allReady, nil
 }
 
 // updateConditions updates the conditions for the LiteLLM instance.
 // It creates conditions for each resource type and an overall Ready condition.
-func (r *LiteLLMInstanceReconciler) updateConditions(llm *litellmv1alpha1.LiteLLMInstance, deployment *appsv1.Deployment, service *corev1.Service) {
-	now := metav1.Now()
-
+func (r *LiteLLMInstanceReconciler) updateConditions(ctx context.Context, llm *litellmv1alpha1.LiteLLMInstance) {
 	// ConfigMap ready condition
-	configMapReady := metav1.Condition{
-		Type:               "ConfigMapReady",
-		Status:             metav1.ConditionFalse,
-		ObservedGeneration: llm.Generation,
-		LastTransitionTime: now,
-		Reason:             "ConfigMapNotReady",
-		Message:            "ConfigMap is not ready",
-	}
+	configMapReady := r.createCondition(
+		CondTypeConfigMapReady,
+		metav1.ConditionFalse,
+		llm.Generation,
+		"ConfigMapNotReady",
+		"ConfigMap is not ready",
+	)
 
 	if llm.Status.ConfigMapCreated {
 		configMapReady.Status = metav1.ConditionTrue
@@ -609,14 +671,13 @@ func (r *LiteLLMInstanceReconciler) updateConditions(llm *litellmv1alpha1.LiteLL
 	}
 
 	// Secret ready condition
-	secretReady := metav1.Condition{
-		Type:               "SecretReady",
-		Status:             metav1.ConditionFalse,
-		ObservedGeneration: llm.Generation,
-		LastTransitionTime: now,
-		Reason:             "SecretNotReady",
-		Message:            "Secret is not ready",
-	}
+	secretReady := r.createCondition(
+		CondTypeSecretReady,
+		metav1.ConditionFalse,
+		llm.Generation,
+		"SecretNotReady",
+		"Secret is not ready",
+	)
 
 	if llm.Status.SecretCreated {
 		secretReady.Status = metav1.ConditionTrue
@@ -625,17 +686,22 @@ func (r *LiteLLMInstanceReconciler) updateConditions(llm *litellmv1alpha1.LiteLL
 	}
 
 	// Deployment ready condition
-	deploymentReady := metav1.Condition{
-		Type:               "DeploymentReady",
-		Status:             metav1.ConditionFalse,
-		ObservedGeneration: llm.Generation,
-		LastTransitionTime: now,
-		Reason:             "DeploymentNotReady",
-		Message:            "Deployment is not ready",
-	}
+	deploymentReady := r.createCondition(
+		CondTypeDeploymentReady,
+		metav1.ConditionFalse,
+		llm.Generation,
+		"DeploymentNotReady",
+		"Deployment is not ready",
+	)
 
 	// Check if deployment is actually ready
-	if deployment != nil {
+	deployment := &appsv1.Deployment{}
+	err := r.Client.Get(ctx, client.ObjectKey{Name: r.litellmResourceNaming.GetDeploymentName(), Namespace: llm.Namespace}, deployment)
+	if err != nil && !errors.Is(err, client.IgnoreNotFound(err)) {
+		deploymentReady.Status = metav1.ConditionFalse
+		deploymentReady.Reason = "DeploymentNotReady"
+		deploymentReady.Message = fmt.Sprintf("Failed to get Deployment: %v", err)
+	} else {
 		expectedReplicas := int32(1) // Default to 1 replica as per createDeployment
 		if deployment.Spec.Replicas != nil {
 			expectedReplicas = *deployment.Spec.Replicas
@@ -655,23 +721,23 @@ func (r *LiteLLMInstanceReconciler) updateConditions(llm *litellmv1alpha1.LiteLL
 				deployment.Status.AvailableReplicas, expectedReplicas,
 				deployment.Status.UpdatedReplicas, expectedReplicas)
 		}
-	} else {
-		deploymentReady.Status = metav1.ConditionFalse
-		deploymentReady.Reason = "DeploymentNotReady"
-		deploymentReady.Message = "Deployment object is nil"
 	}
 
 	// Service ready condition
-	serviceReady := metav1.Condition{
-		Type:               "ServiceReady",
-		Status:             metav1.ConditionFalse,
-		ObservedGeneration: llm.Generation,
-		LastTransitionTime: now,
-		Reason:             "ServiceNotReady",
-		Message:            "Service is not ready",
-	}
-
-	if service != nil && service.Spec.ClusterIP != "" {
+	serviceReady := r.createCondition(
+		CondTypeServiceReady,
+		metav1.ConditionFalse,
+		llm.Generation,
+		"ServiceNotReady",
+		"Service is not ready",
+	)
+	service := &corev1.Service{}
+	err = r.Client.Get(ctx, client.ObjectKey{Name: r.litellmResourceNaming.GetServiceName(), Namespace: llm.Namespace}, service)
+	if err != nil && !errors.Is(err, client.IgnoreNotFound(err)) {
+		serviceReady.Status = metav1.ConditionFalse
+		serviceReady.Reason = "ServiceNotReady"
+		serviceReady.Message = fmt.Sprintf("Failed to get Service: %v", err)
+	} else if service.Spec.ClusterIP != "" {
 		serviceReady.Status = metav1.ConditionTrue
 		serviceReady.Reason = "ServiceReady"
 		serviceReady.Message = fmt.Sprintf("Service is ready with ClusterIP: %s", service.Spec.ClusterIP)
@@ -679,14 +745,13 @@ func (r *LiteLLMInstanceReconciler) updateConditions(llm *litellmv1alpha1.LiteLL
 
 	// Ingress ready condition (only if ingress is enabled)
 	if llm.Spec.Ingress.Enabled {
-		ingressReady := metav1.Condition{
-			Type:               "IngressReady",
-			Status:             metav1.ConditionFalse,
-			ObservedGeneration: llm.Generation,
-			LastTransitionTime: now,
-			Reason:             "IngressNotReady",
-			Message:            "Ingress is not ready",
-		}
+		ingressReady := r.createCondition(
+			CondTypeIngressReady,
+			metav1.ConditionFalse,
+			llm.Generation,
+			"IngressNotReady",
+			"Ingress is not ready",
+		)
 
 		if llm.Status.IngressCreated {
 			ingressReady.Status = metav1.ConditionTrue
@@ -698,25 +763,16 @@ func (r *LiteLLMInstanceReconciler) updateConditions(llm *litellmv1alpha1.LiteLL
 	}
 
 	// Overall Ready condition
-	ready := metav1.Condition{
-		Type:               "Ready",
-		Status:             metav1.ConditionFalse,
-		ObservedGeneration: llm.Generation,
-		LastTransitionTime: now,
-		Reason:             "NotReady",
-		Message:            "Not all resources are ready",
-	}
+	ready := r.createCondition(
+		"Ready",
+		metav1.ConditionFalse,
+		llm.Generation,
+		"NotReady",
+		"Not all resources are ready",
+	)
 
-	// Only set to True if ALL required resources are ready
-	allReady := configMapReady.Status == metav1.ConditionTrue &&
-		secretReady.Status == metav1.ConditionTrue &&
-		deploymentReady.Status == metav1.ConditionTrue &&
-		serviceReady.Status == metav1.ConditionTrue
-
-	// If ingress is enabled, it must also be ready
-	if llm.Spec.Ingress.Enabled {
-		allReady = allReady && llm.Status.IngressCreated
-	}
+	// Only set to True if ALL required resources are ready. Use helper so it's centralized.
+	allReady := r.childResourcesAreReady(llm)
 
 	if allReady {
 		ready.Status = metav1.ConditionTrue
@@ -732,16 +788,16 @@ func (r *LiteLLMInstanceReconciler) updateConditions(llm *litellmv1alpha1.LiteLL
 	r.setCondition(llm, ready)
 }
 
-// setCondition sets a condition on the LiteLLM instance.
-// It either updates an existing condition or adds a new one to the conditions slice.
-func (r *LiteLLMInstanceReconciler) setCondition(llm *litellmv1alpha1.LiteLLMInstance, condition metav1.Condition) {
-	for i, existingCondition := range llm.Status.Conditions {
-		if existingCondition.Type == condition.Type {
-			llm.Status.Conditions[i] = condition
-			return
-		}
-	}
-	llm.Status.Conditions = append(llm.Status.Conditions, condition)
+func (r *LiteLLMInstanceReconciler) setCondition(llm *litellmv1alpha1.LiteLLMInstance, condition metav1.Condition) bool {
+	// record old slice for change detection
+	old := make([]metav1.Condition, len(llm.Status.Conditions))
+	copy(old, llm.Status.Conditions)
+
+	// use the k8s helper which updates LastTransitionTime appropriately
+	meta.SetStatusCondition(&llm.Status.Conditions, condition)
+
+	// return true if conditions changed so caller can persist status
+	return !equality.Semantic.DeepEqual(old, llm.Status.Conditions)
 }
 
 // createConfigMap creates or updates the ConfigMap for the LiteLLM instance.
@@ -763,11 +819,14 @@ func (r *LiteLLMInstanceReconciler) createConfigMap(ctx context.Context, llm *li
 		Data: map[string]string{"proxy_server_config.yaml": configYAML},
 	}
 
-	if restart, err := util.CreateOrUpdateWithRetry(ctx, r.Client, r.Scheme, configMap, llm); err != nil {
-		log.Error(err, "Failed to create or update config map", "configMap", configMap.Name)
+	_, restart, err := r.createOrUpdateResource(ctx, llm, configMap, "ConfigMap")
+	if err != nil {
 		return nil, err
-	} else if restart {
-		//get the deployment
+	}
+
+	// Check if we need to restart the deployment due to config changes
+	if restart {
+		// Get the deployment
 		deployment := &appsv1.Deployment{}
 		err := r.Get(ctx, client.ObjectKey{Name: r.litellmResourceNaming.GetDeploymentName(), Namespace: llm.Namespace}, deployment)
 		if err != nil {
@@ -780,18 +839,8 @@ func (r *LiteLLMInstanceReconciler) createConfigMap(ctx context.Context, llm *li
 		}
 	}
 
-	// set controller reference for garbage collection
-	if err := controllerutil.SetControllerReference(llm, configMap, r.Scheme); err != nil {
-		log.Error(err, "Failed to set controller reference on ConfigMap")
-		return nil, err
-	}
-
 	// set ConfigMapCreated status
 	llm.Status.ConfigMapCreated = true
-	if err := r.Status().Update(ctx, llm); err != nil {
-		log.Error(err, "Failed to update status after creating ConfigMap")
-		return nil, err
-	}
 
 	return configMap, nil
 }
@@ -844,7 +893,6 @@ func createAdditionalModelSecrets(ctx context.Context, model *litellmv1alpha1.In
 // createSecret creates or updates the Secret for the LiteLLM instance.
 // It creates a Secret containing the master key and other sensitive data.
 func (r *LiteLLMInstanceReconciler) createMasterKeySecret(ctx context.Context, llm *litellmv1alpha1.LiteLLMInstance) (*corev1.Secret, error) {
-
 	// Get existing secret to preserve data if it exists
 	secretName := r.litellmResourceNaming.GetSecretName()
 	existingSecret := &corev1.Secret{}
@@ -855,24 +903,24 @@ func (r *LiteLLMInstanceReconciler) createMasterKeySecret(ctx context.Context, l
 
 	data := buildSecretData(llm.Spec.MasterKey, existingSecret)
 
-	secret, err := createSecret(ctx, r.Client, r.Scheme, secretName, llm.Namespace, data, llm)
-	if err != nil {
-		return nil, err
+	secret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      secretName,
+			Namespace: llm.Namespace,
+		},
+		Type: corev1.SecretTypeOpaque,
+		Data: data,
 	}
 
-	// set owner reference
-	if err = controllerutil.SetControllerReference(llm, secret, r.Scheme); err != nil {
+	resource, _, err := r.createOrUpdateResource(ctx, llm, secret, "Secret")
+	if err != nil {
 		return nil, err
 	}
 
 	// set SecretCreated status
 	llm.Status.SecretCreated = true
-	if err := r.Status().Update(ctx, llm); err != nil {
-		logf.FromContext(ctx).Error(err, "Failed to update status after creating Secret")
-		return nil, err
-	}
 
-	return secret, nil
+	return resource.(*corev1.Secret), nil
 }
 
 func createSecret(ctx context.Context, k8sClient client.Client, scheme *runtime.Scheme, name string, namespace string, data map[string][]byte, owner client.Object) (*corev1.Secret, error) {
@@ -885,6 +933,13 @@ func createSecret(ctx context.Context, k8sClient client.Client, scheme *runtime.
 		Data: data,
 	}
 
+	// set owner ref before create so GC sees the owner
+	if owner != nil {
+		if err := controllerutil.SetControllerReference(owner, secret, scheme); err != nil {
+			return nil, err
+		}
+	}
+
 	if _, err := util.CreateOrUpdateWithRetry(ctx, k8sClient, scheme, secret, owner); err != nil {
 		return nil, err
 	}
@@ -894,7 +949,7 @@ func createSecret(ctx context.Context, k8sClient client.Client, scheme *runtime.
 
 // createDeployment creates or updates the Deployment for the LiteLLM instance.
 // It creates a Deployment that runs the LiteLLM proxy container with appropriate configuration.
-func (r *LiteLLMInstanceReconciler) createDeployment(ctx context.Context, llm *litellmv1alpha1.LiteLLMInstance, configMap *corev1.ConfigMap, secret *corev1.Secret, serviceAccount *corev1.ServiceAccount) (*appsv1.Deployment, error) {
+func (r *LiteLLMInstanceReconciler) createDeployment(ctx context.Context, llm *litellmv1alpha1.LiteLLMInstance) (*appsv1.Deployment, error) {
 	log := logf.FromContext(ctx)
 
 	deployment := &appsv1.Deployment{
@@ -913,9 +968,9 @@ func (r *LiteLLMInstanceReconciler) createDeployment(ctx context.Context, llm *l
 					Labels: r.litellmResourceNaming.GetAppLabels(),
 				},
 				Spec: corev1.PodSpec{
-					ServiceAccountName: serviceAccount.Name,
+					ServiceAccountName: r.litellmResourceNaming.GetServiceAccountName(),
 					Containers: []corev1.Container{
-						buildContainerSpec(llm, secret.Name, ctx, r.Client),
+						buildContainerSpec(llm, r.litellmResourceNaming.GetSecretName(), ctx, r.Client),
 					},
 					Volumes: []corev1.Volume{
 						{
@@ -923,7 +978,7 @@ func (r *LiteLLMInstanceReconciler) createDeployment(ctx context.Context, llm *l
 							VolumeSource: corev1.VolumeSource{
 								ConfigMap: &corev1.ConfigMapVolumeSource{
 									LocalObjectReference: corev1.LocalObjectReference{
-										Name: configMap.Name,
+										Name: r.litellmResourceNaming.GetConfigMapName(),
 									},
 								},
 							},
@@ -934,26 +989,21 @@ func (r *LiteLLMInstanceReconciler) createDeployment(ctx context.Context, llm *l
 		},
 	}
 	log.Info("Creating or updating deployment", "deployment", deployment.Name)
-	if _, err := util.CreateOrUpdateWithRetry(ctx, r.Client, r.Scheme, deployment, llm); err != nil {
-		log.Error(err, "Cannot create deployment")
+
+	resource, _, err := r.createOrUpdateResource(ctx, llm, deployment, "Deployment")
+	if err != nil {
 		return nil, err
 	}
 
 	// set deployment status
 	llm.Status.DeploymentCreated = true
-	if err := r.Status().Update(ctx, llm); err != nil {
-		log.Error(err, "Failed to update status after creating ConfigMap")
-		return nil, err
-	}
 
-	return deployment, nil
+	return resource.(*appsv1.Deployment), nil
 }
 
 // createService creates or updates the Service for the LiteLLM instance.
 // It creates a Service that exposes the LiteLLM proxy on port 80.
 func (r *LiteLLMInstanceReconciler) createService(ctx context.Context, llm *litellmv1alpha1.LiteLLMInstance) (*corev1.Service, error) {
-	log := logf.FromContext(ctx)
-
 	service := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      r.litellmResourceNaming.GetServiceName(),
@@ -974,17 +1024,14 @@ func (r *LiteLLMInstanceReconciler) createService(ctx context.Context, llm *lite
 		},
 	}
 
-	if _, err := util.CreateOrUpdateWithRetry(ctx, r.Client, r.Scheme, service, llm); err != nil {
+	resource, _, err := r.createOrUpdateResource(ctx, llm, service, "Service")
+	if err != nil {
 		return nil, err
 	}
 
 	llm.Status.ServiceCreated = true
-	if err := r.Status().Update(ctx, llm); err != nil {
-		log.Error(err, "Failed to update status after creating Service")
-		return nil, err
-	}
 
-	return service, nil
+	return resource.(*corev1.Service), nil
 }
 
 // createServiceAccount creates or updates the ServiceAccount for the LiteLLM instance.
@@ -998,16 +1045,17 @@ func (r *LiteLLMInstanceReconciler) createServiceAccount(ctx context.Context, ll
 		},
 	}
 
-	if _, err := util.CreateOrUpdateWithRetry(ctx, r.Client, r.Scheme, serviceAccount, llm); err != nil {
+	resource, _, err := r.createOrUpdateResource(ctx, llm, serviceAccount, "ServiceAccount")
+	if err != nil {
 		return nil, err
 	}
 
-	return serviceAccount, nil
+	return resource.(*corev1.ServiceAccount), nil
 }
 
 // createRBAC creates or updates the Role and RoleBinding for the LiteLLM instance ServiceAccount.
 // It creates a Role with minimal permissions and a RoleBinding to bind it to the ServiceAccount.
-func (r *LiteLLMInstanceReconciler) createRBAC(ctx context.Context, llm *litellmv1alpha1.LiteLLMInstance, serviceAccount *corev1.ServiceAccount) error {
+func (r *LiteLLMInstanceReconciler) createRBAC(ctx context.Context, llm *litellmv1alpha1.LiteLLMInstance) error {
 	// Create Role with minimal permissions for the LiteLLM instance
 	role := &rbacv1.Role{
 		ObjectMeta: metav1.ObjectMeta{
@@ -1024,7 +1072,8 @@ func (r *LiteLLMInstanceReconciler) createRBAC(ctx context.Context, llm *litellm
 		},
 	}
 
-	if _, err := util.CreateOrUpdateWithRetry(ctx, r.Client, r.Scheme, role, llm); err != nil {
+	_, _, err := r.createOrUpdateResource(ctx, llm, role, "Role")
+	if err != nil {
 		return err
 	}
 
@@ -1038,8 +1087,8 @@ func (r *LiteLLMInstanceReconciler) createRBAC(ctx context.Context, llm *litellm
 		Subjects: []rbacv1.Subject{
 			{
 				Kind:      "ServiceAccount",
-				Name:      serviceAccount.Name,
-				Namespace: serviceAccount.Namespace,
+				Name:      r.litellmResourceNaming.GetServiceAccountName(),
+				Namespace: llm.Namespace,
 			},
 		},
 		RoleRef: rbacv1.RoleRef{
@@ -1049,7 +1098,8 @@ func (r *LiteLLMInstanceReconciler) createRBAC(ctx context.Context, llm *litellm
 		},
 	}
 
-	if _, err := util.CreateOrUpdateWithRetry(ctx, r.Client, r.Scheme, roleBinding, llm); err != nil {
+	_, _, err = r.createOrUpdateResource(ctx, llm, roleBinding, "RoleBinding")
+	if err != nil {
 		return err
 	}
 
@@ -1059,7 +1109,6 @@ func (r *LiteLLMInstanceReconciler) createRBAC(ctx context.Context, llm *litellm
 // createIngress creates or updates the Ingress for the LiteLLM instance.
 // It creates an Ingress resource to expose the LiteLLM proxy externally when enabled.
 func (r *LiteLLMInstanceReconciler) createIngress(ctx context.Context, llm *litellmv1alpha1.LiteLLMInstance) error {
-	log := logf.FromContext(ctx)
 	ingress := &networkingv1.Ingress{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      r.litellmResourceNaming.GetIngressName(),
@@ -1074,15 +1123,13 @@ func (r *LiteLLMInstanceReconciler) createIngress(ctx context.Context, llm *lite
 		},
 	}
 
-	if _, err := util.CreateOrUpdateWithRetry(ctx, r.Client, r.Scheme, ingress, llm); err != nil {
+	_, _, err := r.createOrUpdateResource(ctx, llm, ingress, "Ingress")
+	if err != nil {
 		return err
 	}
 
 	llm.Status.IngressCreated = true
-	if err := r.Status().Update(ctx, llm); err != nil {
-		log.Error(err, "Failed to update status after creating Ingress")
-		return err
-	}
+
 	return nil
 }
 
@@ -1128,6 +1175,27 @@ func buildContainerSpec(llm *litellmv1alpha1.LiteLLMInstance, secretName string,
 		StartupProbe:   buildStartupProbe(),
 	}
 }
+
+// Condition types and reasons
+const (
+	CondTypeConfigMapReady  = "ConfigMapReady"
+	CondTypeSecretReady     = "SecretReady"
+	CondTypeDeploymentReady = "DeploymentReady"
+	CondTypeServiceReady    = "ServiceReady"
+	CondTypeIngressReady    = "IngressReady"
+	CondTypeReady           = "Ready"
+
+	ReasonConfigMapReady     = "ConfigMapReady"
+	ReasonConfigMapNotReady  = "ConfigMapNotReady"
+	ReasonSecretReady        = "SecretReady"
+	ReasonSecretNotReady     = "SecretNotReady"
+	ReasonDeploymentReady    = "DeploymentReady"
+	ReasonDeploymentNotReady = "DeploymentNotReady"
+	ReasonServiceReady       = "ServiceReady"
+	ReasonServiceNotReady    = "ServiceNotReady"
+	ReasonIngressReady       = "IngressReady"
+	ReasonIngressNotReady    = "IngressNotReady"
+)
 
 // buildEnvironmentVariables builds the environment variables for the container.
 // It creates environment variables for the LiteLLM master key and database connection details.
