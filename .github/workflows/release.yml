@@ -29,9 +29,9 @@ jobs:
       with:
         fetch-depth: 0
 
-    - uses: actions/setup-go@v5
+    - uses: actions/setup-go@v6
       with:
-        go-version: '1.21'
+        go-version: '1.24'
         cache: true
 
     - name: Run tests
@@ -99,9 +99,9 @@ jobs:
           echo "   Build: ${{ steps.semver.outputs.build }}"
         fi
 
-    - uses: actions/setup-go@v5
+    - uses: actions/setup-go@v6
       with:
-        go-version: '1.21'
+        go-version: '1.24'
         cache: true
 
     - name: Set up Docker Buildx

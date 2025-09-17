@@ -372,6 +372,11 @@ spec:
                 items:
                   type: string
                 type: array
+              observedGeneration:
+                description: ObservedGeneration tracks the generation observed by
+                  the controller
+                format: int64
+                type: integer
               permissions:
                 additionalProperties:
                   type: string

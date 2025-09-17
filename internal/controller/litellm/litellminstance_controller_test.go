@@ -58,7 +58,13 @@ var _ = Describe("LiteLLMInstance Controller", func() {
 					"dbname":   []byte("test-db"),
 				},
 			}
-			Expect(k8sClient.Create(ctx, databaseSecret)).To(Succeed())
+			existingSecret := &corev1.Secret{}
+			err := k8sClient.Get(ctx, types.NamespacedName{Name: databaseSecret.Name, Namespace: databaseSecret.Namespace}, existingSecret)
+			if err != nil && errors.IsNotFound(err) {
+				Expect(k8sClient.Create(ctx, databaseSecret)).To(Succeed())
+			} else {
+				Expect(err).NotTo(HaveOccurred())
+			}
 
 			By("creating the test redis secret")
 			redisSecret := &corev1.Secret{
@@ -71,7 +77,13 @@ var _ = Describe("LiteLLMInstance Controller", func() {
 					"password": []byte("test-password"),
 				},
 			}
-			Expect(k8sClient.Create(ctx, redisSecret)).To(Succeed())
+			existingSecret = &corev1.Secret{}
+			err = k8sClient.Get(ctx, types.NamespacedName{Name: redisSecret.Name, Namespace: redisSecret.Namespace}, existingSecret)
+			if err != nil && errors.IsNotFound(err) {
+				Expect(k8sClient.Create(ctx, redisSecret)).To(Succeed())
+			} else {
+				Expect(err).NotTo(HaveOccurred())
+			}
 
 			By("creating the test openAI model secret")
 			openAIModelSecret := &corev1.Secret{
@@ -84,13 +96,13 @@ var _ = Describe("LiteLLMInstance Controller", func() {
 					"ApiBase": []byte("test-api-base-url"),
 				},
 			}
-			Expect(k8sClient.Create(ctx, openAIModelSecret)).To(Succeed())
-			openAISecret := &corev1.Secret{}
-			err := k8sClient.Get(ctx, types.NamespacedName{
-				Name:      "test-openai-model-secret",
-				Namespace: "default",
-			}, openAISecret)
-			Expect(err).NotTo(HaveOccurred())
+			existingSecret = &corev1.Secret{}
+			err = k8sClient.Get(ctx, types.NamespacedName{Name: openAIModelSecret.Name, Namespace: openAIModelSecret.Namespace}, existingSecret)
+			if err != nil && errors.IsNotFound(err) {
+				Expect(k8sClient.Create(ctx, openAIModelSecret)).To(Succeed())
+			} else {
+				Expect(err).NotTo(HaveOccurred())
+			}
 
 			By("creating the test bedrock model secret")
 			bedrockModelSecret := &corev1.Secret{
@@ -103,13 +115,13 @@ var _ = Describe("LiteLLMInstance Controller", func() {
 					"AwsSecretAccessKey": []byte("test-secret-access-key"),
 				},
 			}
-			Expect(k8sClient.Create(ctx, bedrockModelSecret)).To(Succeed())
-			bedrockSecret := &corev1.Secret{}
-			err = k8sClient.Get(ctx, types.NamespacedName{
-				Name:      "test-bedrock-model-secret",
-				Namespace: "default",
-			}, bedrockSecret)
-			Expect(err).NotTo(HaveOccurred())
+			existingSecret = &corev1.Secret{}
+			err = k8sClient.Get(ctx, types.NamespacedName{Name: bedrockModelSecret.Name, Namespace: bedrockModelSecret.Namespace}, existingSecret)
+			if err != nil && errors.IsNotFound(err) {
+				Expect(k8sClient.Create(ctx, bedrockModelSecret)).To(Succeed())
+			} else {
+				Expect(err).NotTo(HaveOccurred())
+			}
 
 			By("creating the custom resource for the Kind LiteLLMInstance")
 			err = k8sClient.Get(ctx, typeNamespacedName, litellminstance)
@@ -218,10 +230,7 @@ var _ = Describe("LiteLLMInstance Controller", func() {
 		It("should successfully reconcile the resource", func() {
 
 			By("Reconciling the created resource")
-			controllerReconciler := &LiteLLMInstanceReconciler{
-				Client: k8sClient,
-				Scheme: k8sClient.Scheme(),
-			}
+			controllerReconciler := NewLiteLLMInstanceReconciler(k8sClient, k8sClient.Scheme())
 
 			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
 				NamespacedName: typeNamespacedName,
@@ -239,10 +248,116 @@ var _ = Describe("LiteLLMInstance Controller", func() {
 			Expect(yamlData).To(ContainSubstring("router_settings"))
 			Expect(yamlData).To(ContainSubstring("general_settings"))
 			Expect(yamlData).To(ContainSubstring("model_list:"))
-			Expect(yamlData).To(ContainSubstring("model_name: amazon.titan-embed-text-v1"))
+			// model names created from LiteLLMInstance models have a source tag appended
+			Expect(yamlData).To(ContainSubstring("model_name: amazon.titan-embed-text-v1-[inst]"))
 			Expect(yamlData).To(ContainSubstring("api_key: os.environ/gpt-3-5-apikey"))
 			Expect(yamlData).To(ContainSubstring("aws_access_key_id: os.environ/aws-bedrock-3-0-awsaccesskeyid"))
 			Expect(yamlData).To(ContainSubstring("model: gpt-3.5-turbo"))
 		})
 	})
+
+})
+
+// Additional unit tests for helper functions and rendering logic
+var _ = Describe("LiteLLMInstance helpers and rendering", func() {
+	ctx := context.Background()
+
+	It("sanitizeKey should produce valid secret names", func() {
+		Expect(sanitizeKey("AwsAccessKeyId")).To(Equal("awsaccesskeyid"))
+		Expect(sanitizeKey("aws/bedrock-3.0")).To(Equal("aws-bedrock-3-0"))
+		// long or weird characters should be normalized
+		Expect(sanitizeKey("__Hello.World!!@@")).To(Equal("hello-world"))
+	})
+
+	It("buildSecretData preserves existing master key when none provided", func() {
+		existing := &corev1.Secret{Data: map[string][]byte{"masterkey": []byte("existing-key")}}
+		data := buildSecretData("", existing)
+		Expect(string(data["masterkey"])).To(Equal("existing-key"))
+	})
+
+	It("buildSecretData uses provided master key when present", func() {
+		data := buildSecretData("provided-key", nil)
+		Expect(string(data["masterkey"])).To(Equal("provided-key"))
+	})
+
+	It("validateModelListForDuplicates detects duplicate identifiers", func() {
+		models := []litellmv1alpha1.InitModelInstance{
+			{Identifier: "a"},
+			{Identifier: "b"},
+			{Identifier: "a"},
+		}
+		ok, err := validateModelListForDuplicates(models)
+		Expect(ok).To(BeFalse())
+		Expect(err).To(HaveOccurred())
+	})
+
+	It("renderProxyConfig returns error when model missing required model name", func() {
+		llm := &litellmv1alpha1.LiteLLMInstance{
+			ObjectMeta: metav1.ObjectMeta{Name: "x", Namespace: "default"},
+			Spec: litellmv1alpha1.LiteLLMInstanceSpec{
+				Models: []litellmv1alpha1.InitModelInstance{{LiteLLMParams: litellmv1alpha1.LiteLLMParams{Model: util.StringPtrOrNil("")}}},
+			},
+		}
+		_, err := renderProxyConfig(llm, ctx, k8sClient, k8sClient.Scheme())
+		Expect(err).To(HaveOccurred())
+	})
+
+	It("renderProxyConfig includes router settings from redis secret ref and maps model secret keys to os.environ/<name>", func() {
+		// create a fake model credentials secret and ensure createAdditionalModelSecrets will make secrets
+		modelCred := &corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{Name: "model-creds", Namespace: "default"},
+			Data:       map[string][]byte{"ApiKey": []byte("k1")},
+		}
+		Expect(k8sClient.Create(ctx, modelCred)).To(Succeed())
+
+		llm := &litellmv1alpha1.LiteLLMInstance{
+			ObjectMeta: metav1.ObjectMeta{Name: "x", Namespace: "default"},
+			Spec: litellmv1alpha1.LiteLLMInstanceSpec{
+				RedisSecretRef: litellmv1alpha1.RedisSecretRef{
+					NameRef: "test-redis-secret",
+					Keys:    litellmv1alpha1.RedisSecretKeys{HostSecret: "host", PortSecret: "port", PasswordSecret: "password"},
+				},
+				Models: []litellmv1alpha1.InitModelInstance{
+					{
+						ModelName:        "gpt-3.5",
+						Identifier:       "gpt-3.5",
+						RequiresAuth:     true,
+						ModelCredentials: litellmv1alpha1.ModelCredentialSecretRef{NameRef: "model-creds", Keys: litellmv1alpha1.ModelCredentialSecretKeys{ApiKey: "ApiKey"}},
+						LiteLLMParams:    litellmv1alpha1.LiteLLMParams{Model: util.StringPtrOrNil("gpt-3.5-turbo")},
+					},
+				},
+			},
+		}
+
+		// ensure the owner LiteLLMInstance exists so created secrets can set ownerReferences
+		existingLLM := &litellmv1alpha1.LiteLLMInstance{}
+		err := k8sClient.Get(ctx, types.NamespacedName{Name: llm.Name, Namespace: llm.Namespace}, existingLLM)
+		if err != nil && errors.IsNotFound(err) {
+			Expect(k8sClient.Create(ctx, llm)).To(Succeed())
+		} else {
+			Expect(err).NotTo(HaveOccurred())
+		}
+
+		// create the redis secret referenced by the llm so router_settings populate (only if absent)
+		redisSecret := &corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{Name: "test-redis-secret", Namespace: "default"},
+			Data:       map[string][]byte{"host": []byte("host"), "port": []byte("port"), "password": []byte("password")},
+		}
+		existingSecret := &corev1.Secret{}
+		err = k8sClient.Get(ctx, types.NamespacedName{Name: redisSecret.Name, Namespace: redisSecret.Namespace}, existingSecret)
+		if err != nil && errors.IsNotFound(err) {
+			Expect(k8sClient.Create(ctx, redisSecret)).To(Succeed())
+		} else {
+			Expect(err).NotTo(HaveOccurred())
+		}
+
+		yamlStr, err := renderProxyConfig(llm, ctx, k8sClient, k8sClient.Scheme())
+		Expect(err).NotTo(HaveOccurred())
+		Expect(yamlStr).To(ContainSubstring("router_settings"))
+		Expect(yamlStr).To(ContainSubstring("host: host"))
+		Expect(yamlStr).To(ContainSubstring("model_name: gpt-3.5-[inst]"))
+		// created secret names are sanitized; ensure the os.environ/ prefix is present
+		Expect(yamlStr).To(ContainSubstring("os.environ/"))
+	})
+
 })

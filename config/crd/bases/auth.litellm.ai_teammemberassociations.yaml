@@ -20,11 +20,11 @@ spec:
       name: Ready
       type: string
     - description: The team alias
-      jsonPath: .spec.teamAlias
+      jsonPath: .status.teamAlias
       name: Team
       type: string
     - description: The user's email address
-      jsonPath: .spec.userEmail
+      jsonPath: .status.userEmail
       name: User
       type: string
     - description: The user's role in the team
@@ -119,28 +119,34 @@ spec:
                 - admin
                 - user
                 type: string
-              teamAlias:
-                description: TeamID is the ID of the team
-                type: string
-                x-kubernetes-validations:
-                - message: TeamAlias is immutable
-                  rule: self == oldSelf
-              userEmail:
-                description: UserEmail is the email of the user
-                type: string
-                x-kubernetes-validations:
-                - message: UserEmail is immutable
-                  rule: self == oldSelf
+              teamRef:
+                description: TeamRef is a reference to the team
+                properties:
+                  name:
+                    type: string
+                  namespace:
+                    type: string
+                type: object
+              userRef:
+                description: UserRef is a reference to the user
+                properties:
+                  name:
+                    type: string
+                  namespace:
+                    type: string
+                type: object
             required:
             - connectionRef
             - role
-            - teamAlias
-            - userEmail
+            - teamRef
+            - userRef
             type: object
           status:
             description: TeamMemberAssociationStatus defines the observed state of
               TeamMemberAssociation
             properties:
+              associationIsValid:
+                type: boolean
               conditions:
                 items:
                   description: Condition contains details for one aspect of the current
@@ -200,12 +206,16 @@ spec:
               teamAlias:
                 description: TeamAlias is the alias of the team
                 type: string
+              teamExists:
+                type: boolean
               teamID:
                 description: TeamID is the ID of the team
                 type: string
               userEmail:
                 description: UserEmail is the email of the user
                 type: string
+              userExists:
+                type: boolean
               userID:
                 description: UserID is the ID of the user
                 type: string
