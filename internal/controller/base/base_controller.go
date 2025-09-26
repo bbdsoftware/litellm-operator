@@ -20,6 +20,8 @@ import (
 	"context"
 	"time"
 
+	controllermetrics "github.com/bbdsoftware/litellm-operator/internal/controller/metrics"
+	"github.com/prometheus/client_golang/prometheus"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -96,6 +98,7 @@ type BaseController[T StatusConditionObject] struct {
 	client.Client
 	Scheme         *runtime.Scheme
 	DefaultTimeout time.Duration
+	ControllerName string // Name of the controller for metrics
 }
 
 // ============================================================================
@@ -191,6 +194,8 @@ func (b *BaseController[T]) HandleCommonErrors(ctx context.Context, obj T, err e
 
 // HandleError is a common error handling pattern with status update
 func (b *BaseController[T]) HandleErrorRetryable(ctx context.Context, obj T, err error, reason string) (ctrl.Result, error) {
+	// Instrument error for metrics
+	b.InstrumentReconcileError()
 
 	b.SetErrorConditions(obj, reason, err.Error())
 	_ = b.PatchStatus(ctx, obj)
@@ -199,6 +204,9 @@ func (b *BaseController[T]) HandleErrorRetryable(ctx context.Context, obj T, err
 }
 
 func (b *BaseController[T]) HandleErrorFinal(ctx context.Context, obj T, err error, reason string) (ctrl.Result, error) {
+	// Instrument error for metrics
+	b.InstrumentReconcileError()
+
 	b.SetErrorConditions(obj, reason, err.Error())
 	_ = b.PatchStatus(ctx, obj)
 
@@ -309,4 +317,30 @@ func (b *BaseController[T]) UpdateObservedGeneration(obj T) {
 func (b *BaseController[T]) EnsureObservedGenerationAndUpdate(ctx context.Context, obj T, setObservedGeneration func(T)) error {
 	setObservedGeneration(obj)
 	return b.PatchStatus(ctx, obj)
+}
+
+// ============================================================================
+// Metrics Helpers
+// ============================================================================
+
+// InstrumentReconcileLoop increments the reconcile loops counter for this controller
+func (b *BaseController[T]) InstrumentReconcileLoop() {
+	if b.ControllerName != "" {
+		controllermetrics.InstrumentReconcileLoop(b.ControllerName)
+	}
+}
+
+// InstrumentReconcileError increments the reconcile errors counter for this controller
+func (b *BaseController[T]) InstrumentReconcileError() {
+	if b.ControllerName != "" {
+		controllermetrics.InstrumentReconcileError(b.ControllerName)
+	}
+}
+
+// InstrumentReconcileLatency creates a timer for measuring reconcile latency
+func (b *BaseController[T]) InstrumentReconcileLatency() *prometheus.Timer {
+	if b.ControllerName != "" {
+		return controllermetrics.InstrumentReconcileLatency(b.ControllerName)
+	}
+	return prometheus.NewTimer(prometheus.NewHistogram(prometheus.HistogramOpts{}))
 }

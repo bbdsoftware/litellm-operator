@@ -69,6 +69,11 @@ func (r *TeamReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 	ctx, cancel := r.WithTimeout(ctx)
 	defer cancel()
 
+	// Instrument the reconcile loop
+	r.InstrumentReconcileLoop()
+	timer := r.InstrumentReconcileLatency()
+	defer timer.ObserveDuration()
+
 	log := log.FromContext(ctx)
 
 	// Phase 1: Fetch and validate the resource
@@ -76,6 +81,7 @@ func (r *TeamReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 	team, err := r.FetchResource(ctx, req.NamespacedName, team)
 	if err != nil {
 		log.Error(err, "Failed to get Team")
+		r.InstrumentReconcileError()
 		return ctrl.Result{}, err
 	}
 	if team == nil {
@@ -96,12 +102,14 @@ func (r *TeamReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 
 	// Phase 4: Upsert branch - ensure finalizer
 	if err := r.AddFinalizer(ctx, team, util.FinalizerName); err != nil {
+		r.InstrumentReconcileError()
 		return ctrl.Result{}, err
 	}
 
 	var externalData ExternalData
 	// Phase 5: Ensure external resource (create/patch/repair drift)
 	if res, err := r.ensureExternal(ctx, team, &externalData); res.Requeue || res.RequeueAfter > 0 || err != nil {
+		r.InstrumentReconcileError()
 		return res, err
 	}
 
@@ -114,6 +122,7 @@ func (r *TeamReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 	r.SetSuccessConditions(team, "Team is in desired state")
 	team.Status.ObservedGeneration = team.GetGeneration()
 	if err := r.PatchStatus(ctx, team); err != nil {
+		r.InstrumentReconcileError()
 		return ctrl.Result{}, err
 	}
 

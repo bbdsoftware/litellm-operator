@@ -54,6 +54,7 @@ func NewVirtualKeyReconciler(client client.Client, scheme *runtime.Scheme) *Virt
 			Client:         client,
 			Scheme:         scheme,
 			DefaultTimeout: 20 * time.Second,
+			ControllerName: "virtualkey",
 		},
 		LitellmClient:         nil,
 		litellmResourceNaming: nil,
@@ -77,6 +78,11 @@ func (r *VirtualKeyReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	ctx, cancel := r.WithTimeout(ctx)
 	defer cancel()
 
+	// Instrument the reconcile loop
+	r.InstrumentReconcileLoop()
+	timer := r.InstrumentReconcileLatency()
+	defer timer.ObserveDuration()
+
 	log := log.FromContext(ctx)
 
 	// Phase 1: Fetch and validate the resource
@@ -84,6 +90,7 @@ func (r *VirtualKeyReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	virtualKey, err := r.FetchResource(ctx, req.NamespacedName, virtualKey)
 	if err != nil {
 		log.Error(err, "Failed to get VirtualKey")
+		r.InstrumentReconcileError()
 		return ctrl.Result{}, err
 	}
 	if virtualKey == nil {
@@ -104,12 +111,14 @@ func (r *VirtualKeyReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 
 	// Phase 4: Upsert branch - ensure finalizer
 	if err := r.AddFinalizer(ctx, virtualKey, util.FinalizerName); err != nil {
+		r.InstrumentReconcileError()
 		return ctrl.Result{}, err
 	}
 
 	var externalData ExternalData
 	// Phase 5: Ensure external resource (create/patch/repair drift)
 	if res, err := r.ensureExternal(ctx, virtualKey, &externalData); res.Requeue || res.RequeueAfter > 0 || err != nil {
+		r.InstrumentReconcileError()
 		return res, err
 	}
 
@@ -122,6 +131,7 @@ func (r *VirtualKeyReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	r.SetSuccessConditions(virtualKey, "VirtualKey is in desired state")
 	virtualKey.Status.ObservedGeneration = virtualKey.GetGeneration()
 	if err := r.PatchStatus(ctx, virtualKey); err != nil {
+		r.InstrumentReconcileError()
 		return ctrl.Result{}, err
 	}
 

@@ -56,6 +56,7 @@ func NewModelReconciler(client client.Client, scheme *runtime.Scheme) *ModelReco
 			Client:         client,
 			Scheme:         scheme,
 			DefaultTimeout: 20 * time.Second,
+			ControllerName: "model",
 		},
 		LitellmModelClient: nil,
 	}
@@ -75,6 +76,11 @@ func (r *ModelReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 	ctx, cancel := r.WithTimeout(ctx)
 	defer cancel()
 
+	// Instrument the reconcile loop
+	r.InstrumentReconcileLoop()
+	timer := r.InstrumentReconcileLatency()
+	defer timer.ObserveDuration()
+
 	log := logf.FromContext(ctx)
 
 	// Phase 1: Fetch and validate the resource
@@ -82,6 +88,7 @@ func (r *ModelReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 	model, err := r.FetchResource(ctx, req.NamespacedName, model)
 	if err != nil {
 		log.Error(err, "Failed to get Model")
+		r.InstrumentReconcileError()
 		return ctrl.Result{}, err
 	}
 	if model == nil {
@@ -102,12 +109,14 @@ func (r *ModelReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 
 	// Phase 4: Upsert branch - ensure finalizer
 	if err := r.AddFinalizer(ctx, model, util.FinalizerName); err != nil {
+		r.InstrumentReconcileError()
 		return ctrl.Result{}, err
 	}
 
 	var externalData ExternalData
 	// Phase 5: Ensure external resource (create/patch/repair drift)
 	if res, err := r.ensureExternal(ctx, model, &externalData); res.Requeue || err != nil {
+		r.InstrumentReconcileError()
 		return res, err
 	}
 
@@ -120,6 +129,7 @@ func (r *ModelReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 	r.SetSuccessConditions(model, "Model is in desired state")
 	model.Status.ObservedGeneration = model.GetGeneration()
 	if err := r.PatchStatus(ctx, model); err != nil {
+		r.InstrumentReconcileError()
 		return ctrl.Result{}, err
 	}
 
