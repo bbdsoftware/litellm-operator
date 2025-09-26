@@ -6,6 +6,10 @@ import (
 	dto "github.com/prometheus/client_model/go"
 )
 
+const (
+	testControllerName = "test-controller"
+)
+
 func TestMetricsInitialization(t *testing.T) {
 	// Test that metrics are properly initialized
 	if ReconcileLoopsTotal == nil {
@@ -20,7 +24,7 @@ func TestMetricsInitialization(t *testing.T) {
 }
 
 func TestInstrumentReconcileLoop(t *testing.T) {
-	controllerName := "test-controller"
+	controllerName := testControllerName
 
 	// Get initial count
 	metric := &dto.Metric{}
@@ -28,14 +32,18 @@ func TestInstrumentReconcileLoop(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	counter.Write(metric)
+	if err := counter.Write(metric); err != nil {
+		t.Fatal(err)
+	}
 	initialValue := metric.GetCounter().GetValue()
 
 	// Increment
 	InstrumentReconcileLoop(controllerName)
 
 	// Check increment
-	counter.Write(metric)
+	if err := counter.Write(metric); err != nil {
+		t.Fatal(err)
+	}
 	newValue := metric.GetCounter().GetValue()
 
 	if newValue != initialValue+1 {
@@ -44,7 +52,7 @@ func TestInstrumentReconcileLoop(t *testing.T) {
 }
 
 func TestInstrumentReconcileError(t *testing.T) {
-	controllerName := "test-controller"
+	controllerName := testControllerName
 
 	// Get initial count
 	metric := &dto.Metric{}
@@ -52,14 +60,18 @@ func TestInstrumentReconcileError(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	counter.Write(metric)
+	if err := counter.Write(metric); err != nil {
+		t.Fatal(err)
+	}
 	initialValue := metric.GetCounter().GetValue()
 
 	// Increment
 	InstrumentReconcileError(controllerName)
 
 	// Check increment
-	counter.Write(metric)
+	if err := counter.Write(metric); err != nil {
+		t.Fatal(err)
+	}
 	newValue := metric.GetCounter().GetValue()
 
 	if newValue != initialValue+1 {
@@ -68,7 +80,7 @@ func TestInstrumentReconcileError(t *testing.T) {
 }
 
 func TestInstrumentReconcileLatency(t *testing.T) {
-	controllerName := "test-controller"
+	controllerName := testControllerName
 
 	// This just tests that we can create a timer without error
 	timer := InstrumentReconcileLatency(controllerName)

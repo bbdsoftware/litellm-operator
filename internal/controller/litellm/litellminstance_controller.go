@@ -109,6 +109,12 @@ const (
 	ReasonServiceNotReady    = "ServiceNotReady"
 	ReasonIngressReady       = "IngressReady"
 	ReasonIngressNotReady    = "IngressNotReady"
+
+	// Resource status constants for metrics
+	StatusCreated  = "created"
+	StatusReady    = "ready"
+	StatusNotReady = "not_ready"
+	StatusMissing  = "missing"
 )
 
 // LiteLLMInstanceReconciler reconciles a LiteLLMInstance object.
@@ -831,16 +837,13 @@ func (r *LiteLLMInstanceReconciler) updateConditions(ctx context.Context, llm *l
 
 	// Emit metrics for resource active/inactive state and per-status counts
 	// Best-effort: ignore metric errors
-	if err := r.updateResourceMetrics(ctx, llm); err != nil {
-		log := logf.FromContext(ctx)
-		log.V(1).Info("failed to update resource metrics", "err", err)
-	}
+	r.updateResourceMetrics(llm)
 }
 
 // updateResourceMetrics updates Prometheus gauges describing managed resource state for this LiteLLMInstance.
 // It sets litellm_managed_resource_active{instance,namespace,resource} to 1 when the resource is present/ready and 0 otherwise.
 // It also sets litellm_managed_resource_status{instance,namespace,resource,status} where status is one of: created,missing,ready,not_ready
-func (r *LiteLLMInstanceReconciler) updateResourceMetrics(ctx context.Context, llm *litellmv1alpha1.LiteLLMInstance) error {
+func (r *LiteLLMInstanceReconciler) updateResourceMetrics(llm *litellmv1alpha1.LiteLLMInstance) {
 	// Helper to set active/state metrics for a named resource
 	setMetrics := func(resource string, active bool, status string) {
 		inst := llm.Name
@@ -859,61 +862,59 @@ func (r *LiteLLMInstanceReconciler) updateResourceMetrics(ctx context.Context, l
 	}
 
 	// ConfigMap
-	cfgStatus := "missing"
+	cfgStatus := StatusMissing
 	if llm.Status.ConfigMapCreated {
-		cfgStatus = "created"
+		cfgStatus = StatusCreated
 	}
 	// treat created as active for configmap
 	setMetrics("configmap", llm.Status.ConfigMapCreated, cfgStatus)
 
 	// Secret
-	secretStatus := "missing"
+	secretStatus := StatusMissing
 	if llm.Status.SecretCreated {
-		secretStatus = "created"
+		secretStatus = StatusCreated
 	}
 	setMetrics("secret", llm.Status.SecretCreated, secretStatus)
 
 	// Deployment: derive ready/not_ready from conditions
 	deployActive := conditionIsTrue(llm, CondTypeDeploymentReady)
-	deployStatus := "not_ready"
+	deployStatus := StatusNotReady
 	if deployActive {
-		deployStatus = "ready"
+		deployStatus = StatusReady
 	} else if llm.Status.DeploymentCreated {
-		deployStatus = "created"
+		deployStatus = StatusCreated
 	}
 	setMetrics("deployment", llm.Status.DeploymentCreated, deployStatus)
 
 	// Service
 	svcActive := conditionIsTrue(llm, CondTypeServiceReady)
-	svcStatus := "not_ready"
+	svcStatus := StatusNotReady
 	if svcActive {
-		svcStatus = "ready"
+		svcStatus = StatusReady
 	} else if llm.Status.ServiceCreated {
-		svcStatus = "created"
+		svcStatus = StatusCreated
 	}
 	setMetrics("service", llm.Status.ServiceCreated, svcStatus)
 
 	// Ingress (if enabled)
 	if llm.Spec.Ingress.Enabled {
 		ingActive := conditionIsTrue(llm, CondTypeIngressReady)
-		ingStatus := "not_ready"
+		ingStatus := StatusNotReady
 		if ingActive {
-			ingStatus = "ready"
+			ingStatus = StatusReady
 		} else if llm.Status.IngressCreated {
-			ingStatus = "created"
+			ingStatus = StatusCreated
 		}
 		setMetrics("ingress", llm.Status.IngressCreated, ingStatus)
 	}
 
 	// Overall instance readiness
 	readyActive := conditionIsTrue(llm, "Ready")
-	readyStatus := "not_ready"
+	readyStatus := StatusNotReady
 	if readyActive {
-		readyStatus = "ready"
+		readyStatus = StatusReady
 	}
 	setMetrics("instance", readyActive, readyStatus)
-
-	return nil
 }
 
 func (r *LiteLLMInstanceReconciler) setCondition(llm *litellmv1alpha1.LiteLLMInstance, condition metav1.Condition) {
