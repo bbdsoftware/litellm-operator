@@ -52,6 +52,7 @@ func NewUserReconciler(client client.Client, scheme *runtime.Scheme) *UserReconc
 			Client:         client,
 			Scheme:         scheme,
 			DefaultTimeout: 20 * time.Second,
+			ControllerName: "user",
 		},
 		LitellmClient:         nil,
 		litellmResourceNaming: nil,
@@ -76,6 +77,11 @@ func (r *UserReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 	ctx, cancel := r.WithTimeout(ctx)
 	defer cancel()
 
+	// Instrument the reconcile loop
+	r.InstrumentReconcileLoop()
+	timer := r.InstrumentReconcileLatency()
+	defer timer.ObserveDuration()
+
 	log := log.FromContext(ctx)
 
 	// Phase 1: Fetch and validate the resource
@@ -83,6 +89,7 @@ func (r *UserReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 	user, err := r.FetchResource(ctx, req.NamespacedName, user)
 	if err != nil {
 		log.Error(err, "Failed to get User")
+		r.InstrumentReconcileError()
 		return ctrl.Result{}, err
 	}
 	if user == nil {
@@ -103,12 +110,14 @@ func (r *UserReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 
 	// Phase 4: Upsert branch - ensure finalizer
 	if err := r.AddFinalizer(ctx, user, util.FinalizerName); err != nil {
+		r.InstrumentReconcileError()
 		return ctrl.Result{}, err
 	}
 
 	var externalData ExternalData
 	// Phase 5: Ensure external resource (create/patch/repair drift)
 	if res, err := r.ensureExternal(ctx, user, &externalData); res.Requeue || err != nil {
+		r.InstrumentReconcileError()
 		return res, err
 	}
 

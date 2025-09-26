@@ -134,6 +134,40 @@ Users can just run kubectl apply -f <URL for YAML BUNDLE> to install the project
 kubectl apply -f https://raw.githubusercontent.com/<org>/litellm-operator/<tag or branch>/dist/install.yaml
 ```
 
+## Monitoring and Observability
+
+The LiteLLM Operator exposes comprehensive Prometheus metrics for monitoring controller health, performance, and resource management.
+
+### Metrics Available
+
+- **Controller Metrics**: Reconciliation loops, error rates, and latency per controller
+- **Resource Metrics**: Status and health of managed LiteLLM resources
+- **Performance Metrics**: Latency histograms and throughput measurements
+
+### Accessing Metrics
+
+Metrics are exposed on the controller manager's metrics endpoint (default: `:8443/metrics`) and can be scraped by Prometheus or any compatible monitoring system.
+
+### Documentation
+
+For detailed metrics documentation, monitoring setup, and alerting guidelines, see:
+
+- **[Complete Metrics Documentation](docs/metrics.md)** - Comprehensive guide with all metrics, queries, and alerts
+- **[Controller Metrics Package](internal/controller/metrics/README.md)** - Technical documentation for developers
+
+### Quick Start Monitoring
+
+```promql
+# Controller reconciliation rate
+rate(litellm_reconcile_loops_total[5m])
+
+# Error percentage by controller  
+rate(litellm_reconcile_errors_total[5m]) / rate(litellm_reconcile_loops_total[5m]) * 100
+
+# 95th percentile reconciliation latency
+histogram_quantile(0.95, rate(litellm_reconcile_latency_seconds_bucket[5m]))
+```
+
 ## Contributing
 See [CONTRIBUTING](CONTRIBUTING.md).
 
