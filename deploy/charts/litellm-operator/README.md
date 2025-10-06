@@ -6,8 +6,6 @@ A Helm chart for deploying the LiteLLM Operator, a Kubernetes operator for manag
 
 | Key | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `certmanager.enabled` | boolean | `false` | Enable cert-manager installation |
-| `certmanager.installCRDs` | boolean | `false` | Install cert-manager CRDs |
 | `controllerManager.manager.image.repository` | string | `ghcr.io/bbdsoftware/litellm-operator` | Controller image repository |
 | `controllerManager.manager.resources.limits.cpu` | string | `200m` | CPU resource limit |
 | `controllerManager.manager.resources.limits.memory` | string | `128Mi` | Memory resource limit |

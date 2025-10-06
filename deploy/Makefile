@@ -49,7 +49,7 @@ HELMIFY ?= $(LOCALBIN)/helmify
 
 .PHONY: run-helmify
 run-helmify: ## Run helmify.
-	$(KUSTOMIZE) build config/default | $(HELMIFY) -crd-dir -cert-manager-as-subchart -add-webhook-option $(CHART_PATH)
+	$(KUSTOMIZE) build config/default | $(HELMIFY) -crd-dir $(CHART_PATH)
 
 .PHONY: helmify
 helmify: $(HELMIFY) ## Download helmify locally if necessary.
@@ -58,4 +58,4 @@ $(HELMIFY): $(LOCALBIN)
 
 .PHONY: helm-gen
 helm-gen: manifests kustomize helmify run-helmify  ## Generate Helm chart from Kustomize output.
-	$(KUSTOMIZE) build config/default | $(HELMIFY) -crd-dir -cert-manager-as-subchart -add-webhook-option $(CHART_PATH) 
+	$(KUSTOMIZE) build config/default | $(HELMIFY) -crd-dir $(CHART_PATH)
