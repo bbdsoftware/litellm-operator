@@ -1,6 +1,6 @@
 apiVersion: v2
 name: litellm-operator
-description: A Helm chart for Kubernetes
+description: The LiteLLM Operator deploys and manages instances of LiteLLM, along with other resources such as models, virtual keys, users, and teams.
 # A chart can be either an 'application' or a 'library' chart.
 #
 # Application charts are a collection of templates that can be packaged into versioned archives
