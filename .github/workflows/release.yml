@@ -197,9 +197,8 @@ jobs:
         kustomize edit set image controller=ghcr.io/${{ github.repository_owner }}/litellm-operator:$VERSION
         cd ../..
 
-    - name: run helm generate
+    - name: Update Helm chart
       run: |
-        make helm-gen
         # Update Helm chart version and appVersion
         VERSION=${{ needs.build-and-release.outputs.validated_version }}
         sed -i "s/^version: .*/version: $VERSION/" deploy/charts/litellm-operator/Chart.yaml

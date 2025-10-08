@@ -44,18 +44,3 @@ helm-docs: ## Generate Helm chart documentation.
 .PHONY: helm-push-oci
 helm-push-oci: helm-package ## Push Helm chart to OCI registry.
 	helm push litellm-operator-*.tgz oci://ghcr.io/bbd/charts
-
-HELMIFY ?= $(LOCALBIN)/helmify
-
-.PHONY: run-helmify
-run-helmify: ## Run helmify.
-	$(KUSTOMIZE) build config/default | $(HELMIFY) -crd-dir $(CHART_PATH)
-
-.PHONY: helmify
-helmify: $(HELMIFY) ## Download helmify locally if necessary.
-$(HELMIFY): $(LOCALBIN)
-	test -s $(LOCALBIN)/helmify || GOBIN=$(LOCALBIN) go install github.com/arttor/helmify/cmd/helmify@latest
-
-.PHONY: helm-gen
-helm-gen: manifests kustomize helmify run-helmify  ## Generate Helm chart from Kustomize output.
-	$(KUSTOMIZE) build config/default | $(HELMIFY) -crd-dir $(CHART_PATH)
