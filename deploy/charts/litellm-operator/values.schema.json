@@ -1,0 +1,208 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "title": "LiteLLM Operator Helm Chart Values",
+  "description": "Configuration values for the LiteLLM Operator Helm chart",
+  "properties": {
+    "nameOverride": {
+      "type": "string",
+      "description": "Name override for the operator",
+      "default": ""
+    },
+    "fullnameOverride": {
+      "type": "string",
+      "description": "Full name override for the operator",
+      "default": ""
+    },
+    "controllerManager": {
+      "type": "object",
+      "description": "Controller manager configuration",
+      "properties": {
+        "manager": {
+          "type": "object",
+          "description": "Manager configuration",
+          "properties": {
+            "args": {
+              "type": "array",
+              "description": "Command line arguments for the manager",
+              "items": {
+                "type": "string"
+              },
+              "default": [
+                "--metrics-bind-address=:8443",
+                "--leader-elect",
+                "--health-probe-bind-address=:8081"
+              ]
+            },
+            "containerSecurityContext": {
+              "type": "object",
+              "description": "Container security context configuration",
+              "properties": {
+                "allowPrivilegeEscalation": {
+                  "type": "boolean",
+                  "description": "Allow privilege escalation",
+                  "default": false
+                },
+                "capabilities": {
+                  "type": "object",
+                  "description": "Container capabilities configuration",
+                  "properties": {
+                    "drop": {
+                      "type": "array",
+                      "description": "List of capabilities to drop",
+                      "items": {
+                        "type": "string"
+                      },
+                      "default": ["ALL"]
+                    }
+                  }
+                }
+              }
+            },
+            "image": {
+              "type": "object",
+              "description": "Container image configuration",
+              "properties": {
+                "repository": {
+                  "type": "string",
+                  "description": "Container image repository",
+                  "default": "ghcr.io/bbdsoftware/litellm-operator"
+                },
+                "tag": {
+                  "type": "string",
+                  "description": "Container image tag"
+                }
+              }
+            },
+            "resources": {
+              "type": "object",
+              "description": "Resource limits and requests",
+              "properties": {
+                "limits": {
+                  "type": "object",
+                  "description": "Resource limits",
+                  "properties": {
+                    "cpu": {
+                      "type": "string",
+                      "description": "CPU limit",
+                      "default": "200m"
+                    },
+                    "memory": {
+                      "type": "string",
+                      "description": "Memory limit",
+                      "default": "128Mi"
+                    }
+                  }
+                },
+                "requests": {
+                  "type": "object",
+                  "description": "Resource requests",
+                  "properties": {
+                    "cpu": {
+                      "type": "string",
+                      "description": "CPU request",
+                      "default": "50m"
+                    },
+                    "memory": {
+                      "type": "string",
+                      "description": "Memory request",
+                      "default": "64Mi"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "podSecurityContext": {
+          "type": "object",
+          "description": "Pod security context configuration",
+          "properties": {
+            "runAsNonRoot": {
+              "type": "boolean",
+              "description": "Run container as non-root user",
+              "default": true
+            }
+          }
+        },
+        "replicas": {
+          "type": "integer",
+          "description": "Number of controller manager replicas",
+          "minimum": 1,
+          "default": 1
+        },
+        "serviceAccount": {
+          "type": "object",
+          "description": "Service account configuration",
+          "properties": {
+            "annotations": {
+              "type": "object",
+              "description": "Service account annotations",
+              "additionalProperties": {
+                "type": "string"
+              },
+              "default": {}
+            }
+          }
+        }
+      }
+    },
+    "kubernetesClusterDomain": {
+      "type": "string",
+      "description": "Kubernetes cluster domain",
+      "default": "cluster.local"
+    },
+    "metricsService": {
+      "type": "object",
+      "description": "Metrics service configuration",
+      "properties": {
+        "ports": {
+          "type": "array",
+          "description": "Service ports configuration",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "Port name"
+              },
+              "port": {
+                "type": "integer",
+                "description": "Service port number"
+              },
+              "protocol": {
+                "type": "string",
+                "description": "Port protocol",
+                "enum": ["TCP", "UDP", "SCTP"]
+              },
+              "targetPort": {
+                "type": "integer",
+                "description": "Target port number"
+              }
+            },
+            "required": ["name", "port", "protocol", "targetPort"]
+          },
+          "default": [
+            {
+              "name": "https",
+              "port": 8443,
+              "protocol": "TCP",
+              "targetPort": 8443
+            }
+          ]
+        },
+        "type": {
+          "type": "string",
+          "description": "Service type",
+          "enum": ["ClusterIP", "NodePort", "LoadBalancer", "ExternalName"],
+          "default": "ClusterIP"
+        }
+      }
+    }
+  },
+  "required": [
+    "controllerManager",
+    "kubernetesClusterDomain",
+    "metricsService"
+  ]
+}
