@@ -204,7 +204,7 @@ jobs:
         VERSION=${{ needs.build-and-release.outputs.validated_version }}
         yq -i ".version = \"$VERSION\"" deploy/charts/litellm-operator/Chart.yaml
         yq -i ".appVersion = \"$VERSION\"" deploy/charts/litellm-operator/Chart.yaml
-        yq -i '.controllerManager.manager.image.tag = \"$VERSION\"' deploy/charts/litellm-operator/values.yaml
+        yq -i ".controllerManager.manager.image.tag = \"$VERSION\"" deploy/charts/litellm-operator/values.yaml
 
         # Show the changes for debugging
         echo "Changes made:"
