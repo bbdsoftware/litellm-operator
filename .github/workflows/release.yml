@@ -179,6 +179,9 @@ jobs:
         ref: main
         token: ${{ steps.github-app.outputs.token }}
 
+    - name: Install yq
+      uses: mikefarah/yq@v4
+
     - name: Configure Git
       run: |
         git config --global user.name 'github-actions[bot]'
@@ -199,8 +202,9 @@ jobs:
       run: |
         # Update Helm chart version and appVersion
         VERSION=${{ needs.build-and-release.outputs.validated_version }}
-        sed -i "s/^version: .*/version: $VERSION/" deploy/charts/litellm-operator/Chart.yaml
-        sed -i "s/^appVersion: .*/appVersion: $VERSION/" deploy/charts/litellm-operator/Chart.yaml
+        yq -i ".version = \"$VERSION\"" deploy/charts/litellm-operator/Chart.yaml
+        yq -i ".appVersion = \"$VERSION\"" deploy/charts/litellm-operator/Chart.yaml
+        yq -i '.controllerManager.manager.image.tag = \"$VERSION\"' deploy/charts/litellm-operator/values.yaml
 
         # Show the changes for debugging
         echo "Changes made:"
