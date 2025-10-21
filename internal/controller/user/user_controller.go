@@ -271,6 +271,10 @@ func (r *UserReconciler) ensureExternal(ctx context.Context, user *authv1alpha1.
 		}
 		log.Info("Successfully repaired drift in LiteLLM", "userID", user.Status.UserID)
 	} else {
+		externalData.Key = observedUser.Key
+		externalData.UserEmail = observedUser.UserEmail
+		externalData.UserRole = observedUser.UserRole
+		externalData.UserID = observedUser.UserID
 		log.V(1).Info("User is up to date in LiteLLM", "userID", user.Status.UserID)
 	}
 
@@ -279,7 +283,8 @@ func (r *UserReconciler) ensureExternal(ctx context.Context, user *authv1alpha1.
 
 // ensureChildren manages in-cluster child resources using CreateOrUpdate pattern
 func (r *UserReconciler) ensureChildren(ctx context.Context, user *authv1alpha1.User, externalData *ExternalData) error {
-	if user.Status.KeySecretRef == "" {
+	// the VirtualKey is never shown again after the User is created, so prevent the secret from being reset to an empty string
+	if user.Status.KeySecretRef == "" || externalData.Key == "" {
 		return nil // No secret to create
 	}
 
