@@ -216,7 +216,7 @@ func (h *LitellmConnectionHandler) getConnectionDetailsFromInstanceRef(ctx conte
 	if os.Getenv("LITELLM_URL_OVERRIDE") != "" {
 		url = os.Getenv("LITELLM_URL_OVERRIDE")
 	} else {
-		url = fmt.Sprintf("http://%s.%s.svc.cluster.local", service.Name, instanceNamespace)
+		url = fmt.Sprintf("http://%s.%s.svc.cluster.local:4000", service.Name, instanceNamespace)
 	}
 
 	return &ConnectionDetails{

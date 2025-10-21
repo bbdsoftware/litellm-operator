@@ -40,8 +40,8 @@ deploy-manifests-dev: manifests kustomize
 	$(KUBECTL) wait --for=condition=Ready --timeout=120s -n litellm pod -l cnpg.io/instanceName=litellm-postgres-1,cnpg.io/instanceRole=primary
 
 
-.PHONY: dev-cluster-bootstrap
-dev-cluster-bootstrap-debug: kind-cluster install install-samples  deploy-manifests-dev install-samples  
+.PHONY: dev-cluster-bootstrap-debug
+dev-cluster-bootstrap-debug: kind-cluster install deploy-manifests-dev install-samples
 
 .PHONY: dev-cluster-bootstrap-full
 dev-cluster-bootstrap-full: IMG=controller:dev
@@ -51,7 +51,7 @@ dev-cluster-bootstrap-full: kind-cluster docker-build docker-load install deploy
 dev-cluster-bootstrap-full-recreate: kind-cluster-delete dev-cluster-bootstrap-full ## Recreate the Kind cluster and bootstrap
 
 .PHONY: dev-cluster-bootstrap-debug-recreate
-dev-cluster-bootstrap-debug-recreate: kind-cluster-delete dev-cluster-bootstrap-debug ## Recreate the Kind cluster and bootstrap
+dev-cluster-bootstrap-debug-recreate: kind-cluster-delete dev-cluster-bootstrap-debug ## Recreate the Kind cluster and bootstrap without the litellm-operator
 
 dev-port-forward-litellm:
-	$(KUBECTL) port-forward svc/litellm-example-service 8000:80 -n litellm > /dev/null 2>&1 &
+	$(KUBECTL) port-forward svc/litellm-example-service 4000:4000 -n litellm > /dev/null 2>&1 &

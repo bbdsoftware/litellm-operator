@@ -84,7 +84,7 @@ func init() {
 const (
 	// Container configuration constants
 	ContainerPort = 4000                                    // Port that the LiteLLM container listens on
-	ServicePort   = 80                                      // Port that the Service exposes
+	ServicePort   = 4000                                    // Port that the Service exposes
 	ConfigPath    = "/etc/litellm/proxy_server_config.yaml" // Path to config file in container
 
 	// Health check paths for container probes
