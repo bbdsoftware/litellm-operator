@@ -122,6 +122,7 @@ changelog:
       - "^test:"
       - "^chore:"
       - "^ci:"
+      - "^Automated update to"
   groups:
     - title: Features
       regexp: '^.*?feat(\([[:word:]]+\))??!?:.+$'

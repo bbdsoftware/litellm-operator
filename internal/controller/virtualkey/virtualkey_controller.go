@@ -117,7 +117,7 @@ func (r *VirtualKeyReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 
 	var externalData ExternalData
 	// Phase 5: Ensure external resource (create/patch/repair drift)
-	if res, err := r.ensureExternal(ctx, virtualKey, &externalData); res.Requeue || res.RequeueAfter > 0 || err != nil {
+	if res, err := r.ensureExternal(ctx, virtualKey, &externalData); res.RequeueAfter > 0 || err != nil {
 		r.InstrumentReconcileError()
 		return res, err
 	}
@@ -285,6 +285,10 @@ func (r *VirtualKeyReconciler) ensureExternal(ctx context.Context, virtualKey *a
 
 // ensureChildren manages in-cluster child resources using CreateOrUpdate pattern
 func (r *VirtualKeyReconciler) ensureChildren(ctx context.Context, virtualKey *authv1alpha1.VirtualKey, externalData *ExternalData) error {
+	// the VirtualKey is never shown again after the VirtualKey is created, so prevent the secret from being reset to an empty string
+	if virtualKey.Status.KeySecretRef == "" || externalData.Key == "" {
+		return nil // No secret to create
+	}
 
 	secretName := r.litellmResourceNaming.GenerateSecretName(virtualKey.Spec.KeyAlias)
 	secret := &corev1.Secret{

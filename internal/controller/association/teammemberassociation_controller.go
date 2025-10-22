@@ -143,7 +143,7 @@ func (r *TeamMemberAssociationReconciler) Reconcile(ctx context.Context, req ctr
 
 	var externalData ExternalData
 	// Phase 5: Ensure external resource (create/patch/repair drift)
-	if res, err := r.ensureExternal(ctx, teamMemberAssociation, &externalData); res.Requeue || res.RequeueAfter > 0 || err != nil {
+	if res, err := r.ensureExternal(ctx, teamMemberAssociation, &externalData); res.RequeueAfter > 0 || err != nil {
 		r.InstrumentReconcileError()
 		return res, err
 	}

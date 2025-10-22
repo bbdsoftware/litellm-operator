@@ -116,7 +116,7 @@ func (r *UserReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 
 	var externalData ExternalData
 	// Phase 5: Ensure external resource (create/patch/repair drift)
-	if res, err := r.ensureExternal(ctx, user, &externalData); res.Requeue || res.RequeueAfter > 0 || err != nil {
+	if res, err := r.ensureExternal(ctx, user, &externalData); res.RequeueAfter > 0 || err != nil {
 		r.InstrumentReconcileError()
 		return res, err
 	}
