@@ -186,11 +186,16 @@ func (l *LitellmClient) GetVirtualKeyInfo(ctx context.Context, key string) (Virt
 
 	var response struct {
 		KeyInfo VirtualKeyResponse `json:"info"`
+		Key     string             `json:"key"`
 	}
 
 	if err := json.Unmarshal(body, &response); err != nil {
 		log.Error(err, "Failed to unmarshal virtual key response from Litellm")
 		return VirtualKeyResponse{}, err
+	}
+
+	if response.Key != "" && response.KeyInfo.Key == "" {
+		response.KeyInfo.Key = response.Key
 	}
 
 	return response.KeyInfo, nil
