@@ -184,13 +184,20 @@ func (l *LitellmClient) GetVirtualKeyInfo(ctx context.Context, key string) (Virt
 		return VirtualKeyResponse{}, err
 	}
 
+	// The KeyID is returned in a field called `token` when creating a virtual key and is required to be passed in for the `key/update` request
+	// but when doing a `key/info` request, the token is presented in a top level field called `key`.
 	var response struct {
 		KeyInfo VirtualKeyResponse `json:"info"`
+		KeyID   string             `json:"key"` // call it KeyID for clarity as it's not the actual key or key alias
 	}
 
 	if err := json.Unmarshal(body, &response); err != nil {
 		log.Error(err, "Failed to unmarshal virtual key response from Litellm")
 		return VirtualKeyResponse{}, err
+	}
+
+	if response.KeyID != "" && response.KeyInfo.Token == "" {
+		response.KeyInfo.Token = response.KeyID
 	}
 
 	return response.KeyInfo, nil

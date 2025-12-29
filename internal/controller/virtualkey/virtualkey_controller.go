@@ -257,8 +257,8 @@ func (r *VirtualKeyReconciler) ensureExternal(ctx context.Context, virtualKey *a
 	updateNeeded := r.LitellmClient.IsVirtualKeyUpdateNeeded(ctx, &observedVirtualKeyDetails, &desiredVirtualKey)
 	if updateNeeded {
 		log.Info("Repairing drift in LiteLLM", "keyAlias", virtualKey.Spec.KeyAlias)
-		// When updating a key, we need to pass the key in the request
-		desiredVirtualKey.Key = observedVirtualKeyDetails.Key
+		// When updating a key, we need to pass the KeyID in the request (which is the same as the Token)
+		desiredVirtualKey.Key = observedVirtualKeyDetails.Token
 		updateResponse, err := r.LitellmClient.UpdateVirtualKey(ctx, &desiredVirtualKey)
 		if err != nil {
 			log.Error(err, "Failed to update virtual key in LiteLLM")
@@ -381,7 +381,7 @@ func (r *VirtualKeyReconciler) updateVirtualKeyStatus(virtualKey *authv1alpha1.V
 	virtualKey.Status.Expires = virtualKeyResponse.Expires
 	virtualKey.Status.Guardrails = virtualKeyResponse.Guardrails
 	virtualKey.Status.KeyAlias = virtualKeyResponse.KeyAlias
-	virtualKey.Status.KeyID = virtualKeyResponse.TokenID
+	virtualKey.Status.KeyID = virtualKeyResponse.Token
 	virtualKey.Status.KeyName = virtualKeyResponse.KeyName
 	virtualKey.Status.KeySecretRef = secretKeyName
 	virtualKey.Status.LiteLLMBudgetTable = virtualKeyResponse.LiteLLMBudgetTable
