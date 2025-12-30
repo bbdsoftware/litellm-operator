@@ -203,6 +203,9 @@ spec:
                   - type
                   type: object
                 type: array
+              role:
+                description: Role is the role of the user in the team
+                type: string
               teamAlias:
                 description: TeamAlias is the alias of the team
                 type: string

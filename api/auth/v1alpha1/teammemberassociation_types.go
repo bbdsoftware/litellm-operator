@@ -66,6 +66,8 @@ type TeamMemberAssociationStatus struct {
 	UserEmail string `json:"userEmail,omitempty"`
 	// UserID is the ID of the user
 	UserID string `json:"userID,omitempty"`
+	// Role is the role of the user in the team
+	Role string `json:"role,omitempty"`
 
 	TeamExists         bool `json:"teamExists,omitempty"`
 	UserExists         bool `json:"userExists,omitempty"`

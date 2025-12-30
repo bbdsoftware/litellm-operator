@@ -61,6 +61,7 @@ type ExternalData struct {
 	TeamID    string `json:"teamID"`
 	UserEmail string `json:"userEmail"`
 	UserID    string `json:"userID"`
+	Role      string `json:"role"`
 }
 
 // +kubebuilder:rbac:groups=auth.litellm.ai,resources=teammemberassociations,verbs=get;list;watch;create;update;patch;delete
@@ -297,6 +298,13 @@ func (r *TeamMemberAssociationReconciler) ensureExternal(ctx context.Context, te
 	externalData.TeamID = createResponse.TeamID
 	externalData.UserEmail = createResponse.UserEmail
 	externalData.UserID = createResponse.UserID
+	// Find role from members with role
+	for _, member := range createResponse.MembersWithRole {
+		if member.UserID == createResponse.UserID {
+			externalData.Role = member.Role
+			break
+		}
+	}
 
 	r.updateTeamMemberAssociationStatus(teamMemberAssociation, externalData)
 	if err := r.PatchStatus(ctx, teamMemberAssociation); err != nil {
@@ -398,6 +406,7 @@ func (r *TeamMemberAssociationReconciler) updateTeamMemberAssociationStatus(team
 	teamMemberAssociation.Status.TeamID = externalData.TeamID
 	teamMemberAssociation.Status.UserEmail = externalData.UserEmail
 	teamMemberAssociation.Status.UserID = externalData.UserID
+	teamMemberAssociation.Status.Role = externalData.Role
 }
 
 func (r *TeamMemberAssociationReconciler) SetupWithManager(mgr ctrl.Manager) error {
