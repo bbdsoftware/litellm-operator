@@ -23,6 +23,9 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"k8s.io/client-go/kubernetes/scheme"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/config"
 
 	"github.com/bbdsoftware/litellm-operator/test/utils"
 )
@@ -30,11 +33,11 @@ import (
 const namespace = "litellm-operator-system"
 
 var _ = BeforeSuite(func() {
-	By("installing prometheus operator")
-	Expect(utils.InstallPrometheusOperator()).To(Succeed())
+	// By("installing prometheus operator")
+	// Expect(utils.InstallPrometheusOperator()).To(Succeed())
 
-	By("installing the cert-manager")
-	Expect(utils.InstallCertManager()).To(Succeed())
+	// By("installing the cert-manager")
+	// Expect(utils.InstallCertManager()).To(Succeed())
 
 	By("creating manager namespace")
 	cmd := exec.Command("kubectl", "create", "ns", namespace)
@@ -100,17 +103,64 @@ var _ = BeforeSuite(func() {
 		return nil
 	}
 	EventuallyWithOffset(1, verifyControllerUp, time.Minute, time.Second).Should(Succeed())
+
+	// Setup LiteLLM instance for all e2e tests
+	By("setting up LiteLLM instance for e2e tests")
+	setupLiteLLMInstanceForE2E()
 })
 
-var _ = AfterSuite(func() {
-	By("uninstalling the Prometheus manager bundle")
-	utils.UninstallPrometheusOperator()
+func setupLiteLLMInstanceForE2E() {
+	// Initialize k8sClient for LiteLLM setup
+	cfg := config.GetConfigOrDie()
+	var err error
+	k8sClient, err = client.New(cfg, client.Options{Scheme: scheme.Scheme})
+	ExpectWithOffset(1, err).NotTo(HaveOccurred())
 
-	By("uninstalling the cert-manager bundle")
-	utils.UninstallCertManager()
+	By("creating test namespace")
+	cmd := exec.Command("kubectl", "create", "namespace", modelTestNamespace)
+	_, _ = utils.Run(cmd)
+
+	By("Starting Postgres instance")
+	createPostgresInstance()
+
+	By("Creating Postgres Secret")
+	createPostgresSecret()
+
+	By("creating model secret")
+	path := mustSamplePath("test-model-secret.yaml")
+	cmd = exec.Command("kubectl", "apply", "-f", path)
+	_, err = utils.Run(cmd)
+	ExpectWithOffset(1, err).NotTo(HaveOccurred())
+
+	By("creating LiteLLM instance")
+	createLiteLLMInstance()
+
+	By("waiting for LiteLLM instance to be ready")
+	EventuallyWithOffset(1, func() error {
+		return waitForLiteLLMInstanceReady()
+	}, testTimeout, testInterval).Should(Succeed())
+
+	By("verifying LiteLLM instance is fully ready and accessible")
+	EventuallyWithOffset(1, func() error {
+		return verifyLiteLLMInstanceFullyReady()
+	}, testTimeout, testInterval).Should(Succeed())
+}
+
+var _ = AfterSuite(func() {
+	By("cleaning up LiteLLM test namespace")
+	// Ensure we wait a moment to allow any final operations to complete
+	time.Sleep(2 * time.Second)
+	cmd := exec.Command("kubectl", "delete", "namespace", modelTestNamespace)
+	_, _ = utils.Run(cmd)
+
+	// By("uninstalling the Prometheus manager bundle")
+	// utils.UninstallPrometheusOperator()
+
+	// By("uninstalling the cert-manager bundle")
+	// utils.UninstallCertManager()
 
 	By("removing manager namespace")
-	cmd := exec.Command("kubectl", "delete", "ns", namespace)
+	cmd = exec.Command("kubectl", "delete", "ns", namespace)
 	_, _ = utils.Run(cmd)
 })
 

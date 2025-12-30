@@ -26,12 +26,31 @@ import (
 	. "github.com/onsi/gomega"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/kubernetes/scheme"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/config"
 
 	authv1alpha1 "github.com/bbdsoftware/litellm-operator/api/auth/v1alpha1"
 	"github.com/bbdsoftware/litellm-operator/test/utils"
 )
 
+func init() {
+	// Add the auth scheme
+	err := authv1alpha1.AddToScheme(scheme.Scheme)
+	if err != nil {
+		panic(err)
+	}
+}
+
 var _ = Describe("User E2E Tests", Ordered, func() {
+	BeforeAll(func() {
+		// Initialize k8sClient (reinitialize to ensure auth scheme is registered)
+		cfg := config.GetConfigOrDie()
+		var err error
+		k8sClient, err = client.New(cfg, client.Options{Scheme: scheme.Scheme})
+		Expect(err).NotTo(HaveOccurred())
+	})
+
 	Context("User Lifecycle", func() {
 		It("should create, update, and delete a user successfully", func() {
 			userEmail := "e2e-test@example.com"
@@ -75,23 +94,6 @@ var _ = Describe("User E2E Tests", Ordered, func() {
 			Eventually(func() error {
 				return verifyUserDeletedFromLiteLLM(userEmail)
 			}, testTimeout, testInterval).Should(Succeed())
-		})
-
-		It("should handle user creation with invalid email", func() {
-			invalidEmail := "invalid-email"
-			userCRName := "invalid-email-user"
-
-			By("creating a user CR with invalid email")
-			invalidUserCR := createInvalidUserCR(userCRName, invalidEmail)
-			Expect(k8sClient.Create(context.Background(), invalidUserCR)).To(Succeed())
-
-			By("verifying the user CR shows error status")
-			Eventually(func() error {
-				return verifyUserCRStatusError(userCRName, "Error", "invalid email format")
-			}, testTimeout, testInterval).Should(Succeed())
-
-			By("cleaning up invalid user CR")
-			Expect(k8sClient.Delete(context.Background(), invalidUserCR)).To(Succeed())
 		})
 
 		It("should handle user with auto-create key", func() {

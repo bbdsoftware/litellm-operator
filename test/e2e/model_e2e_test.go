@@ -65,42 +65,27 @@ func init() {
 
 var _ = Describe("Model E2E Tests", Ordered, func() {
 	BeforeAll(func() {
-		cfg := config.GetConfigOrDie()
-		var err error
-		k8sClient, err = client.New(cfg, client.Options{Scheme: scheme.Scheme})
-		Expect(err).NotTo(HaveOccurred())
+		// Initialize k8sClient if not already initialized
+		if k8sClient == nil {
+			cfg := config.GetConfigOrDie()
+			var err error
+			k8sClient, err = client.New(cfg, client.Options{Scheme: scheme.Scheme})
+			Expect(err).NotTo(HaveOccurred())
+		}
 
-		By("creating test namespace")
-		cmd := exec.Command("kubectl", "create", "namespace", modelTestNamespace)
-		_, _ = utils.Run(cmd)
-
-		By("Starting Postgress instance")
-		createPostgresInstance()
-
-		//create postrges-secret in modelTestNamespace
-		By("Creating Postgres Secret")
-		createPostgresSecret()
-
-		By("creating model secret")
-		path := mustSamplePath("test-model-secret.yaml")
-		cmd = exec.Command("kubectl", "apply", "-f", path)
-		_, err = utils.Run(cmd)
-		Expect(err).NotTo(HaveOccurred())
-
-		By("creating LiteLLM instance")
-		createLiteLLMInstance()
-
-		By("waiting for LiteLLM instance to be ready")
+		// Verify LiteLLM instance is ready (it should already be set up in BeforeSuite)
+		By("verifying LiteLLM instance is ready")
 		Eventually(func() error {
 			return waitForLiteLLMInstanceReady()
-		}, testTimeout, testInterval).Should(Succeed())
-
+		}, 30*time.Second, 2*time.Second).Should(Succeed(), "LiteLLM instance must be ready before tests")
 	})
 
-	AfterAll(func() {
-		By("cleaning up test namespace")
-		cmd := exec.Command("kubectl", "delete", "namespace", modelTestNamespace)
-		_, _ = utils.Run(cmd)
+	// BeforeEach ensures the LiteLLM instance is still ready before each test
+	BeforeEach(func() {
+		By("verifying LiteLLM instance is still ready before test execution")
+		Eventually(func() error {
+			return waitForLiteLLMInstanceReady()
+		}, 30*time.Second, 2*time.Second).Should(Succeed(), "LiteLLM instance must be ready before each test")
 	})
 
 	Context("Model Lifecycle", func() {
@@ -274,9 +259,15 @@ func createPostgresSecret() {
 }
 
 func createPostgresInstance() {
-	//install Postges
+	//install Postges operator
 	cmd := exec.Command("kubectl", "apply", "-f", "https://raw.githubusercontent.com/cloudnative-pg/cloudnative-pg/release-1.21/releases/cnpg-1.21.0.yaml")
 	_, err := utils.Run(cmd)
+	if err != nil {
+		Expect(err).NotTo(HaveOccurred())
+	}
+	// Wait for the Postgres operator to be ready
+	cmd = exec.Command("kubectl", "wait", "--for=condition=Ready", "pod", "-l", "app.kubernetes.io/name=cloudnative-pg", "-n", "cnpg-system", "--timeout=300s")
+	_, err = utils.Run(cmd)
 	if err != nil {
 		Expect(err).NotTo(HaveOccurred())
 	}
@@ -418,6 +409,37 @@ func waitForLiteLLMInstanceReady() error {
 
 	if string(output) != condStatusTrue {
 		return fmt.Errorf("LiteLLM instance not ready, status: %s", string(output))
+	}
+
+	return nil
+}
+
+func verifyLiteLLMInstanceFullyReady() error {
+	// Verify the instance exists
+	cmd := exec.Command("kubectl", "get", "litellminstance", "e2e-test-instance",
+		"-n", modelTestNamespace)
+	_, err := utils.Run(cmd)
+	if err != nil {
+		return fmt.Errorf("LiteLLM instance does not exist: %w", err)
+	}
+
+	// Verify Ready condition is True
+	if err := waitForLiteLLMInstanceReady(); err != nil {
+		return err
+	}
+
+	// Verify the instance has a non-empty status (indicating it's been processed)
+	cmd = exec.Command("kubectl", "get", "litellminstance", "e2e-test-instance",
+		"-n", modelTestNamespace,
+		"-o", "jsonpath={.status.conditions[?(@.type=='Ready')].message}")
+	output, err := utils.Run(cmd)
+	if err != nil {
+		return fmt.Errorf("failed to get LiteLLM instance status message: %w", err)
+	}
+
+	// If there's an error message in the Ready condition, that's a problem
+	if strings.Contains(string(output), "Error") || strings.Contains(string(output), "error") {
+		return fmt.Errorf("LiteLLM instance has error in status: %s", string(output))
 	}
 
 	return nil

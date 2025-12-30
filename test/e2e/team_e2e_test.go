@@ -26,12 +26,31 @@ import (
 	. "github.com/onsi/gomega"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/kubernetes/scheme"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/config"
 
 	authv1alpha1 "github.com/bbdsoftware/litellm-operator/api/auth/v1alpha1"
 	"github.com/bbdsoftware/litellm-operator/test/utils"
 )
 
+func init() {
+	// Add the auth scheme
+	err := authv1alpha1.AddToScheme(scheme.Scheme)
+	if err != nil {
+		panic(err)
+	}
+}
+
 var _ = Describe("Team E2E Tests", Ordered, func() {
+	BeforeAll(func() {
+		// Initialize k8sClient (reinitialize to ensure auth scheme is registered)
+		cfg := config.GetConfigOrDie()
+		var err error
+		k8sClient, err = client.New(cfg, client.Options{Scheme: scheme.Scheme})
+		Expect(err).NotTo(HaveOccurred())
+	})
+
 	Context("Team Lifecycle", func() {
 		It("should create, update, and delete a team successfully", func() {
 			teamAlias := "e2e-test-team"
