@@ -12,7 +12,7 @@ import (
 )
 
 const (
-	LitellmImage = "docker.litellm.ai/berriai/litellm:main-latest"
+	LitellmImage = "ghcr.io/berriai/litellm-database:main-v1.74.9.rc.1"
 )
 
 // LitellmDockerFixture manages the lifecycle of a LiteLLM and Postgres docker container pair for testing
