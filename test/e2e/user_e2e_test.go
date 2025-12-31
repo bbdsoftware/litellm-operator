@@ -291,68 +291,14 @@ func verifyUserKeyCreated(userEmail string) error {
 }
 
 func verifyUserCRStatus(userCRName, expectedStatus string) error {
-	cmd := exec.Command("kubectl", "get", "user", userCRName,
-		"-n", modelTestNamespace,
-		"-o", "jsonpath={.status.conditions[?(@.type=='Ready')].status}")
-
-	output, err := utils.Run(cmd)
+	userCR := &authv1alpha1.User{}
+	err := k8sClient.Get(context.Background(), types.NamespacedName{
+		Name:      userCRName,
+		Namespace: modelTestNamespace,
+	}, userCR)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to get user %s: %w", userCRName, err)
 	}
 
-	got := strings.TrimSpace(string(output))
-	var expectedConditionStatus string
-	switch expectedStatus {
-	case "Ready":
-		expectedConditionStatus = condStatusTrue
-	case "Error":
-		expectedConditionStatus = condStatusFalse
-	default:
-		expectedConditionStatus = expectedStatus
-	}
-
-	if got != expectedConditionStatus {
-		return fmt.Errorf("expected status %s (condition status %s), got %s", expectedStatus, expectedConditionStatus, got)
-	}
-
-	return nil
-}
-
-func verifyUserCRStatusError(userCRName, expectedStatus string, errorMsg string) error {
-	var expectedConditionStatus string
-	switch expectedStatus {
-	case "Ready":
-		expectedConditionStatus = condStatusTrue
-	case "Error":
-		expectedConditionStatus = condStatusFalse
-	default:
-		expectedConditionStatus = expectedStatus
-	}
-
-	cmdStatus := exec.Command("kubectl", "get", "user", userCRName,
-		"-n", modelTestNamespace,
-		"-o", "jsonpath={.status.conditions[?(@.type=='Ready')].status}")
-	outStatus, err := utils.Run(cmdStatus)
-	if err != nil {
-		return err
-	}
-
-	got := strings.TrimSpace(string(outStatus))
-	if got != expectedConditionStatus {
-		return fmt.Errorf("expected status %s (condition status %s), got %s", expectedStatus, expectedConditionStatus, got)
-	}
-
-	cmdMsg := exec.Command("kubectl", "get", "user", userCRName,
-		"-n", modelTestNamespace,
-		"-o", "jsonpath={.status.conditions[?(@.type=='Ready')].message}")
-	outMsg, err := utils.Run(cmdMsg)
-	if err != nil {
-		return err
-	}
-
-	if !strings.Contains(string(outMsg), errorMsg) {
-		return fmt.Errorf("expected error message '%s' not found in status message: %s", errorMsg, string(outMsg))
-	}
-
-	return nil
+	return verifyReady(userCR.GetConditions(), expectedStatus)
 }

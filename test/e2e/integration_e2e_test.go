@@ -507,31 +507,16 @@ func updateTeamMemberRole(associationCRName, newRole string) error {
 }
 
 func verifyTeamMemberAssociationCRStatus(associationCRName, expectedStatus string) error {
-	cmd := exec.Command("kubectl", "get", "teammemberassociation", associationCRName,
-		"-n", modelTestNamespace,
-		"-o", "jsonpath={.status.conditions[?(@.type=='Ready')].status}")
-
-	output, err := utils.Run(cmd)
+	association := &authv1alpha1.TeamMemberAssociation{}
+	err := k8sClient.Get(context.Background(), types.NamespacedName{
+		Name:      associationCRName,
+		Namespace: modelTestNamespace,
+	}, association)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to get team member association %s: %w", associationCRName, err)
 	}
 
-	got := strings.TrimSpace(string(output))
-	var expectedConditionStatus string
-	switch expectedStatus {
-	case statusReady:
-		expectedConditionStatus = condStatusTrue
-	case statusError:
-		expectedConditionStatus = condStatusFalse
-	default:
-		expectedConditionStatus = expectedStatus
-	}
-
-	if got != expectedConditionStatus {
-		return fmt.Errorf("expected status %s (condition status %s), got %s", expectedStatus, expectedConditionStatus, got)
-	}
-
-	return nil
+	return verifyReady(association.GetConditions(), expectedStatus)
 }
 
 func verifyTeamMemberAssociationDeletedFromLiteLLM(associationCRName string) error {
@@ -550,5 +535,36 @@ func verifyTeamMemberAssociationDeletedFromLiteLLM(associationCRName string) err
 	}
 
 	// Resource not found means it was successfully deleted
+	return nil
+}
+
+func verifyReady(conditions []metav1.Condition, expectedStatus string) error {
+	var readyCondition *metav1.Condition
+	for i := range conditions {
+		if conditions[i].Type == "Ready" {
+			readyCondition = &conditions[i]
+			break
+		}
+	}
+
+	if readyCondition == nil {
+		return fmt.Errorf("Ready condition not found")
+	}
+
+	got := string(readyCondition.Status)
+	var expectedConditionStatus string
+	switch expectedStatus {
+	case statusReady:
+		expectedConditionStatus = condStatusTrue
+	case statusError:
+		expectedConditionStatus = condStatusFalse
+	default:
+		expectedConditionStatus = expectedStatus
+	}
+
+	if got != expectedConditionStatus {
+		return fmt.Errorf("expected status %s (condition status %s), got %s", expectedStatus, expectedConditionStatus, got)
+	}
+
 	return nil
 }

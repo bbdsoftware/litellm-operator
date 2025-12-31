@@ -436,29 +436,14 @@ func verifyVirtualKeyDuration(keyAlias, expectedDuration string) error {
 }
 
 func verifyVirtualKeyCRStatus(keyCRName, expectedStatus string) error {
-	cmd := exec.Command("kubectl", "get", "virtualkey", keyCRName,
-		"-n", modelTestNamespace,
-		"-o", "jsonpath={.status.conditions[?(@.type=='Ready')].status}")
-
-	output, err := utils.Run(cmd)
+	virtualKeyCR := &authv1alpha1.VirtualKey{}
+	err := k8sClient.Get(context.Background(), types.NamespacedName{
+		Name:      keyCRName,
+		Namespace: modelTestNamespace,
+	}, virtualKeyCR)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to get virtual key %s: %w", keyCRName, err)
 	}
 
-	got := strings.TrimSpace(string(output))
-	var expectedConditionStatus string
-	switch expectedStatus {
-	case statusReady:
-		expectedConditionStatus = condStatusTrue
-	case statusError:
-		expectedConditionStatus = condStatusFalse
-	default:
-		expectedConditionStatus = expectedStatus
-	}
-
-	if got != expectedConditionStatus {
-		return fmt.Errorf("expected status %s (condition status %s), got %s", expectedStatus, expectedConditionStatus, got)
-	}
-
-	return nil
+	return verifyReady(virtualKeyCR.GetConditions(), expectedStatus)
 }

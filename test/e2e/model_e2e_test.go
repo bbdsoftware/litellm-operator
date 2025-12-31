@@ -516,33 +516,16 @@ func verifyModelCRStatusError(modelCRName, expectedStatus string, errorMsg strin
 }
 
 func verifyModelCRStatus(modelCRName, expectedStatus string) error {
-	cmd := exec.Command("kubectl", "get", "model", modelCRName,
-		"-n", modelTestNamespace,
-		"-o", "jsonpath={.status.conditions[?(@.type=='Ready')].status}")
-
-	output, err := utils.Run(cmd)
+	modelCR := &litellmv1alpha1.Model{}
+	err := k8sClient.Get(context.Background(), types.NamespacedName{
+		Name:      modelCRName,
+		Namespace: modelTestNamespace,
+	}, modelCR)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to get model %s: %w", modelCRName, err)
 	}
 
-	got := strings.TrimSpace(string(output))
-
-	// Map the human-friendly expected statuses used in tests to the actual condition status values.
-	var expectedConditionStatus string
-	switch expectedStatus {
-	case statusReady:
-		expectedConditionStatus = condStatusTrue
-	case statusError:
-		expectedConditionStatus = condStatusFalse
-	default:
-		expectedConditionStatus = expectedStatus
-	}
-
-	if got != expectedConditionStatus {
-		return fmt.Errorf("expected status %s (condition status %s), got %s", expectedStatus, expectedConditionStatus, got)
-	}
-
-	return nil
+	return verifyReady(modelCR.GetConditions(), expectedStatus)
 }
 
 // Helper functions for creating pointers to primitive types

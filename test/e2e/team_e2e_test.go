@@ -359,30 +359,14 @@ func verifyTeamBudgetDuration(teamAlias, expectedDuration string) error {
 }
 
 func verifyTeamCRStatus(teamCRName string) error {
-	expectedStatus := statusReady
-	cmd := exec.Command("kubectl", "get", "team", teamCRName,
-		"-n", modelTestNamespace,
-		"-o", "jsonpath={.status.conditions[?(@.type=='Ready')].status}")
-
-	output, err := utils.Run(cmd)
+	teamCR := &authv1alpha1.Team{}
+	err := k8sClient.Get(context.Background(), types.NamespacedName{
+		Name:      teamCRName,
+		Namespace: modelTestNamespace,
+	}, teamCR)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to get team %s: %w", teamCRName, err)
 	}
 
-	got := strings.TrimSpace(string(output))
-	var expectedConditionStatus string
-	switch expectedStatus {
-	case statusReady:
-		expectedConditionStatus = condStatusTrue
-	case statusError:
-		expectedConditionStatus = condStatusFalse
-	default:
-		expectedConditionStatus = expectedStatus
-	}
-
-	if got != expectedConditionStatus {
-		return fmt.Errorf("expected status %s (condition status %s), got %s", expectedStatus, expectedConditionStatus, got)
-	}
-
-	return nil
+	return verifyReady(teamCR.GetConditions(), statusReady)
 }
