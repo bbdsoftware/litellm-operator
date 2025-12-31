@@ -460,49 +460,11 @@ func verifyTeamMembership(teamAlias, userEmail string) error {
 	return nil
 }
 
-func verifyTeamMemberRole(teamAlias, userEmail, expectedRole string) error {
-	cmd := exec.Command("sh", "-c", fmt.Sprintf("kubectl get teammemberassociation -n %s -o json | jq -r '.items[] | select(.status.teamAlias==\"%s\" and .status.userEmail==\"%s\") | .status.role'", modelTestNamespace, teamAlias, userEmail))
-
-	output, err := utils.Run(cmd)
-	if err != nil {
-		return err
-	}
-
-	actualRole := strings.TrimSpace(string(output))
-	if actualRole != expectedRole {
-		return fmt.Errorf("expected role %s, got %s for user %s in team %s", expectedRole, actualRole, userEmail, teamAlias)
-	}
-
-	return nil
-}
-
-func verifyUserRemovedFromTeam(teamAlias, userEmail string) error {
-	cmd := exec.Command("kubectl", "get", "teammemberassociation", "-n", modelTestNamespace,
-		"-o", "jsonpath={.items[?(@.status.teamAlias=='"+teamAlias+"' && @.status.userEmail=='"+userEmail+"')].metadata.name}")
-
-	output, err := utils.Run(cmd)
-	if err != nil {
-		return err
-	}
-
-	if strings.TrimSpace(string(output)) != "" {
-		return fmt.Errorf("user %s still exists in team %s", userEmail, teamAlias)
-	}
-
-	return nil
-}
-
 func verifyBudgetHierarchy(teamAlias, userEmail, keyAlias string) error {
 	// This is a placeholder for budget hierarchy validation
 	// In a real implementation, you would verify that:
 	// - Key budget <= User budget <= Team member budget <= Team budget
 	// This would require querying the actual budget values and comparing them
-	return nil
-}
-
-func updateTeamMemberRole(associationCRName, newRole string) error {
-	// Update the team member association role
-	// This would involve getting the CR, updating the role, and applying the change
 	return nil
 }
 

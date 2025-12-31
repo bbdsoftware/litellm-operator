@@ -80,6 +80,8 @@ jobs:
 
   e2e:
     runs-on: ubuntu-latest
+    env:
+      KIND_CLUSTER: e2e-test-cluster
     steps:
     - uses: actions/checkout@v6
 
@@ -90,23 +92,8 @@ jobs:
     - name: Set up Kind cluster
       uses: helm/kind-action@v1
       with:
-        cluster_name: test-cluster
-        kubectl_version: v1.28.0
-
-    - name: Build and load Docker image
-      run: |
-        make docker-build IMG=litellm-operator:test
-        kind load docker-image litellm-operator:test --name test-cluster
-
-    - name: Install CRDs
-      run: make install
-
-    - name: Deploy operator
-      run: make deploy IMG=litellm-operator:test
-
-    - name: Wait for operator to be ready
-      run: |
-        kubectl wait --for=condition=available --timeout=300s deployment/litellm-operator-controller-manager -n litellm
+        cluster_name: ${{ env.KIND_CLUSTER }}
+        kubectl_version: v1.32.0
 
     - name: Run e2e tests
       run: make test-e2e

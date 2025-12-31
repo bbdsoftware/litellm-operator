@@ -184,26 +184,6 @@ func createUserCR(name, email string) *authv1alpha1.User {
 	}
 }
 
-func createInvalidUserCR(name, email string) *authv1alpha1.User {
-	return &authv1alpha1.User{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      name,
-			Namespace: modelTestNamespace,
-		},
-		Spec: authv1alpha1.UserSpec{
-			ConnectionRef: authv1alpha1.ConnectionRef{
-				InstanceRef: &authv1alpha1.InstanceRef{
-					Namespace: modelTestNamespace,
-					Name:      "e2e-test-instance",
-				},
-			},
-			UserEmail: email, // Invalid email format
-			UserAlias: name,
-			UserRole:  "internal_user",
-		},
-	}
-}
-
 func createUserWithAutoKey(name, email string) *authv1alpha1.User {
 	userCR := createUserCR(name, email)
 	userCR.Spec.AutoCreateKey = true
