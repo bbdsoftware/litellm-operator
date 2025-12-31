@@ -65,6 +65,7 @@ func NewVirtualKeyReconciler(client client.Client, scheme *runtime.Scheme) *Virt
 type ExternalData struct {
 	Key      string `json:"key"`
 	KeyAlias string `json:"keyAlias"`
+	KeyID    string `json:"keyID"`
 }
 
 // +kubebuilder:rbac:groups=auth.litellm.ai,resources=virtualkeys,verbs=get;list;watch;create;update;patch;delete
@@ -235,6 +236,7 @@ func (r *VirtualKeyReconciler) ensureExternal(ctx context.Context, virtualKey *a
 
 		externalData.Key = createResponse.Key
 		externalData.KeyAlias = createResponse.KeyAlias
+		externalData.KeyID = createResponse.Token
 
 		secretName := r.litellmResourceNaming.GenerateSecretName(createResponse.KeyAlias)
 		r.updateVirtualKeyStatus(virtualKey, createResponse, secretName)
@@ -265,8 +267,14 @@ func (r *VirtualKeyReconciler) ensureExternal(ctx context.Context, virtualKey *a
 			return r.HandleErrorRetryable(ctx, virtualKey, err, base.ReasonLitellmError)
 		}
 
-		externalData.Key = updateResponse.Key
 		externalData.KeyAlias = updateResponse.KeyAlias
+		externalData.KeyID = updateResponse.Token
+
+		// If the key is the same as the token, then it's clearly not the key
+		if updateResponse.Key != updateResponse.Token {
+			externalData.Key = updateResponse.Key
+		}
+
 		r.updateVirtualKeyStatus(virtualKey, updateResponse, virtualKey.Status.KeySecretRef)
 		if err := r.PatchStatus(ctx, virtualKey); err != nil {
 			log.Error(err, "Failed to update status after update")
