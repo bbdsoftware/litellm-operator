@@ -279,34 +279,20 @@ func createPostgresInstance() {
 		Expect(err).NotTo(HaveOccurred())
 	}
 
-	podName, err := waitForPodWithPrefix("litellm-postgres-1", 5*time.Minute)
-	Expect(err).NotTo(HaveOccurred())
+	// Wait for the postgres init job to complete
+	EventuallyWithOffset(1, func() error {
+		return waitForPostgresInitComplete()
+	}, testTimeout, testInterval).Should(Succeed())
 
-	// Wait for the cluster to be ready:
+	// Wait for the cluster to be ready
 	cmd = exec.Command("kubectl", "wait", "--for=condition=Ready", "cluster/litellm-postgres", "-n", modelTestNamespace, "--timeout=300s")
 	_, err = utils.Run(cmd)
 	Expect(err).NotTo(HaveOccurred())
 
-	// Wait for all pods to be ready
-	cmd = exec.Command("kubectl", "wait", "--for=condition=Ready", "pod/"+podName, "-n", modelTestNamespace, "--timeout=300s")
-	_, err = utils.Run(cmd)
-	Expect(err).NotTo(HaveOccurred())
-}
-
-func waitForPodWithPrefix(prefix string, timeout time.Duration) (string, error) {
-	deadline := time.Now().Add(timeout)
-	for time.Now().Before(deadline) {
-		cmd := exec.Command("kubectl", "get", "pods", "-n", modelTestNamespace, "-o", "jsonpath={.items[*].metadata.name}")
-		out, _ := utils.Run(cmd)
-		names := strings.Fields(string(out))
-		for _, n := range names {
-			if strings.HasPrefix(n, prefix) && !strings.Contains(n, "initdb") {
-				return n, nil
-			}
-		}
-		time.Sleep(5 * time.Second)
-	}
-	return "", fmt.Errorf("no pod with prefix %q found in namespace %s after %s", prefix, modelTestNamespace, timeout)
+	// Wait for pod to be ready
+	EventuallyWithOffset(1, func() error {
+		return waitForPostgresPodReady()
+	}, testTimeout, testInterval).Should(Succeed())
 }
 
 func createLiteLLMInstance() {
@@ -397,51 +383,30 @@ func createInvalidModelCR(name, modelName string) *litellmv1alpha1.Model {
 	}
 }
 
-func waitForLiteLLMInstanceReady() error {
-	cmd := exec.Command("kubectl", "get", "litellminstance", "e2e-test-instance",
-		"-n", modelTestNamespace,
-		"-o", "jsonpath={.status.conditions[?(@.type=='Ready')].status}")
-
-	output, err := utils.Run(cmd)
+func waitForPostgresInitComplete() error {
+	cmd := exec.Command("kubectl", "wait", "--for=condition=Complete", "job/litellm-postgres-1-initdb", "-n", modelTestNamespace, "--timeout=300s")
+	_, err := utils.Run(cmd)
 	if err != nil {
 		return err
 	}
-
-	if string(output) != condStatusTrue {
-		return fmt.Errorf("LiteLLM instance not ready, status: %s", string(output))
-	}
-
 	return nil
 }
 
-func verifyLiteLLMInstanceFullyReady() error {
-	// Verify the instance exists
-	cmd := exec.Command("kubectl", "get", "litellminstance", "e2e-test-instance",
-		"-n", modelTestNamespace)
+func waitForPostgresPodReady() error {
+	cmd := exec.Command("kubectl", "wait", "--for=condition=Ready", "pod", "-l", "cnpg.io/instanceName=litellm-postgres-1", "-n", modelTestNamespace, "--timeout=300s")
 	_, err := utils.Run(cmd)
 	if err != nil {
-		return fmt.Errorf("LiteLLM instance does not exist: %w", err)
-	}
-
-	// Verify Ready condition is True
-	if err := waitForLiteLLMInstanceReady(); err != nil {
 		return err
 	}
+	return nil
+}
 
-	// Verify the instance has a non-empty status (indicating it's been processed)
-	cmd = exec.Command("kubectl", "get", "litellminstance", "e2e-test-instance",
-		"-n", modelTestNamespace,
-		"-o", "jsonpath={.status.conditions[?(@.type=='Ready')].message}")
-	output, err := utils.Run(cmd)
+func waitForLiteLLMInstanceReady() error {
+	cmd := exec.Command("kubectl", "wait", "--for=condition=Ready", "litellminstance/e2e-test-instance", "-n", modelTestNamespace, "--timeout=300s")
+	_, err := utils.Run(cmd)
 	if err != nil {
-		return fmt.Errorf("failed to get LiteLLM instance status message: %w", err)
+		return err
 	}
-
-	// If there's an error message in the Ready condition, that's a problem
-	if strings.Contains(string(output), "Error") || strings.Contains(string(output), "error") {
-		return fmt.Errorf("LiteLLM instance has error in status: %s", string(output))
-	}
-
 	return nil
 }
 

@@ -127,6 +127,9 @@ spec:
                   namespace:
                     type: string
                 type: object
+                x-kubernetes-validations:
+                - message: TeamRef is immutable
+                  rule: self == oldSelf
               userRef:
                 description: UserRef is a reference to the user
                 properties:
@@ -135,6 +138,9 @@ spec:
                   namespace:
                     type: string
                 type: object
+                x-kubernetes-validations:
+                - message: UserRef is immutable
+                  rule: self == oldSelf
             required:
             - connectionRef
             - role

@@ -182,6 +182,11 @@ var _ = Describe("Team E2E Tests", Ordered, func() {
 			teamCR := createTeamCR(teamCRName, teamAlias)
 			Expect(k8sClient.Create(context.Background(), teamCR)).To(Succeed())
 
+			By("waiting for team CR to be ready")
+			Eventually(func() error {
+				return verifyTeamCRStatus(teamCRName)
+			}, testTimeout, testInterval).Should(Succeed())
+
 			By("trying to update the immutable teamAlias field")
 			updatedTeamCR := &authv1alpha1.Team{}
 			Expect(k8sClient.Get(context.Background(), types.NamespacedName{

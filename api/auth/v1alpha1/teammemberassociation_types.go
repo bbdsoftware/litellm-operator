@@ -41,10 +41,12 @@ type TeamMemberAssociationSpec struct {
 
 	// TeamRef is a reference to the team
 	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:XValidation:rule="self == oldSelf",message="TeamRef is immutable"
 	TeamRef CRDRef `json:"teamRef,omitempty"`
 
 	// UserRef is a reference to the user
 	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:XValidation:rule="self == oldSelf",message="UserRef is immutable"
 	UserRef CRDRef `json:"userRef,omitempty"`
 }
 

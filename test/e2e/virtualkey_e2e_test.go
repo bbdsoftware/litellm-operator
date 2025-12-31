@@ -156,6 +156,11 @@ var _ = Describe("VirtualKey E2E Tests", Ordered, func() {
 				return verifyVirtualKeyBlockedStatus(keyAlias, true)
 			}, testTimeout, testInterval).Should(Succeed())
 
+			By("verifying virtual key CR has ready status")
+			Eventually(func() error {
+				return verifyVirtualKeyCRStatus(keyCRName, "Ready")
+			}, testTimeout, testInterval).Should(Succeed())
+
 			By("unblocking the virtual key")
 			updatedKeyCR := &authv1alpha1.VirtualKey{}
 			Expect(k8sClient.Get(context.Background(), types.NamespacedName{
