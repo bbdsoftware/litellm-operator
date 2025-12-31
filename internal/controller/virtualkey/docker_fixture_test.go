@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"os"
 	"os/exec"
 	"strings"
 	"time"
@@ -52,12 +53,17 @@ func (f *LitellmDockerFixture) Setup(ctx context.Context) error {
 	// Wait a bit for Postgres to initialize
 	time.Sleep(5 * time.Second)
 
+	image := LitellmImage
+	if os.Getenv("LITELLM_IMAGE") != "" {
+		image = os.Getenv("LITELLM_IMAGE")
+	}
+
 	// Start LiteLLM
 	// We map container port 4000 to a random host port using "-p 0:4000"
 	cmd := exec.Command("docker", "run", "-d", "--name", f.LitellmName, "--network", f.NetworkName, "-p", "0:4000",
 		"-e", "DATABASE_URL=postgresql://postgres:password@"+f.PostgresName+":5432/postgres",
 		"-e", "LITELLM_MASTER_KEY="+f.MasterKey,
-		LitellmImage,
+		image,
 		"--port", "4000",
 		"--model", "huggingface/bigcode/starcoder")
 
