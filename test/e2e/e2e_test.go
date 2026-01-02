@@ -109,7 +109,17 @@ var _ = AfterSuite(func() {
 	By("cleaning up LiteLLM test namespace")
 	// Ensure we wait a moment to allow any final operations to complete
 	time.Sleep(2 * time.Second)
-	cmd := exec.Command("kubectl", "delete", "namespace", modelTestNamespace)
+	// Deleting the namespace will hang if we don't delete the resources first
+	// this can happen if a test fails, which prevents the cleanup from happening
+	cmd := exec.Command("kubectl", "delete", "teammemberassociation", "-n", modelTestNamespace, "--all")
+	_, _ = utils.Run(cmd)
+	cmd = exec.Command("kubectl", "delete", "team", "-n", modelTestNamespace, "--all")
+	_, _ = utils.Run(cmd)
+	cmd = exec.Command("kubectl", "delete", "user", "-n", modelTestNamespace, "--all")
+	_, _ = utils.Run(cmd)
+	cmd = exec.Command("kubectl", "delete", "virtualkey", "-n", modelTestNamespace, "--all")
+	_, _ = utils.Run(cmd)
+	cmd = exec.Command("kubectl", "delete", "namespace", modelTestNamespace)
 	_, _ = utils.Run(cmd)
 
 	By("removing manager namespace")
