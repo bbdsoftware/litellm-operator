@@ -23,11 +23,10 @@ type TeamMemberAssociationRequest struct {
 }
 
 type TeamMemberAssociationResponse struct {
-	TeamAlias       string               `json:"team_alias,omitempty"`
-	TeamID          string               `json:"team_id,omitempty"`
-	UserEmail       string               `json:"user_email,omitempty"`
-	UserID          string               `json:"user_id,omitempty"`
-	MembersWithRole []TeamMemberWithRole `json:"members_with_roles,omitempty"`
+	TeamAlias string `json:"team_alias,omitempty"`
+	TeamID    string `json:"team_id,omitempty"`
+	UserEmail string `json:"user_email,omitempty"`
+	UserID    string `json:"user_id,omitempty"`
 }
 
 // CreateTeamMemberAssociation adds a User to a Team in the Litellm service
