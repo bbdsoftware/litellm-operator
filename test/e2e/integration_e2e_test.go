@@ -256,6 +256,66 @@ var _ = Describe("Integration E2E Tests", Ordered, func() {
 				return nil
 			})
 		})
+
+		It("should validate immutable fields", func() {
+			associationCRName := "immutable-test-association"
+			teamAlias := "immutable-team"
+			userEmail := "immutable@example.com"
+
+			teamCRName := "immutable-team-cr"
+			userCRName := "immutable-user-cr"
+
+			By("creating a team")
+			teamCR := createIntegrationTeamCR(teamCRName, teamAlias)
+			Expect(k8sClient.Create(context.Background(), teamCR)).To(Succeed())
+
+			By("creating a user")
+			userCR := createIntegrationUserCR(userCRName, userEmail)
+			Expect(k8sClient.Create(context.Background(), userCR)).To(Succeed())
+
+			By("creating team member association")
+			associationCR := createTeamMemberAssociationCR(associationCRName, teamCRName, userCRName)
+			Expect(k8sClient.Create(context.Background(), associationCR)).To(Succeed())
+
+			By("trying to update immutable teamAlias field")
+			updatedAssociationCR := &authv1alpha1.TeamMemberAssociation{}
+			Expect(k8sClient.Get(context.Background(), types.NamespacedName{
+				Name:      associationCRName,
+				Namespace: e2eTestNamespace,
+			}, updatedAssociationCR)).To(Succeed())
+
+			updatedAssociationCR.Spec.TeamRef.Name = "new-team-alias"
+			err := k8sClient.Update(context.Background(), updatedAssociationCR)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("TeamRef is immutable"))
+
+			By("cleaning up association CR")
+			originalAssociationCR := &authv1alpha1.TeamMemberAssociation{}
+			Expect(k8sClient.Get(context.Background(), types.NamespacedName{
+				Name:      associationCRName,
+				Namespace: e2eTestNamespace,
+			}, originalAssociationCR)).To(Succeed())
+			Expect(k8sClient.Delete(context.Background(), originalAssociationCR)).To(Succeed())
+			Eventually(func() error {
+				if err := verifyTeamMemberAssociationDeletedFromLiteLLM(associationCRName); err != nil {
+					return fmt.Errorf("association not deleted: %v", err)
+				}
+				return nil
+			}, testTimeout, testInterval).Should(Succeed())
+			Expect(k8sClient.Delete(context.Background(), userCR)).To(Succeed())
+			Expect(k8sClient.Delete(context.Background(), teamCR)).To(Succeed())
+
+			By("verifying all resources are deleted")
+			eventuallyVerify(func() error {
+				if err := verifyUserDeletedFromLiteLLM(userCRName); err != nil {
+					return fmt.Errorf("user still exists: %v", err)
+				}
+				if err := verifyTeamDeletedFromLiteLLM(teamCRName); err != nil {
+					return fmt.Errorf("team still exists: %v", err)
+				}
+				return nil
+			})
+		})
 	})
 })
 

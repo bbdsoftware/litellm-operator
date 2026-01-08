@@ -41,10 +41,12 @@ type TeamMemberAssociationSpec struct {
 
 	// TeamRef is a reference to the team
 	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:XValidation:rule="self == oldSelf",message="TeamRef is immutable"
 	TeamRef CRDRef `json:"teamRef,omitempty"`
 
 	// UserRef is a reference to the user
 	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:XValidation:rule="self == oldSelf",message="UserRef is immutable"
 	UserRef CRDRef `json:"userRef,omitempty"`
 }
 
@@ -66,6 +68,8 @@ type TeamMemberAssociationStatus struct {
 	UserEmail string `json:"userEmail,omitempty"`
 	// UserID is the ID of the user
 	UserID string `json:"userID,omitempty"`
+	// Role is the role of the user in the team
+	Role string `json:"role,omitempty"`
 
 	TeamExists         bool `json:"teamExists,omitempty"`
 	UserExists         bool `json:"userExists,omitempty"`

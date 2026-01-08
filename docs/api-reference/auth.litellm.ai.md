@@ -229,6 +229,7 @@ _Appears in:_
 | `teamID` _string_ | TeamID is the ID of the team |  |  |
 | `userEmail` _string_ | UserEmail is the email of the user |  |  |
 | `userID` _string_ | UserID is the ID of the user |  |  |
+| `role` _string_ | Role is the role of the user in the team |  |  |
 | `teamExists` _boolean_ |  |  |  |
 | `userExists` _boolean_ |  |  |  |
 | `associationIsValid` _boolean_ |  |  |  |
