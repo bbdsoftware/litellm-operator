@@ -704,6 +704,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#helm-configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Helm Configuration
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -1571,6 +1582,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#helm-configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Helm Configuration
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -1706,9 +1728,14 @@
 <td>Required</td>
 </tr>
 <tr>
+<td><code>LITELLM_URL_OVERRIDE</code></td>
+<td>Overrides the base URL for LiteLLM instances (internal service URL)</td>
+<td>None</td>
+</tr>
+<tr>
 <td><code>METRICS_BIND_ADDRESS</code></td>
 <td>Address for metrics server</td>
-<td><code>:8080</code></td>
+<td><code>:8443</code></td>
 </tr>
 <tr>
 <td><code>HEALTH_PROBE_BIND_ADDRESS</code></td>
@@ -1717,6 +1744,12 @@
 </tr>
 </tbody>
 </table>
+<h3 id="helm-configuration">Helm Configuration<a class="headerlink" href="#helm-configuration" title="Permanent link">&para;</a></h3>
+<p>When using Helm, you can set the URL override in your <code>values.yaml</code>:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="nt">controllerManager</span><span class="p">:</span>
+<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="w">  </span><span class="nt">manager</span><span class="p">:</span>
+<a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="w">    </span><span class="nt">litellmUrlOverride</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;http://custom-litellm-service:4000&quot;</span>
+</code></pre></div>
 <h2 id="troubleshooting">Troubleshooting<a class="headerlink" href="#troubleshooting" title="Permanent link">&para;</a></h2>
 <h3 id="common-issues">Common Issues<a class="headerlink" href="#common-issues" title="Permanent link">&para;</a></h3>
 <p><strong>Permission Denied Errors</strong>
@@ -1734,7 +1767,7 @@
 <li>Submit an issue on <a href="https://github.com/bbdsoftware/litellm-operator/issues/new/choose">GitHub</a></li>
 </ul>
 <h2 id="next-steps">Next Steps<a class="headerlink" href="#next-steps" title="Permanent link">&para;</a></h2>
-<p>Once installed, proceed to the <a href="../quickstart/">Quick Start Guide</a> to create your first resources. </p>
+<p>Once installed, proceed to the <a href="../quickstart/">Quick Start Guide</a> to create your first resources.</p>
 
 
 
