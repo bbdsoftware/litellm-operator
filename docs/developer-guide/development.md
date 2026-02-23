@@ -3,7 +3,7 @@
 It is expected that the operator will be deployed in the same namespace as the litellm service.
 
 ### Prerequisites
-- go version v1.22.0+
+- go version v1.22.5+
 - docker version 17.03+.
 - kubectl version v1.11.3+.
 - Access to a Kubernetes v1.11.3+ cluster.
@@ -16,10 +16,10 @@ For local development, you can use the provided Makefile targets to set up a com
 
 ```sh
 # Create a Kind cluster and bootstrap the development environment
-make dev-cluster-bootstrap
+make dev-cluster-bootstrap-full
 
 # Or recreate the entire cluster if needed
-make dev-cluster-recreate
+make dev-cluster-bootstrap-full-recreate
 ```
 
 This will:
@@ -27,7 +27,7 @@ This will:
 2. Generate manifests and install CRDs
 3. Install extra samples and basic samples
 4. Set up the complete development environment
-5. You will be able to ruin the controller locally thrp you IDE of choise
+5. You will be able to ruin the controller locally through you IDE of choice
 
 #### Manual Development Setup
 If you prefer to set up manually or use an existing cluster:
