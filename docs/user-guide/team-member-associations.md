@@ -46,7 +46,7 @@ spec:
     instanceRef:
       name: litellm-example
       namespace: litellm
-  role: member
+  role: user
   teamRef:
     name: ai-team
     namespace: litellm
@@ -60,7 +60,7 @@ spec:
 | Field | Type | Description | Required |
 |-------|------|-------------|----------|
 | `connectionRef` | object | Reference to LiteLLM instance | Yes |
-| `role` | string | User role within the team (admin, member) | Yes |
+| `role` | string | User role within the team (admin, user) | Yes |
 | `teamRef` | object | Reference to an existing `Team` resource  | yes |
 | `userRef` | object | Reference to an existing `User` resource  | yes |
 
@@ -81,7 +81,7 @@ kubectl describe teammemberassociation alice-ai-team
 ### Update User Role
 
 ```bash
-kubectl patch teammemberassociation alice-ai-team --type='merge' -p='{"spec":{"role":"member"}}'
+kubectl patch teammemberassociation alice-ai-team --type='merge' -p='{"spec":{"role":"user"}}'
 ```
 
 ### Remove User from Team
@@ -98,7 +98,7 @@ kubectl delete teammemberassociation alice-ai-team
 - Can view all team member activities
 - Can create and manage team resources
 
-### Member Role
+### User Role
 - Can access team resources and models
 - Can view team information
 - Cannot modify team settings
@@ -174,7 +174,7 @@ spec:
 ## Best Practices
 
 - Use descriptive names for associations that include both user and team
-- Start with member roles and promote to admin only when necessary
+- Start with user roles and promote to admin only when necessary
 - Regularly review team membership and roles
 - Ensure team aliases match exactly between Team and TeamMemberAssociation resources
 - Use consistent email addresses across User and TeamMemberAssociation resources
@@ -190,8 +190,8 @@ spec:
 
 **Role Permissions**
 - Admin roles have full team management capabilities
-- Member roles have limited access to team resources
-- Verify role spelling (admin, member)
+- User roles have limited access to team resources
+- Verify role spelling (admin, user)
 
 ## Next Steps
 

@@ -27,7 +27,7 @@ This will:
 2. Generate manifests and install CRDs
 3. Install extra samples and basic samples
 4. Set up the complete development environment
-5. You will be able to ruin the controller locally thrp you IDE of choise
+5. You will be able to run the controller locally through your IDE of choice
 
 #### Manual Development Setup
 If you prefer to set up manually or use an existing cluster:
