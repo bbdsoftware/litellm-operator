@@ -19,7 +19,7 @@
       
       
       <link rel="icon" href="../../assets/images/favicon.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.3">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.5">
     
     
       
@@ -1148,17 +1148,6 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#overview_1" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Overview
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
   <a href="#creating-models" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1172,45 +1161,6 @@
         
           <li class="md-nav__item">
   <a href="#basic-model" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Basic Model
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#overview_2" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Overview
-      
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#creating-models_1" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        Creating Models
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Creating Models">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#basic-model_1" class="md-nav__link">
     <span class="md-ellipsis">
       
         Basic Model
@@ -1290,15 +1240,6 @@
 <p>Model resources in the LiteLLM Operator provide:</p>
 <ul>
 <li><strong>Model Configuration</strong> - Define model routing and settings</li>
-<li><strong>Provider Management</strong> - Configure model provider credentials and endpoints </li>
-<li><strong>Request Routing</strong> - Control how requests are routed to models
- # Models</li>
-</ul>
-<p>Models represent LLM configurations in your LiteLLM system. They provide the foundation for routing requests to different model providers and managing model-specific configurations.</p>
-<h2 id="overview_1">Overview<a class="headerlink" href="#overview_1" title="Permanent link">&para;</a></h2>
-<p>Model resources in the LiteLLM Operator provide:</p>
-<ul>
-<li><strong>Model Configuration</strong> - Define model routing and settings</li>
 <li><strong>Provider Management</strong> - Configure model provider credentials and endpoints</li>
 <li><strong>Request Routing</strong> - Control how requests are routed to models</li>
 <li><strong>Usage Tracking</strong> - Monitor model usage and performance</li>
@@ -1306,19 +1247,6 @@
 </ul>
 <h2 id="creating-models">Creating Models<a class="headerlink" href="#creating-models" title="Permanent link">&para;</a></h2>
 <h3 id="basic-model">Basic Model<a class="headerlink" href="#basic-model" title="Permanent link">&para;</a></h3>
-<p># Models</p>
-<p>Models represent LLM configurations in your LiteLLM system. They provide the foundation for routing requests to different model providers and managing model-specific configurations.</p>
-<h2 id="overview_2">Overview<a class="headerlink" href="#overview_2" title="Permanent link">&para;</a></h2>
-<p>Model resources in the LiteLLM Operator provide:</p>
-<ul>
-<li><strong>Model Configuration</strong> - Define model routing and settings</li>
-<li><strong>Provider Management</strong> - Configure model provider credentials and endpoints</li>
-<li><strong>Request Routing</strong> - Control how requests are routed to models</li>
-<li><strong>Usage Tracking</strong> - Monitor model usage and performance</li>
-<li><strong>Auto-Routing</strong> - Configure automatic routing between models</li>
-</ul>
-<h2 id="creating-models_1">Creating Models<a class="headerlink" href="#creating-models_1" title="Permanent link">&para;</a></h2>
-<h3 id="basic-model_1">Basic Model<a class="headerlink" href="#basic-model_1" title="Permanent link">&para;</a></h3>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">litellm.litellm.ai/v1alpha1</span>
 <a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Model</span>
 <a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="nt">metadata</span><span class="p">:</span>
