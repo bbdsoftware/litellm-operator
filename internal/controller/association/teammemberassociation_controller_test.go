@@ -409,24 +409,58 @@ var _ = Describe("TeamMemberAssociation Controller", func() {
 			err = reconciler.Create(context.Background(), readyUser)
 			Expect(err).NotTo(HaveOccurred())
 
-			// Update association to reference existing but not-ready team
-			updatedAssociation := &authv1alpha1.TeamMemberAssociation{}
-			err = reconciler.Get(context.Background(), types.NamespacedName{
-				Name:      association.Name,
-				Namespace: association.Namespace,
-			}, updatedAssociation)
-			Expect(err).NotTo(HaveOccurred())
+			// Create a new association that references the not-ready team and ready user
+			// (TeamRef and UserRef are immutable, so we cannot update them on an existing resource)
+			notReadyAssociation := &authv1alpha1.TeamMemberAssociation{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:       "not-ready-team-association",
+					Namespace:  "default",
+					Generation: 1,
+				},
+				Spec: authv1alpha1.TeamMemberAssociationSpec{
+					Role: "user",
+					TeamRef: authv1alpha1.CRDRef{
+						Name:      "not-ready-team",
+						Namespace: "default",
+					},
+					UserRef: authv1alpha1.CRDRef{
+						Name:      "ready-user",
+						Namespace: "default",
+					},
+					ConnectionRef: authv1alpha1.ConnectionRef{
+						SecretRef: &authv1alpha1.SecretRef{
+							Name: "test-secret",
+							Keys: authv1alpha1.SecretKeys{
+								MasterKey: "masterkey",
+								URL:       "url",
+							},
+						},
+					},
+				},
+			}
 
-			updatedAssociation.Spec.TeamRef.Name = "not-ready-team"
-			updatedAssociation.Spec.UserRef.Name = "ready-user"
-			err = reconciler.Update(context.Background(), updatedAssociation)
+			// Create connection secret for the new association
+			secret := &corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-secret",
+					Namespace: "default",
+				},
+				Data: map[string][]byte{
+					"masterkey": []byte("test-key"),
+					"url":       []byte("http://test-url"),
+				},
+			}
+			// Ignore error in case secret already exists from earlier test setup
+			_ = reconciler.Create(context.Background(), secret)
+
+			err = reconciler.Create(context.Background(), notReadyAssociation)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Reconcile should detect not-ready team
 			result, err = reconciler.Reconcile(context.Background(), ctrl.Request{
 				NamespacedName: types.NamespacedName{
-					Name:      association.Name,
-					Namespace: association.Namespace,
+					Name:      notReadyAssociation.Name,
+					Namespace: notReadyAssociation.Namespace,
 				},
 			})
 

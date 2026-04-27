@@ -277,7 +277,7 @@ var _ = Describe("Integration E2E Tests", Ordered, func() {
 			associationCR := createTeamMemberAssociationCR(associationCRName, teamCRName, userCRName)
 			Expect(k8sClient.Create(context.Background(), associationCR)).To(Succeed())
 
-			By("trying to update immutable teamAlias field")
+			By("trying to update immutable teamRef.Name field")
 			updatedAssociationCR := &authv1alpha1.TeamMemberAssociation{}
 			Expect(k8sClient.Get(context.Background(), types.NamespacedName{
 				Name:      associationCRName,
