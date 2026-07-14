@@ -232,6 +232,9 @@ spec:
                   id:
                     description: ID is the model ID
                     type: string
+                  mode:
+                    description: Mode is the mode of the model
+                    type: string
                   teamId:
                     description: TeamID is the team ID
                     type: string

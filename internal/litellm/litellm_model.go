@@ -89,6 +89,7 @@ type ModelInfo struct {
 	DBModel              *bool                  `json:"db_model,omitempty"`
 	TeamID               *string                `json:"team_id,omitempty"`
 	TeamPublicModelName  *string                `json:"team_public_model_name,omitempty"`
+	Mode                 *string                `json:"mode,omitempty"`
 	AdditionalProperties map[string]interface{} `json:"-"`
 }
 
@@ -301,6 +302,7 @@ func (l *LitellmClient) IsModelUpdateNeeded(ctx context.Context, model *ModelRes
 		checkField("model_info_id", "Model info ID", model.ModelInfo.ID, req.ModelInfo.ID, true, true)
 		checkField("team_id", "Team ID", model.ModelInfo.TeamID, req.ModelInfo.TeamID, true, true)
 		checkField("team_public_model_name", "Team public model name", model.ModelInfo.TeamPublicModelName, req.ModelInfo.TeamPublicModelName, true, true)
+		checkField("mode", "Mode", model.ModelInfo.Mode, req.ModelInfo.Mode, true, true)
 	}
 
 	if changedFields.NeedsUpdate {

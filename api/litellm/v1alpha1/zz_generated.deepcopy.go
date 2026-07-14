@@ -562,6 +562,11 @@ func (in *ModelInfo) DeepCopyInto(out *ModelInfo) {
 		*out = new(string)
 		**out = **in
 	}
+	if in.Mode != nil {
+		in, out := &in.Mode, &out.Mode
+		*out = new(string)
+		**out = **in
+	}
 	if in.AdditionalProps != nil {
 		in, out := &in.AdditionalProps, &out.AdditionalProps
 		*out = new(runtime.RawExtension)

@@ -183,6 +183,9 @@ type ModelInfo struct {
 	// TeamPublicModelName is the team public model name
 	TeamPublicModelName *string `json:"teamPublicModelName,omitempty"`
 
+	// Mode is the mode of the model
+	Mode *string `json:"mode,omitempty"`
+
 	// AdditionalProps contains additional properties
 	AdditionalProps *runtime.RawExtension `json:"additionalProp1,omitempty"`
 }

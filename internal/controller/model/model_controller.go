@@ -465,6 +465,9 @@ func (r *ModelReconciler) convertToModelRequest(ctx context.Context, model *lite
 		}
 		modelRequest.LiteLLMParams = litellmParams
 		modelRequest.ModelInfo = litellm.NewModelInfo()
+		if model.Spec.ModelInfo.Mode != nil && *model.Spec.ModelInfo.Mode != "" {
+			modelRequest.ModelInfo.Mode = model.Spec.ModelInfo.Mode
+		}
 		if model.Status.ModelId != nil && *model.Status.ModelId != "" {
 			modelRequest.ModelInfo.ID = model.Status.ModelId
 		}
