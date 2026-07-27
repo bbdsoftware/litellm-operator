@@ -1448,7 +1448,7 @@ func buildLivenessProbe(customProbe *corev1.Probe) *corev1.Probe {
 	}
 
 	if customProbe != nil {
-		mergeProbeSettings(probe, customProbe)
+		mergeProbeSettings(probe, customProbe, false)
 	}
 
 	return probe
@@ -1471,7 +1471,7 @@ func buildReadinessProbe(customProbe *corev1.Probe) *corev1.Probe {
 	}
 
 	if customProbe != nil {
-		mergeProbeSettings(probe, customProbe)
+		mergeProbeSettings(probe, customProbe, true)
 	}
 
 	return probe
@@ -1494,14 +1494,15 @@ func buildStartupProbe(customProbe *corev1.Probe) *corev1.Probe {
 	}
 
 	if customProbe != nil {
-		mergeProbeSettings(probe, customProbe)
+		mergeProbeSettings(probe, customProbe, false)
 	}
 
 	return probe
 }
 
 // mergeProbeSettings copies non-zero timing settings from custom to default.
-func mergeProbeSettings(defaultProbe, customProbe *corev1.Probe) {
+// Kubernetes does not permit terminationGracePeriodSeconds on readiness probes.
+func mergeProbeSettings(defaultProbe, customProbe *corev1.Probe, isReadiness bool) {
 	if customProbe.InitialDelaySeconds != 0 {
 		defaultProbe.InitialDelaySeconds = customProbe.InitialDelaySeconds
 	}
@@ -1517,7 +1518,7 @@ func mergeProbeSettings(defaultProbe, customProbe *corev1.Probe) {
 	if customProbe.SuccessThreshold != 0 {
 		defaultProbe.SuccessThreshold = customProbe.SuccessThreshold
 	}
-	if customProbe.TerminationGracePeriodSeconds != nil {
+	if !isReadiness && customProbe.TerminationGracePeriodSeconds != nil {
 		defaultProbe.TerminationGracePeriodSeconds = customProbe.TerminationGracePeriodSeconds
 	}
 	// If the user specified a non-empty handler, use it entirely.

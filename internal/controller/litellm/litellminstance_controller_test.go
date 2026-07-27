@@ -390,9 +390,15 @@ var _ = Describe("LiteLLMInstance helpers and rendering", func() {
 				Exec: &corev1.ExecAction{Command: []string{"test"}},
 			},
 		}
-		mergeProbeSettings(defaultProbe, customProbe)
+		mergeProbeSettings(defaultProbe, customProbe, false)
 		Expect(defaultProbe.ProbeHandler.Exec).NotTo(BeNil())
 		Expect(defaultProbe.ProbeHandler.HTTPGet).To(BeNil())
+	})
+
+	It("does not apply termination grace period to readiness probes", func() {
+		terminationGracePeriodSeconds := int64(30)
+		probe := buildReadinessProbe(&corev1.Probe{TerminationGracePeriodSeconds: &terminationGracePeriodSeconds})
+		Expect(probe.TerminationGracePeriodSeconds).To(BeNil())
 	})
 
 })
