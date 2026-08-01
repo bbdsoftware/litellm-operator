@@ -107,6 +107,37 @@ spec:
 | `ingress` | object | Kubernetes ingress configuration | No |
 | `gateway` | object | Gateway configuration | No |
 | `replicas` | integer | Number of replicas for the LiteLLM deployment | No (default: 1) |
+| `livenessProbe` | object | Custom liveness probe configuration | No |
+| `readinessProbe` | object | Custom readiness probe configuration | No |
+| `startupProbe` | object | Custom startup probe configuration | No |
+
+### Probe Configuration
+
+The `livenessProbe`, `readinessProbe`, and `startupProbe` fields follow the standard Kubernetes Probe specification. You can configure:
+- `initialDelaySeconds`
+- `periodSeconds`
+- `timeoutSeconds`
+- `failureThreshold`
+- `successThreshold`
+
+The operator provides sane defaults for the probe handlers (path and port), which are used unless you specify a custom handler (`httpGet`, `exec`, `tcpSocket`, or `grpc`).
+
+#### Example with Custom Probes
+
+```yaml
+apiVersion: litellm.litellm.ai/v1alpha1
+kind: LiteLLMInstance
+metadata:
+  name: litellm-custom-probes
+spec:
+  startupProbe:
+    initialDelaySeconds: 30
+    periodSeconds: 10
+    failureThreshold: 30
+  livenessProbe:
+    initialDelaySeconds: 60
+    periodSeconds: 30
+```
 
 ### Database Configuration
 
@@ -370,4 +401,4 @@ spec:
 ## Next Steps
 
 - Learn about [Users](users.md), [Teams](teams.md), and [Virtual Keys](virtual-keys.md)
-- Review [security best practices](../community/security.md) 
+- Review [security best practices](../community/security.md)

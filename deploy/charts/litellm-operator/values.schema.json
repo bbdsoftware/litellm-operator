@@ -116,6 +116,31 @@
                   }
                 }
               }
+            },
+            "livenessProbe": {
+              "type": "object",
+              "description": "Liveness probe configuration for the manager",
+              "properties": {
+                "initialDelaySeconds": { "type": "integer", "default": 15 },
+                "periodSeconds": { "type": "integer", "default": 20 }
+              }
+            },
+            "readinessProbe": {
+              "type": "object",
+              "description": "Readiness probe configuration for the manager",
+              "properties": {
+                "initialDelaySeconds": { "type": "integer", "default": 5 },
+                "periodSeconds": { "type": "integer", "default": 10 }
+              }
+            },
+            "startupProbe": {
+              "type": "object",
+              "description": "Startup probe configuration for the manager",
+              "properties": {
+                "initialDelaySeconds": { "type": "integer", "default": 15 },
+                "periodSeconds": { "type": "integer", "default": 10 },
+                "failureThreshold": { "type": "integer", "default": 30 }
+              }
             }
           }
         },

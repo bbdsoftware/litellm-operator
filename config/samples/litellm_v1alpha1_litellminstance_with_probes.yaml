@@ -1,0 +1,25 @@
+apiVersion: litellm.litellm.ai/v1alpha1
+kind: LiteLLMInstance
+metadata:
+  name: litellm-with-probes
+  namespace: litellm
+spec:
+  replicas: 1
+  image: "ghcr.io/berriai/litellm-database:main-v1.74.9.rc.1"
+  # Custom probe configurations
+  startupProbe:
+    initialDelaySeconds: 30
+    periodSeconds: 10
+    failureThreshold: 30
+  livenessProbe:
+    initialDelaySeconds: 120
+    periodSeconds: 60
+  readinessProbe:
+    initialDelaySeconds: 20
+    periodSeconds: 10
+  models:
+  - modelName: gpt-4o
+    requiresAuth: false
+    identifier: gpt-4o
+    liteLLMParams:
+      model: "azure/gpt-4o"

@@ -370,4 +370,45 @@ var _ = Describe("LiteLLMInstance helpers and rendering", func() {
 		Expect(yamlStr).To(ContainSubstring("os.environ/"))
 	})
 
+	It("buildContainerSpec should apply custom probes from spec", func() {
+		llm := &litellmv1alpha1.LiteLLMInstance{
+			Spec: litellmv1alpha1.LiteLLMInstanceSpec{
+				LivenessProbe: &corev1.Probe{
+					InitialDelaySeconds: 123,
+				},
+				StartupProbe: &corev1.Probe{
+					FailureThreshold: 99,
+				},
+			},
+		}
+		container := buildContainerSpec(llm, "secret", ctx, k8sClient)
+
+		Expect(container.LivenessProbe.InitialDelaySeconds).To(Equal(int32(123)))
+		Expect(container.LivenessProbe.PeriodSeconds).To(Equal(int32(30))) // default preserved
+		Expect(container.StartupProbe.FailureThreshold).To(Equal(int32(99)))
+		Expect(container.StartupProbe.InitialDelaySeconds).To(Equal(int32(30))) // default preserved
+	})
+
+	It("mergeProbeSettings should override handler if provided", func() {
+		defaultProbe := &corev1.Probe{
+			ProbeHandler: corev1.ProbeHandler{
+				HTTPGet: &corev1.HTTPGetAction{Path: "/health"},
+			},
+		}
+		customProbe := &corev1.Probe{
+			ProbeHandler: corev1.ProbeHandler{
+				Exec: &corev1.ExecAction{Command: []string{"test"}},
+			},
+		}
+		mergeProbeSettings(defaultProbe, customProbe, false)
+		Expect(defaultProbe.ProbeHandler.Exec).NotTo(BeNil())
+		Expect(defaultProbe.ProbeHandler.HTTPGet).To(BeNil())
+	})
+
+	It("does not apply termination grace period to readiness probes", func() {
+		terminationGracePeriodSeconds := int64(30)
+		probe := buildReadinessProbe(&corev1.Probe{TerminationGracePeriodSeconds: &terminationGracePeriodSeconds})
+		Expect(probe.TerminationGracePeriodSeconds).To(BeNil())
+	})
+
 })

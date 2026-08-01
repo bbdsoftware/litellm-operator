@@ -1300,9 +1300,9 @@ func buildContainerSpec(llm *litellmv1alpha1.LiteLLMInstance, secretName string,
 				ReadOnly:  true,
 			},
 		},
-		LivenessProbe:  buildLivenessProbe(),
-		ReadinessProbe: buildReadinessProbe(),
-		StartupProbe:   buildStartupProbe(),
+		LivenessProbe:  buildLivenessProbe(llm.Spec.LivenessProbe),
+		ReadinessProbe: buildReadinessProbe(llm.Spec.ReadinessProbe),
+		StartupProbe:   buildStartupProbe(llm.Spec.StartupProbe),
 	}
 }
 
@@ -1437,8 +1437,8 @@ func getAllSecretsByPrefix(ctx context.Context, k8sClient client.Client, namespa
 
 // buildLivenessProbe builds the liveness probe configuration.
 // It creates a liveness probe that checks if the LiteLLM proxy is responding to health check requests.
-func buildLivenessProbe() *corev1.Probe {
-	return &corev1.Probe{
+func buildLivenessProbe(customProbe *corev1.Probe) *corev1.Probe {
+	probe := &corev1.Probe{
 		ProbeHandler: corev1.ProbeHandler{
 			HTTPGet: &corev1.HTTPGetAction{
 				Path: LivenessPath,
@@ -1450,12 +1450,18 @@ func buildLivenessProbe() *corev1.Probe {
 		TimeoutSeconds:      10,
 		FailureThreshold:    3,
 	}
+
+	if customProbe != nil {
+		mergeProbeSettings(probe, customProbe, false)
+	}
+
+	return probe
 }
 
 // buildReadinessProbe builds the readiness probe configuration.
 // It creates a readiness probe that checks if the LiteLLM proxy is ready to accept traffic.
-func buildReadinessProbe() *corev1.Probe {
-	return &corev1.Probe{
+func buildReadinessProbe(customProbe *corev1.Probe) *corev1.Probe {
+	probe := &corev1.Probe{
 		ProbeHandler: corev1.ProbeHandler{
 			HTTPGet: &corev1.HTTPGetAction{
 				Path: ReadinessPath,
@@ -1467,12 +1473,18 @@ func buildReadinessProbe() *corev1.Probe {
 		TimeoutSeconds:      5,
 		FailureThreshold:    3,
 	}
+
+	if customProbe != nil {
+		mergeProbeSettings(probe, customProbe, true)
+	}
+
+	return probe
 }
 
 // buildStartupProbe builds the startup probe configuration.
 // It creates a startup probe that checks if the LiteLLM proxy has finished starting up.
-func buildStartupProbe() *corev1.Probe {
-	return &corev1.Probe{
+func buildStartupProbe(customProbe *corev1.Probe) *corev1.Probe {
+	probe := &corev1.Probe{
 		ProbeHandler: corev1.ProbeHandler{
 			HTTPGet: &corev1.HTTPGetAction{
 				Path: ReadinessPath,
@@ -1483,5 +1495,38 @@ func buildStartupProbe() *corev1.Probe {
 		PeriodSeconds:       10,
 		TimeoutSeconds:      5,
 		FailureThreshold:    30,
+	}
+
+	if customProbe != nil {
+		mergeProbeSettings(probe, customProbe, false)
+	}
+
+	return probe
+}
+
+// mergeProbeSettings copies non-zero timing settings from custom to default.
+// Kubernetes does not permit terminationGracePeriodSeconds on readiness probes.
+func mergeProbeSettings(defaultProbe, customProbe *corev1.Probe, isReadiness bool) {
+	if customProbe.InitialDelaySeconds != 0 {
+		defaultProbe.InitialDelaySeconds = customProbe.InitialDelaySeconds
+	}
+	if customProbe.PeriodSeconds != 0 {
+		defaultProbe.PeriodSeconds = customProbe.PeriodSeconds
+	}
+	if customProbe.TimeoutSeconds != 0 {
+		defaultProbe.TimeoutSeconds = customProbe.TimeoutSeconds
+	}
+	if customProbe.FailureThreshold != 0 {
+		defaultProbe.FailureThreshold = customProbe.FailureThreshold
+	}
+	if customProbe.SuccessThreshold != 0 {
+		defaultProbe.SuccessThreshold = customProbe.SuccessThreshold
+	}
+	if !isReadiness && customProbe.TerminationGracePeriodSeconds != nil {
+		defaultProbe.TerminationGracePeriodSeconds = customProbe.TerminationGracePeriodSeconds
+	}
+	// If the user specified a non-empty handler, use it entirely.
+	if customProbe.ProbeHandler.HTTPGet != nil || customProbe.ProbeHandler.TCPSocket != nil || customProbe.ProbeHandler.Exec != nil || customProbe.ProbeHandler.GRPC != nil {
+		defaultProbe.ProbeHandler = customProbe.ProbeHandler
 	}
 }

@@ -36,6 +36,10 @@ type LiteLLMInstanceSpec struct {
 	Replicas     int32               `json:"replicas,omitempty"`
 	Models       []InitModelInstance `json:"models,omitempty"`
 	ExtraEnvVars []corev1.EnvVar     `json:"extraEnvVars,omitempty"`
+
+	LivenessProbe  *corev1.Probe `json:"livenessProbe,omitempty"`
+	ReadinessProbe *corev1.Probe `json:"readinessProbe,omitempty"`
+	StartupProbe   *corev1.Probe `json:"startupProbe,omitempty"`
 }
 
 // model instance used to create proxy server config map
