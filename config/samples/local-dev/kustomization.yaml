@@ -1,0 +1,3 @@
+## Local development overlay — adds LoadBalancer service on top of the base samples ##
+resources:
+- loadbalancer-service.yaml

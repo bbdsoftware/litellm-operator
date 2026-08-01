@@ -22,6 +22,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/metrics"
 )
 
+const labelController = "controller"
+
 var (
 	// ReconcileLoopsTotal tracks the total number of reconcile loops per controller.
 	//
@@ -35,7 +37,7 @@ var (
 			Name: "litellm_operator_reconcile_loops_total",
 			Help: "Total number of reconcile loops per controller.",
 		},
-		[]string{"controller"},
+		[]string{labelController},
 	)
 
 	// ReconcileErrorsTotal tracks the total number of reconciliation errors per controller
@@ -44,7 +46,7 @@ var (
 			Name: "litellm_operator_reconcile_errors_total",
 			Help: "Total number of reconciliation errors per controller.",
 		},
-		[]string{"controller"},
+		[]string{labelController},
 	)
 
 	// ReconcileLatency tracks the latency of reconciliation loops per controller
@@ -53,7 +55,7 @@ var (
 			Name: "litellm_operator_reconcile_latency_seconds",
 			Help: "Latency of reconciliation loops per controller.",
 		},
-		[]string{"controller"},
+		[]string{labelController},
 	)
 )
 

@@ -244,14 +244,14 @@ func createTeamCR(name, teamAlias string) *authv1alpha1.Team {
 			ConnectionRef: authv1alpha1.ConnectionRef{
 				InstanceRef: &authv1alpha1.InstanceRef{
 					Namespace: e2eTestNamespace,
-					Name:      "e2e-test-instance",
+					Name:      e2eTestInstance,
 				},
 			},
 			TeamAlias: teamAlias,
 			MaxBudget: "25",
 			RPMLimit:  250,
 			TPMLimit:  2500,
-			Models:    []string{"gpt-4o"},
+			Models:    []string{e2eTestModelGPT4o},
 			Blocked:   false,
 		},
 	}

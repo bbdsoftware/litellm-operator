@@ -10,7 +10,7 @@ var _ = Describe("MasterKey Generation", func() {
 	Context("buildSecretData", func() {
 		It("should generate a new master key with sk- prefix when none is provided and no existing secret exists", func() {
 			data := buildSecretData("", nil)
-			masterKey, exists := data["masterkey"]
+			masterKey, exists := data[masterKeyDataKey]
 			Expect(exists).To(BeTrue())
 			Expect(string(masterKey)).To(HavePrefix("sk-"))
 			// Verify it's sk- followed by a UUID (simplified check)
@@ -21,11 +21,11 @@ var _ = Describe("MasterKey Generation", func() {
 			existingKey := []byte("existing-key")
 			existingSecret := &corev1.Secret{
 				Data: map[string][]byte{
-					"masterkey": existingKey,
+					masterKeyDataKey: existingKey,
 				},
 			}
 			data := buildSecretData("", existingSecret)
-			masterKey, exists := data["masterkey"]
+			masterKey, exists := data[masterKeyDataKey]
 			Expect(exists).To(BeTrue())
 			Expect(masterKey).To(Equal(existingKey))
 		})
@@ -33,7 +33,7 @@ var _ = Describe("MasterKey Generation", func() {
 		It("should use provided master key and not add sk- prefix if it's already provided", func() {
 			providedKey := "user-provided-key"
 			data := buildSecretData(providedKey, nil)
-			masterKey, exists := data["masterkey"]
+			masterKey, exists := data[masterKeyDataKey]
 			Expect(exists).To(BeTrue())
 			Expect(string(masterKey)).To(Equal(providedKey))
 		})
@@ -45,7 +45,7 @@ var _ = Describe("MasterKey Generation", func() {
 				},
 			}
 			data := buildSecretData("", existingSecret)
-			masterKey, exists := data["masterkey"]
+			masterKey, exists := data[masterKeyDataKey]
 			Expect(exists).To(BeTrue())
 			Expect(string(masterKey)).To(HavePrefix("sk-"))
 		})

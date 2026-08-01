@@ -347,7 +347,7 @@ func (r *VirtualKeyReconciler) getSecretKeyValue(ctx context.Context, virtualKey
 		Namespace: virtualKey.Namespace,
 	}
 
-	err := r.Client.Get(ctx, secretResource, secret)
+	err := r.Get(ctx, secretResource, secret)
 	if err != nil {
 		return "", fmt.Errorf("failed to get secret %s: %w", virtualKey.Status.KeySecretRef, err)
 	}

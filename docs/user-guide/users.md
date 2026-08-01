@@ -24,7 +24,7 @@ metadata:
 spec:
   userEmail: "alice@example.com"
   userAlias: "alice"
-  userRole: "internal_user_viewer"
+  userRole: "internal_user"
   keyAlias: "alice-key"
   autoCreateKey: true
   models:
@@ -47,7 +47,7 @@ metadata:
 spec:
   userEmail: "admin@example.com"
   userAlias: "admin"
-  userRole: "admin"
+  userRole: "proxy_admin"
   keyAlias: "admin-key"
   autoCreateKey: true
   models:
@@ -69,10 +69,10 @@ spec:
 | `userAlias` | string | User alias/username | Yes |
 | `userRole` | string | User role (one of "proxy_admin", "proxy_admin_viewer", "internal_user", "internal_user_viewer") | Yes |
 | `keyAlias` | string | Alias for the virtual key | No |
-| `autoCreateKey` | boolean | Automatically create virtual key | Yes |
+| `autoCreateKey` | boolean | Automatically create virtual key | No |
 | `models` | []string | Allowed models for this user | No |
-| `maxBudget` | string | Maximum spend limit in dollars | Yes |
-| `budgetDuration` | string | Budget duration (e.g., "1h", "30d") | Yes |
+| `maxBudget` | string | Maximum spend limit in dollars | No |
+| `budgetDuration` | string | Budget duration (e.g., "1h", "30d") | No |
 | `connectionRef` | object | Reference to LiteLLM instance | Yes |
 
 ## Managing Users

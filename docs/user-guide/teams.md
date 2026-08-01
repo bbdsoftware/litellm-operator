@@ -102,8 +102,12 @@ spec:
       name: litellm-example
       namespace: litellm
   role: admin
-  teamAlias: ai-team
-  userEmail: alice@example.com
+  teamRef:
+    name: ai-team
+    namespace: litellm
+  userRef:
+    name: alice
+    namespace: litellm
 ```
 
 ## Best Practices

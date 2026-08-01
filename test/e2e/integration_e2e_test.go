@@ -273,12 +273,12 @@ func createIntegrationTeamCR(name, teamAlias string) *authv1alpha1.Team {
 			ConnectionRef: authv1alpha1.ConnectionRef{
 				InstanceRef: &authv1alpha1.InstanceRef{
 					Namespace: e2eTestNamespace,
-					Name:      "e2e-test-instance",
+					Name:      e2eTestInstance,
 				},
 			},
 			TeamAlias: teamAlias,
 			MaxBudget: "100",
-			Models:    []string{"gpt-4o"},
+			Models:    []string{e2eTestModelGPT4o},
 		},
 	}
 }
@@ -293,7 +293,7 @@ func createIntegrationUserCR(name, userEmail string) *authv1alpha1.User {
 			ConnectionRef: authv1alpha1.ConnectionRef{
 				InstanceRef: &authv1alpha1.InstanceRef{
 					Namespace: e2eTestNamespace,
-					Name:      "e2e-test-instance",
+					Name:      e2eTestInstance,
 				},
 			},
 			UserEmail: userEmail,
@@ -313,7 +313,7 @@ func createIntegrationVirtualKeyCR(name, keyAlias, userEmail string) *authv1alph
 			ConnectionRef: authv1alpha1.ConnectionRef{
 				InstanceRef: &authv1alpha1.InstanceRef{
 					Namespace: e2eTestNamespace,
-					Name:      "e2e-test-instance",
+					Name:      e2eTestInstance,
 				},
 			},
 			KeyAlias:  keyAlias,
@@ -336,7 +336,7 @@ func createTeamMemberAssociationCR(name, teamCRName, userCRName string) *authv1a
 			ConnectionRef: authv1alpha1.ConnectionRef{
 				InstanceRef: &authv1alpha1.InstanceRef{
 					Namespace: e2eTestNamespace,
-					Name:      "e2e-test-instance",
+					Name:      e2eTestInstance,
 				},
 			},
 			TeamRef: authv1alpha1.CRDRef{

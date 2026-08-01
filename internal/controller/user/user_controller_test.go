@@ -32,6 +32,12 @@ import (
 	"github.com/bbdsoftware/litellm-operator/internal/litellm"
 )
 
+const (
+	testNamespace       = "default"
+	testSecretName      = "test-secret"
+	testUserUpToDateMsg = "User is up to date"
+)
+
 type FakeLitellmUserClient struct{}
 
 var fakeUserResponse = litellm.UserResponse{
@@ -72,9 +78,9 @@ func (l *FakeLitellmUserClient) IsUserUpdateNeeded(ctx context.Context, userResp
 		NeedsUpdate: false,
 		ChangedFields: []litellm.FieldChange{
 			{
-				FieldName:     "User is up to date",
-				CurrentValue:  "User is up to date",
-				ExpectedValue: "User is up to date",
+				FieldName:     testUserUpToDateMsg,
+				CurrentValue:  testUserUpToDateMsg,
+				ExpectedValue: testUserUpToDateMsg,
 			},
 		},
 	}, nil
@@ -92,7 +98,7 @@ var _ = Describe("User Controller", func() {
 
 		typeNamespacedName := types.NamespacedName{
 			Name:      resourceName,
-			Namespace: "default", // TODO(user):Modify as needed
+			Namespace: testNamespace, // TODO(user):Modify as needed
 		}
 		user := &authv1alpha1.User{}
 
@@ -100,8 +106,8 @@ var _ = Describe("User Controller", func() {
 			By("creating the test secret")
 			secret := &corev1.Secret{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      "test-secret",
-					Namespace: "default",
+					Name:      testSecretName,
+					Namespace: testNamespace,
 				},
 				Data: map[string][]byte{
 					"masterkey": []byte("test-master-key"),
@@ -116,12 +122,12 @@ var _ = Describe("User Controller", func() {
 				resource := &authv1alpha1.User{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      resourceName,
-						Namespace: "default",
+						Namespace: testNamespace,
 					},
 					Spec: authv1alpha1.UserSpec{
 						ConnectionRef: authv1alpha1.ConnectionRef{
 							SecretRef: &authv1alpha1.SecretRef{
-								Name: "test-secret",
+								Name: testSecretName,
 								Keys: authv1alpha1.SecretKeys{
 									MasterKey: "masterkey",
 									URL:       "url",
@@ -146,7 +152,7 @@ var _ = Describe("User Controller", func() {
 
 			By("Cleanup the test secret")
 			secret := &corev1.Secret{}
-			err = k8sClient.Get(ctx, types.NamespacedName{Name: "test-secret", Namespace: "default"}, secret)
+			err = k8sClient.Get(ctx, types.NamespacedName{Name: testSecretName, Namespace: testNamespace}, secret)
 			if err == nil {
 				Expect(k8sClient.Delete(ctx, secret)).To(Succeed())
 			}

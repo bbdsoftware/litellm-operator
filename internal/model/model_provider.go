@@ -15,11 +15,20 @@ const (
 	ModelProviderBedrock   = "bedrock"
 )
 
+// Provider configuration field names
+const (
+	FieldAPIKey             = "apiKey"
+	FieldAPIBase            = "apiBase"
+	FieldVertexCredentials  = "vertexCredentials"
+	FieldAwsSecretAccessKey = "awsSecretAccessKey"
+	FieldAwsAccessKeyID     = "awsAccessKeyId"
+)
+
 // Required fields for each provider
 var (
-	DefaultRequiredFields = []string{"apiKey", "apiBase"}
-	GoogleRequiredFields  = []string{"vertexCredentials"}
-	AwsRequiredFields     = []string{"awsSecretAccessKey", "awsAccessKeyId"}
+	DefaultRequiredFields = []string{FieldAPIKey, FieldAPIBase}
+	GoogleRequiredFields  = []string{FieldVertexCredentials}
+	AwsRequiredFields     = []string{FieldAwsSecretAccessKey, FieldAwsAccessKeyID}
 )
 
 var providerRequiredFields = map[string][]string{

@@ -37,6 +37,18 @@ import (
 	"github.com/bbdsoftware/litellm-operator/internal/util"
 )
 
+const (
+	testNamespace    = "default"
+	testSecretName   = "test-secret"
+	testTeamName     = "test-team"
+	testUserName     = "test-user"
+	testUserEmail    = "test@example.com"
+	testRoleUser     = "user"
+	testNotReadyTeam = "not-ready-team"
+	testSecretURLKey = "url"
+	testMasterKeyVal = "masterkey"
+)
+
 // mockLitellmTeamMemberAssociationClient implements the LitellmTeamMemberAssociation interface for testing
 type mockLitellmTeamMemberAssociationClient struct {
 	associations map[string]map[string]*litellm.TeamMemberWithRole // teamAlias -> userEmail -> member info
@@ -180,12 +192,12 @@ var _ = Describe("TeamMemberAssociation Controller", func() {
 				// Create connection secret first
 				secret := &corev1.Secret{
 					ObjectMeta: metav1.ObjectMeta{
-						Name:      "test-secret",
-						Namespace: "default",
+						Name:      testSecretName,
+						Namespace: testNamespace,
 					},
 					Data: map[string][]byte{
-						"masterkey": []byte("test-key"),
-						"url":       []byte("http://test-url"),
+						testMasterKeyVal: []byte("test-key"),
+						testSecretURLKey: []byte("http://test-url"),
 					},
 				}
 				err := reconciler.Create(context.Background(), secret)
@@ -246,8 +258,8 @@ var _ = Describe("TeamMemberAssociation Controller", func() {
 				createTestTeamMemberAssociation("test-association"),
 				&litellm.TeamMemberWithRole{
 					UserID:    "user-test@example.com",
-					UserEmail: "test@example.com",
-					Role:      "user",
+					UserEmail: testUserEmail,
+					Role:      testRoleUser,
 				},
 				nil, // No create error
 				ctrl.Result{RequeueAfter: 60 * time.Second},
@@ -273,24 +285,24 @@ var _ = Describe("TeamMemberAssociation Controller", func() {
 			association := &authv1alpha1.TeamMemberAssociation{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:       "test-association",
-					Namespace:  "default",
+					Namespace:  testNamespace,
 					Finalizers: []string{util.FinalizerName},
 				},
 				Spec: authv1alpha1.TeamMemberAssociationSpec{
-					Role: "user",
+					Role: testRoleUser,
 					TeamRef: authv1alpha1.CRDRef{
-						Name:      "test-team",
-						Namespace: "default",
+						Name:      testTeamName,
+						Namespace: testNamespace,
 					},
 					UserRef: authv1alpha1.CRDRef{
-						Name:      "test-user",
-						Namespace: "default",
+						Name:      testUserName,
+						Namespace: testNamespace,
 					},
 					ConnectionRef: authv1alpha1.ConnectionRef{},
 				},
 				Status: authv1alpha1.TeamMemberAssociationStatus{
-					TeamAlias: "test-team",
-					UserEmail: "test@example.com",
+					TeamAlias: testTeamName,
+					UserEmail: testUserEmail,
 				},
 			}
 
@@ -299,12 +311,12 @@ var _ = Describe("TeamMemberAssociation Controller", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Setup existing association in mock client
-			if mockClient.associations["test-team"] == nil {
-				mockClient.associations["test-team"] = make(map[string]*litellm.TeamMemberWithRole)
+			if mockClient.associations[testTeamName] == nil {
+				mockClient.associations[testTeamName] = make(map[string]*litellm.TeamMemberWithRole)
 			}
-			mockClient.associations["test-team"]["test@example.com"] = &litellm.TeamMemberWithRole{
-				UserEmail: "test@example.com",
-				Role:      "user",
+			mockClient.associations[testTeamName][testUserEmail] = &litellm.TeamMemberWithRole{
+				UserEmail: testUserEmail,
+				Role:      testRoleUser,
 			}
 
 			// Now mark the resource for deletion
@@ -322,7 +334,7 @@ var _ = Describe("TeamMemberAssociation Controller", func() {
 			Expect(result).To(Equal(ctrl.Result{}))
 
 			// Verify external resource was deleted
-			_, exists := mockClient.associations["test-team"]["test@example.com"]
+			_, exists := mockClient.associations[testTeamName][testUserEmail]
 			Expect(exists).To(BeFalse())
 
 			// Verify finalizer was removed by checking the resource in the client
@@ -362,11 +374,11 @@ var _ = Describe("TeamMemberAssociation Controller", func() {
 			// Create a Team with "not ready" condition
 			notReadyTeam := &authv1alpha1.Team{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      "not-ready-team",
-					Namespace: "default",
+					Name:      testNotReadyTeam,
+					Namespace: testNamespace,
 				},
 				Spec: authv1alpha1.TeamSpec{
-					TeamAlias: "not-ready-team",
+					TeamAlias: testNotReadyTeam,
 				},
 				Status: authv1alpha1.TeamStatus{
 					Conditions: []metav1.Condition{
@@ -388,7 +400,7 @@ var _ = Describe("TeamMemberAssociation Controller", func() {
 			readyUser := &authv1alpha1.User{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "ready-user",
-					Namespace: "default",
+					Namespace: testNamespace,
 				},
 				Spec: authv1alpha1.UserSpec{
 					UserEmail: "ready@example.com",
@@ -417,7 +429,7 @@ var _ = Describe("TeamMemberAssociation Controller", func() {
 			}, updatedAssociation)
 			Expect(err).NotTo(HaveOccurred())
 
-			updatedAssociation.Spec.TeamRef.Name = "not-ready-team"
+			updatedAssociation.Spec.TeamRef.Name = testNotReadyTeam
 			updatedAssociation.Spec.UserRef.Name = "ready-user"
 			err = reconciler.Update(context.Background(), updatedAssociation)
 			Expect(err).NotTo(HaveOccurred())
@@ -455,12 +467,12 @@ var _ = Describe("TeamMemberAssociation Controller", func() {
 				// Create connection secret first
 				secret := &corev1.Secret{
 					ObjectMeta: metav1.ObjectMeta{
-						Name:      "test-secret",
-						Namespace: "default",
+						Name:      testSecretName,
+						Namespace: testNamespace,
 					},
 					Data: map[string][]byte{
-						"masterkey": []byte("test-key"),
-						"url":       []byte("http://test-url"),
+						testMasterKeyVal: []byte("test-key"),
+						testSecretURLKey: []byte("http://test-url"),
 					},
 				}
 				err := reconcilerForError.Create(context.Background(), secret)
@@ -471,7 +483,7 @@ var _ = Describe("TeamMemberAssociation Controller", func() {
 				Expect(err).NotTo(HaveOccurred())
 
 				result, err := reconcilerForError.Reconcile(context.Background(), ctrl.Request{
-					NamespacedName: types.NamespacedName{Name: "test", Namespace: "default"},
+					NamespacedName: types.NamespacedName{Name: "test", Namespace: testNamespace},
 				})
 
 				if shouldRequeue {
@@ -481,7 +493,7 @@ var _ = Describe("TeamMemberAssociation Controller", func() {
 
 				// Check degraded condition is set
 				updatedAssociation := &authv1alpha1.TeamMemberAssociation{}
-				err = reconcilerForError.Get(context.Background(), types.NamespacedName{Name: "test", Namespace: "default"}, updatedAssociation)
+				err = reconcilerForError.Get(context.Background(), types.NamespacedName{Name: "test", Namespace: testNamespace}, updatedAssociation)
 				Expect(err).NotTo(HaveOccurred())
 
 				degradedCondition := findCondition(updatedAssociation.Status.Conditions, expectedCondition)
@@ -520,8 +532,8 @@ var _ = Describe("TeamMemberAssociation Controller", func() {
 			// Get the referenced Team
 			team := &authv1alpha1.Team{}
 			err = reconciler.Get(context.Background(), types.NamespacedName{
-				Name:      "test-team",
-				Namespace: "default",
+				Name:      testTeamName,
+				Namespace: testNamespace,
 			}, team)
 			Expect(err).NotTo(HaveOccurred())
 
@@ -556,8 +568,8 @@ var _ = Describe("TeamMemberAssociation Controller", func() {
 			// Get the referenced User
 			user := &authv1alpha1.User{}
 			err = reconciler.Get(context.Background(), types.NamespacedName{
-				Name:      "test-user",
-				Namespace: "default",
+				Name:      testUserName,
+				Namespace: testNamespace,
 			}, user)
 			Expect(err).NotTo(HaveOccurred())
 
@@ -604,8 +616,8 @@ var _ = Describe("TeamMemberAssociation Controller", func() {
 			// Get the referenced Team
 			team := &authv1alpha1.Team{}
 			err = reconciler.Get(context.Background(), types.NamespacedName{
-				Name:      "test-team",
-				Namespace: "default",
+				Name:      testTeamName,
+				Namespace: testNamespace,
 			}, team)
 			Expect(err).NotTo(HaveOccurred())
 
@@ -656,8 +668,8 @@ var _ = Describe("TeamMemberAssociation Controller", func() {
 			// Get the referenced User
 			user := &authv1alpha1.User{}
 			err = reconciler.Get(context.Background(), types.NamespacedName{
-				Name:      "test-user",
-				Namespace: "default",
+				Name:      testUserName,
+				Namespace: testNamespace,
 			}, user)
 			Expect(err).NotTo(HaveOccurred())
 
@@ -701,11 +713,11 @@ func setupTestTeamMemberAssociationReconciler() *TeamMemberAssociationReconciler
 	// Create the fake Team and User
 	team := &authv1alpha1.Team{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "test-team",
-			Namespace: "default",
+			Name:      testTeamName,
+			Namespace: testNamespace,
 		},
 		Spec: authv1alpha1.TeamSpec{
-			TeamAlias: "test-team",
+			TeamAlias: testTeamName,
 		},
 		Status: authv1alpha1.TeamStatus{
 			Conditions: []metav1.Condition{
@@ -722,11 +734,11 @@ func setupTestTeamMemberAssociationReconciler() *TeamMemberAssociationReconciler
 
 	user := &authv1alpha1.User{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "test-user",
-			Namespace: "default",
+			Name:      testUserName,
+			Namespace: testNamespace,
 		},
 		Spec: authv1alpha1.UserSpec{
-			UserEmail: "test@example.com",
+			UserEmail: testUserEmail,
 		},
 		Status: authv1alpha1.UserStatus{
 			Conditions: []metav1.Condition{
@@ -760,7 +772,6 @@ func setupTestTeamMemberAssociationReconciler() *TeamMemberAssociationReconciler
 }
 
 func createTestTeamMemberAssociation(name string) *authv1alpha1.TeamMemberAssociation {
-	const testNamespace = "default"
 	return &authv1alpha1.TeamMemberAssociation{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:       name,
@@ -768,21 +779,21 @@ func createTestTeamMemberAssociation(name string) *authv1alpha1.TeamMemberAssoci
 			Generation: 1,
 		},
 		Spec: authv1alpha1.TeamMemberAssociationSpec{
-			Role: "user",
+			Role: testRoleUser,
 			TeamRef: authv1alpha1.CRDRef{
-				Name:      "test-team",
+				Name:      testTeamName,
 				Namespace: testNamespace,
 			},
 			UserRef: authv1alpha1.CRDRef{
-				Name:      "test-user",
+				Name:      testUserName,
 				Namespace: testNamespace,
 			},
 			ConnectionRef: authv1alpha1.ConnectionRef{
 				SecretRef: &authv1alpha1.SecretRef{
-					Name: "test-secret",
+					Name: testSecretName,
 					Keys: authv1alpha1.SecretKeys{
-						MasterKey: "masterkey",
-						URL:       "url",
+						MasterKey: testMasterKeyVal,
+						URL:       testSecretURLKey,
 					},
 				},
 			},

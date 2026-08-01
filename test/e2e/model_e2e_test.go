@@ -292,7 +292,7 @@ func createLiteLLMInstance() {
 	By("creating LiteLLM instance CR")
 	liteLLMInstance := &litellmv1alpha1.LiteLLMInstance{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "e2e-test-instance",
+			Name:      e2eTestInstance,
 			Namespace: e2eTestNamespace,
 		},
 		Spec: litellmv1alpha1.LiteLLMInstanceSpec{
@@ -322,7 +322,7 @@ func createModelCR(name, modelName string) *litellmv1alpha1.Model {
 			ConnectionRef: litellmv1alpha1.ConnectionRef{
 				InstanceRef: litellmv1alpha1.InstanceRef{
 					Namespace: e2eTestNamespace,
-					Name:      "e2e-test-instance",
+					Name:      e2eTestInstance,
 				},
 			},
 			ModelName: modelName,
@@ -358,7 +358,7 @@ func createInvalidModelCR(name, modelName string) *litellmv1alpha1.Model {
 			ConnectionRef: litellmv1alpha1.ConnectionRef{
 				InstanceRef: litellmv1alpha1.InstanceRef{
 					Namespace: e2eTestNamespace,
-					Name:      "e2e-test-instance",
+					Name:      e2eTestInstance,
 				},
 			},
 			ModelName: modelName,

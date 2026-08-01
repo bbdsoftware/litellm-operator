@@ -147,4 +147,4 @@ roleRef:
 subjects:
 - kind: ServiceAccount
   name: '{{ include "litellm-operator.fullname" . }}-controller-manager'
-  namespace: '{{ .Release.Namespace }}'
+  namespace: {{ include "litellm-operator.namespace" . }}

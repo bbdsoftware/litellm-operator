@@ -7,27 +7,51 @@ It is expected that the operator will be deployed in the same namespace as the l
 - docker version 17.03+.
 - kubectl version v1.11.3+.
 - Access to a Kubernetes v1.11.3+ cluster.
-- Kind (optional, for local development)
+- vCluster (v0.33.1+) (optional, for local development)
 
 ### Local Development Setup
 
-#### Quick Start with Kind Cluster
+#### Quick Start with vind (vCluster in docker)
+
 For local development, you can use the provided Makefile targets to set up a complete development environment:
 
+> [!IMPORTANT]
+> Your Docker must be configured to use the [containerd image store](https://docs.docker.com/engine/storage/containerd/).
+
 ```sh
-# Create a Kind cluster and bootstrap the development environment
-make dev-cluster-bootstrap
+# As a one off, ensure vCluster is configured to use the docker driver
+vcluster use driver docker
+
+# Create a vind cluster and bootstrap the development environment
+make vind-bootstrap-full
 
 # Or recreate the entire cluster if needed
-make dev-cluster-recreate
+make vind-bootstrap-full-recreate
 ```
 
 This will:
-1. Create a Kind cluster (if it doesn't exist)
+1. Create a vCluster (if it doesn't exist)
 2. Generate manifests and install CRDs
 3. Install extra samples and basic samples
 4. Set up the complete development environment
-5. You will be able to ruin the controller locally thrp you IDE of choise
+5. Create a load balancer service for the litellm example service
+6. You will be able to run the controller locally through your IDE of choice
+
+```sh
+# Get the IP address of the load balancer service
+kubectl get svc litellm-example-loadbalancer -n litellm -o jsonpath='{.status.loadBalancer.ingress[0].ip}'
+
+# Go to the returned IP address in your browser to access the litellm example service
+```
+
+> [!NOTE]
+> On macOS (Docker Desktop), LoadBalancer services may require elevated privileges and
+> the `jsonpath` command above can return empty. If you need a real LoadBalancer IP on
+> Docker Desktop, try running Docker with `sudo`. As an alternative, use port-forward:
+> ```sh
+> kubectl port-forward svc/litellm-example-loadbalancer 8080:80 -n litellm
+> # Then open http://localhost:8080 in your browser
+> ```
 
 #### Manual Development Setup
 If you prefer to set up manually or use an existing cluster:

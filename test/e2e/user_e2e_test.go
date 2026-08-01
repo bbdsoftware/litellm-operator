@@ -158,7 +158,7 @@ func createUserCR(name, email string) *authv1alpha1.User {
 			ConnectionRef: authv1alpha1.ConnectionRef{
 				InstanceRef: &authv1alpha1.InstanceRef{
 					Namespace: e2eTestNamespace,
-					Name:      "e2e-test-instance",
+					Name:      e2eTestInstance,
 				},
 			},
 			UserEmail:     email,
@@ -167,7 +167,7 @@ func createUserCR(name, email string) *authv1alpha1.User {
 			MaxBudget:     "10",
 			RPMLimit:      100,
 			TPMLimit:      1000,
-			Models:        []string{"gpt-4o"},
+			Models:        []string{e2eTestModelGPT4o},
 			AutoCreateKey: false,
 		},
 	}

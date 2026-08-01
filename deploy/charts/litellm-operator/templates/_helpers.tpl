@@ -60,3 +60,10 @@ Create the name of the service account to use
 {{- default "default" .Values.serviceAccount.name }}
 {{- end }}
 {{- end }}
+
+{{/*
+Computed Namespace
+*/}}
+{{- define "litellm-operator.namespace" -}}
+{{ .Release.Namespace }}
+{{- end }}

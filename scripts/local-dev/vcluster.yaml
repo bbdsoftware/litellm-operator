@@ -1,0 +1,6 @@
+experimental:
+  docker:
+    network: litellm-operator-network
+
+    # nodes:
+    #   - name: worker-1

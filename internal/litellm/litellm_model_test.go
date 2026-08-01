@@ -28,6 +28,15 @@ import (
 	. "github.com/onsi/gomega"
 )
 
+const (
+	testModelName      = "test-model"
+	testJSONKeyError   = "error"
+	testJSONKeyMessage = "message"
+	testJSONKeyType    = "type"
+	testJSONKeyCode    = "code"
+	testModelNotFound  = "Model not found"
+)
+
 func TestLitellmModel(t *testing.T) {
 	RegisterFailHandler(Fail)
 	RunSpecs(t, "Litellm Model Suite")
@@ -66,11 +75,11 @@ var _ = Describe("Litellm Model", func() {
 					var req ModelRequest
 					err := json.NewDecoder(r.Body).Decode(&req)
 					Expect(err).NotTo(HaveOccurred())
-					Expect(req.ModelName).To(Equal("test-model"))
+					Expect(req.ModelName).To(Equal(testModelName))
 
 					// Return success response
 					response := ModelResponse{
-						ModelName: "test-model",
+						ModelName: testModelName,
 						LiteLLMParams: &UpdateLiteLLMParams{
 							InputCostPerToken:  float64Ptr(0.001),
 							OutputCostPerToken: float64Ptr(0.002),
@@ -94,7 +103,7 @@ var _ = Describe("Litellm Model", func() {
 
 			It("should create a model successfully", func() {
 				req := &ModelRequest{
-					ModelName: "test-model",
+					ModelName: testModelName,
 					LiteLLMParams: &UpdateLiteLLMParams{
 						InputCostPerToken:  float64Ptr(0.001),
 						OutputCostPerToken: float64Ptr(0.002),
@@ -106,7 +115,7 @@ var _ = Describe("Litellm Model", func() {
 				response, err := client.CreateModel(ctx, req)
 
 				Expect(err).NotTo(HaveOccurred())
-				Expect(response.ModelName).To(Equal("test-model"))
+				Expect(response.ModelName).To(Equal(testModelName))
 				Expect(response.LiteLLMParams.InputCostPerToken).To(Equal(float64Ptr(0.001)))
 				Expect(response.LiteLLMParams.OutputCostPerToken).To(Equal(float64Ptr(0.002)))
 				Expect(response.ModelInfo.ID).To(Equal(stringPtr("model-123")))
@@ -120,10 +129,10 @@ var _ = Describe("Litellm Model", func() {
 					w.Header().Set("Content-Type", "application/json")
 					w.WriteHeader(http.StatusBadRequest)
 					if err := json.NewEncoder(w).Encode(map[string]interface{}{
-						"error": map[string]interface{}{
-							"message": "Model already exists",
-							"type":    "validation_error",
-							"code":    "MODEL_EXISTS",
+						testJSONKeyError: map[string]interface{}{
+							testJSONKeyMessage: "Model already exists",
+							testJSONKeyType:    "validation_error",
+							testJSONKeyCode:    "MODEL_EXISTS",
 						},
 					}); err != nil {
 						Fail("failed to encode error response: " + err.Error())
@@ -154,7 +163,7 @@ var _ = Describe("Litellm Model", func() {
 			It("should return a marshalling error", func() {
 				// Create a request with a field that cannot be marshalled
 				req := &ModelRequest{
-					ModelName: "test-model",
+					ModelName: testModelName,
 					LiteLLMParams: &UpdateLiteLLMParams{
 						// use a slice with an unsupported element (channel) so json.Marshal fails at runtime
 						ConfigurableClientsideAuthParams: []interface{}{make(chan int)}, // This cannot be marshalled
@@ -183,11 +192,11 @@ var _ = Describe("Litellm Model", func() {
 					var req ModelRequest
 					err := json.NewDecoder(r.Body).Decode(&req)
 					Expect(err).NotTo(HaveOccurred())
-					Expect(req.ModelName).To(Equal("test-model"))
+					Expect(req.ModelName).To(Equal(testModelName))
 
 					// Return success response
 					response := ModelResponse{
-						ModelName: "test-model",
+						ModelName: testModelName,
 						LiteLLMParams: &UpdateLiteLLMParams{
 							InputCostPerToken:  float64Ptr(0.002),
 							OutputCostPerToken: float64Ptr(0.003),
@@ -207,7 +216,7 @@ var _ = Describe("Litellm Model", func() {
 
 			It("should update a model successfully", func() {
 				req := &ModelRequest{
-					ModelName: "test-model",
+					ModelName: testModelName,
 					LiteLLMParams: &UpdateLiteLLMParams{
 						InputCostPerToken:  float64Ptr(0.002),
 						OutputCostPerToken: float64Ptr(0.003),
@@ -218,7 +227,7 @@ var _ = Describe("Litellm Model", func() {
 				response, err := client.UpdateModel(ctx, req)
 
 				Expect(err).NotTo(HaveOccurred())
-				Expect(response.ModelName).To(Equal("test-model"))
+				Expect(response.ModelName).To(Equal(testModelName))
 				Expect(response.LiteLLMParams.InputCostPerToken).To(Equal(float64Ptr(0.002)))
 				Expect(response.LiteLLMParams.OutputCostPerToken).To(Equal(float64Ptr(0.003)))
 			})
@@ -231,7 +240,7 @@ var _ = Describe("Litellm Model", func() {
 					w.WriteHeader(http.StatusNotFound)
 					if err := json.NewEncoder(w).Encode(map[string]interface{}{
 						"detail": map[string]interface{}{
-							"error": "Model not found",
+							testJSONKeyError: testModelNotFound,
 						},
 					}); err != nil {
 						Fail("failed to encode error response: " + err.Error())
@@ -262,12 +271,12 @@ var _ = Describe("Litellm Model", func() {
 				server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 					Expect(r.Method).To(Equal("GET"))
 					Expect(r.URL.Path).To(Equal("/model"))
-					Expect(r.URL.Query().Get("litellm_model_id")).To(Equal("test-model"))
+					Expect(r.URL.Query().Get("litellm_model_id")).To(Equal(testModelName))
 					Expect(r.Header.Get("Authorization")).To(Equal("Bearer " + masterKey))
 
 					// Return success response
 					response := ModelResponse{
-						ModelName: "test-model",
+						ModelName: testModelName,
 						LiteLLMParams: &UpdateLiteLLMParams{
 							InputCostPerToken:  float64Ptr(0.001),
 							OutputCostPerToken: float64Ptr(0.002),
@@ -291,10 +300,10 @@ var _ = Describe("Litellm Model", func() {
 			})
 
 			It("should get a model successfully", func() {
-				response, err := client.GetModel(ctx, "test-model")
+				response, err := client.GetModel(ctx, testModelName)
 
 				Expect(err).NotTo(HaveOccurred())
-				Expect(response.ModelName).To(Equal("test-model"))
+				Expect(response.ModelName).To(Equal(testModelName))
 				Expect(response.LiteLLMParams.InputCostPerToken).To(Equal(float64Ptr(0.001)))
 				Expect(response.LiteLLMParams.OutputCostPerToken).To(Equal(float64Ptr(0.002)))
 				Expect(response.LiteLLMParams.ApiKey).To(Equal(stringPtr("sk-test-key")))
@@ -309,10 +318,10 @@ var _ = Describe("Litellm Model", func() {
 					w.Header().Set("Content-Type", "application/json")
 					w.WriteHeader(http.StatusNotFound)
 					if err := json.NewEncoder(w).Encode(map[string]interface{}{
-						"error": map[string]interface{}{
-							"message": "Model not found",
-							"type":    "not_found",
-							"code":    "MODEL_NOT_FOUND",
+						testJSONKeyError: map[string]interface{}{
+							testJSONKeyMessage: testModelNotFound,
+							testJSONKeyType:    "not_found",
+							testJSONKeyCode:    "MODEL_NOT_FOUND",
 						},
 					}); err != nil {
 						Fail("failed to encode error response: " + err.Error())
@@ -367,10 +376,10 @@ var _ = Describe("Litellm Model", func() {
 					w.Header().Set("Content-Type", "application/json")
 					w.WriteHeader(http.StatusNotFound)
 					if err := json.NewEncoder(w).Encode(map[string]interface{}{
-						"error": map[string]interface{}{
-							"message": "Model not found",
-							"type":    "not_found",
-							"code":    "MODEL_NOT_FOUND",
+						testJSONKeyError: map[string]interface{}{
+							testJSONKeyMessage: testModelNotFound,
+							testJSONKeyType:    "not_found",
+							testJSONKeyCode:    "MODEL_NOT_FOUND",
 						},
 					}); err != nil {
 						Fail("failed to encode error response: " + err.Error())
@@ -416,13 +425,13 @@ var _ = Describe("Litellm Model", func() {
 		Context("when LiteLLM parameters are different", func() {
 			It("should return true when input cost changes", func() {
 				model := &ModelResponse{
-					ModelName: "test-model",
+					ModelName: testModelName,
 					LiteLLMParams: &UpdateLiteLLMParams{
 						InputCostPerToken: float64Ptr(0.001),
 					},
 				}
 				req := &ModelRequest{
-					ModelName: "test-model",
+					ModelName: testModelName,
 					LiteLLMParams: &UpdateLiteLLMParams{
 						InputCostPerToken: float64Ptr(0.002),
 					},
@@ -436,13 +445,13 @@ var _ = Describe("Litellm Model", func() {
 
 			It("should return true when output cost changes", func() {
 				model := &ModelResponse{
-					ModelName: "test-model",
+					ModelName: testModelName,
 					LiteLLMParams: &UpdateLiteLLMParams{
 						OutputCostPerToken: float64Ptr(0.001),
 					},
 				}
 				req := &ModelRequest{
-					ModelName: "test-model",
+					ModelName: testModelName,
 					LiteLLMParams: &UpdateLiteLLMParams{
 						OutputCostPerToken: float64Ptr(0.002),
 					},
@@ -457,13 +466,13 @@ var _ = Describe("Litellm Model", func() {
 
 			It("should not consider API key changes as requiring an update (sensitive)", func() {
 				model := &ModelResponse{
-					ModelName: "test-model",
+					ModelName: testModelName,
 					LiteLLMParams: &UpdateLiteLLMParams{
 						ApiKey: stringPtr("old-key"),
 					},
 				}
 				req := &ModelRequest{
-					ModelName: "test-model",
+					ModelName: testModelName,
 					LiteLLMParams: &UpdateLiteLLMParams{
 						ApiKey: stringPtr("new-key"),
 					},
@@ -480,13 +489,13 @@ var _ = Describe("Litellm Model", func() {
 		Context("when model is different", func() {
 			It("should return true when model changes", func() {
 				model := &ModelResponse{
-					ModelName: "test-model",
+					ModelName: testModelName,
 					LiteLLMParams: &UpdateLiteLLMParams{
 						Model: stringPtr("gpt-3.5"),
 					},
 				}
 				req := &ModelRequest{
-					ModelName: "test-model",
+					ModelName: testModelName,
 					LiteLLMParams: &UpdateLiteLLMParams{
 						Model: stringPtr("gpt-4"),
 					},
@@ -500,13 +509,13 @@ var _ = Describe("Litellm Model", func() {
 
 			It("should return true when modelInfo changes", func() {
 				model := &ModelResponse{
-					ModelName: "test-model",
+					ModelName: testModelName,
 					ModelInfo: &ModelInfo{
 						ID: stringPtr("model-123"),
 					},
 				}
 				req := &ModelRequest{
-					ModelName: "test-model",
+					ModelName: testModelName,
 					ModelInfo: &ModelInfo{
 						ID: stringPtr("model-000008"),
 					},
@@ -522,7 +531,7 @@ var _ = Describe("Litellm Model", func() {
 		Context("when no changes are detected", func() {
 			It("should return false", func() {
 				model := &ModelResponse{
-					ModelName: "test-model",
+					ModelName: testModelName,
 					LiteLLMParams: &UpdateLiteLLMParams{
 						InputCostPerToken:  float64Ptr(0.001),
 						OutputCostPerToken: float64Ptr(0.002),
@@ -534,7 +543,7 @@ var _ = Describe("Litellm Model", func() {
 					},
 				}
 				req := &ModelRequest{
-					ModelName: "test-model",
+					ModelName: testModelName,
 					LiteLLMParams: &UpdateLiteLLMParams{
 						InputCostPerToken:  float64Ptr(0.001),
 						OutputCostPerToken: float64Ptr(0.002),
@@ -556,10 +565,10 @@ var _ = Describe("Litellm Model", func() {
 		Context("when comparing nil values", func() {
 			It("should handle nil LiteLLMParams", func() {
 				model := &ModelResponse{
-					ModelName: "test-model",
+					ModelName: testModelName,
 				}
 				req := &ModelRequest{
-					ModelName: "test-model",
+					ModelName: testModelName,
 					LiteLLMParams: &UpdateLiteLLMParams{
 						InputCostPerToken: float64Ptr(0.001),
 					},
@@ -573,10 +582,10 @@ var _ = Describe("Litellm Model", func() {
 
 			It("should handle nil ModelInfo", func() {
 				model := &ModelResponse{
-					ModelName: "test-model",
+					ModelName: testModelName,
 				}
 				req := &ModelRequest{
-					ModelName: "test-model",
+					ModelName: testModelName,
 					ModelInfo: &ModelInfo{
 						ID: stringPtr("000000000011"),
 					},
@@ -592,7 +601,7 @@ var _ = Describe("Litellm Model", func() {
 	Describe("ModelRequest and ModelResponse serialisation", func() {
 		It("should marshal and unmarshal ModelRequest correctly", func() {
 			req := &ModelRequest{
-				ModelName: "test-model",
+				ModelName: testModelName,
 				LiteLLMParams: &UpdateLiteLLMParams{
 					InputCostPerToken:  float64Ptr(0.001),
 					OutputCostPerToken: float64Ptr(0.002),
@@ -629,7 +638,7 @@ var _ = Describe("Litellm Model", func() {
 
 		It("should marshal and unmarshal ModelResponse correctly", func() {
 			resp := &ModelResponse{
-				ModelName: "test-model",
+				ModelName: testModelName,
 				LiteLLMParams: &UpdateLiteLLMParams{
 					InputCostPerToken:  float64Ptr(0.001),
 					OutputCostPerToken: float64Ptr(0.002),
@@ -665,7 +674,7 @@ var _ = Describe("Litellm Model", func() {
 
 			It("should return a connection error for CreateModel", func() {
 				req := &ModelRequest{
-					ModelName: "test-model",
+					ModelName: testModelName,
 				}
 
 				_, err := client.CreateModel(ctx, req)
@@ -676,7 +685,7 @@ var _ = Describe("Litellm Model", func() {
 
 			It("should return a connection error for UpdateModel", func() {
 				req := &ModelRequest{
-					ModelName: "test-model",
+					ModelName: testModelName,
 					ModelInfo: &ModelInfo{ID: stringPtr("model-000")},
 				}
 
@@ -687,14 +696,14 @@ var _ = Describe("Litellm Model", func() {
 			})
 
 			It("should return a connection error for GetModel", func() {
-				_, err := client.GetModel(ctx, "test-model")
+				_, err := client.GetModel(ctx, testModelName)
 
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("connection refused"))
 			})
 
 			It("should return a connection error for DeleteModel", func() {
-				err := client.DeleteModel(ctx, "test-model")
+				err := client.DeleteModel(ctx, testModelName)
 
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("connection refused"))
@@ -717,7 +726,7 @@ var _ = Describe("Litellm Model", func() {
 
 			It("should return an unmarshalling error for CreateModel", func() {
 				req := &ModelRequest{
-					ModelName: "test-model",
+					ModelName: testModelName,
 				}
 
 				_, err := client.CreateModel(ctx, req)
@@ -728,7 +737,7 @@ var _ = Describe("Litellm Model", func() {
 
 			It("should return an unmarshalling error for UpdateModel", func() {
 				req := &ModelRequest{
-					ModelName: "test-model",
+					ModelName: testModelName,
 					ModelInfo: &ModelInfo{ID: stringPtr("model-000")},
 				}
 
@@ -739,7 +748,7 @@ var _ = Describe("Litellm Model", func() {
 			})
 
 			It("should return an unmarshalling error for GetModel", func() {
-				_, err := client.GetModel(ctx, "test-model")
+				_, err := client.GetModel(ctx, testModelName)
 
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("invalid character"))

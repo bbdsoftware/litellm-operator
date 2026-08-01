@@ -13,7 +13,7 @@ controllerManager:
           - ALL
     image:
       repository: ghcr.io/bbdsoftware/litellm-operator
-      tag: 1.1.1
+      tag: 1.1.2
     litellmUrlOverride: ""
     resources:
       limits:
@@ -22,6 +22,7 @@ controllerManager:
       requests:
         cpu: 50m
         memory: 64Mi
+  topologySpreadConstraints: []
   podSecurityContext:
     runAsNonRoot: true
   replicas: 1

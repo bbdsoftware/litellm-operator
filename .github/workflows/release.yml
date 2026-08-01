@@ -22,7 +22,7 @@ permissions:
   pull-requests: write
 
 env:
-  GO_VERSION: '1.25'
+  GO_VERSION: '1.26.5'
 
 jobs:
   run-tests:
@@ -57,7 +57,7 @@ jobs:
         fetch-depth: 0
     - name: Validate semver tag
       id: semver
-      uses: matt-usurp/validate-semver@v2
+      uses: matt-usurp/validate-semver@v3
       with:
         version: ${{ github.ref }}
 
@@ -106,21 +106,21 @@ jobs:
         go-version: ${{ env.GO_VERSION }}
 
     - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v3
+      uses: docker/setup-buildx-action@v4
       with:
         driver: docker-container
         driver-opts: |
           image=moby/buildkit:v0.12.0
 
     - name: Log in to GitHub Container Registry
-      uses: docker/login-action@v3
+      uses: docker/login-action@v4
       with:
         registry: ghcr.io
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
 
     - name: Install Helm
-      uses: azure/setup-helm@v3
+      uses: azure/setup-helm@v5
       with:
         version: v3.12.0
 
@@ -137,7 +137,7 @@ jobs:
         GOARCH: amd64
 
     - name: Run GoReleaser
-      uses: goreleaser/goreleaser-action@v6
+      uses: goreleaser/goreleaser-action@v7
       with:
         distribution: goreleaser
         version: '~> v2'
@@ -160,18 +160,18 @@ jobs:
     steps:
     - name: Authenticate GitHub App
       id: github-app
-      uses: actions/create-github-app-token@v2
+      uses: actions/create-github-app-token@v3
       with:
         app-id: ${{ secrets.LITELLM_OPERATOR_BOT_APP_ID }}
         private-key: ${{ secrets.LITELLM_OPERATOR_BOT_PRIVATE_KEY }}
     
     - name: Install Helm
-      uses: azure/setup-helm@v4
+      uses: azure/setup-helm@v5
       with:
         version: v3.12.0
  
     - name: Login to GitHub Container Registry
-      uses: docker/login-action@v3
+      uses: docker/login-action@v4
       with:
         registry: ghcr.io
         username: ${{ github.actor }}
@@ -215,7 +215,7 @@ jobs:
 
     - name: Commit and push changes
       id: commit-and-push
-      uses: EndBug/add-and-commit@v9
+      uses: EndBug/add-and-commit@v10
       with:
         message: "Automated update to ${{ needs.build-and-release.outputs.validated_version }} [skip ci]"
         default_author: github_actions

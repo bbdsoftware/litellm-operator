@@ -4,6 +4,17 @@ import (
 	"testing"
 )
 
+const (
+	testOpenAIAPIKey      = "sk-1234567890abcdef"
+	testOpenAIAPIBase     = "https://api.openai.com/v1"
+	testAnthropicAPIKey   = "sk-ant-1234567890abcdef"
+	testAnthropicAPIBase  = "https://api.anthropic.com"
+	testGoogleCredentials = "AIzaSyC1234567890abcdef"
+	testAzureAPIBase      = "https://my-resource.openai.azure.com"
+	testCaseMissingAPIKey = "Missing API key"
+	testCaseEmptyAPIKey   = "Empty API key"
+)
+
 func TestModelProvider_GetValidator(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -71,38 +82,38 @@ func TestOpenAIValidator_ValidateConfig(t *testing.T) {
 		{
 			name: "Valid OpenAI config",
 			config: map[string]string{
-				"apiKey":  "sk-1234567890abcdef",
-				"apiBase": "https://api.openai.com/v1",
+				FieldAPIKey:  testOpenAIAPIKey,
+				FieldAPIBase: testOpenAIAPIBase,
 			},
 			wantErr: false,
 		},
 		{
 			name: "Valid OpenAI config with optional fields",
 			config: map[string]string{
-				"apiKey":  "sk-1234567890abcdef",
-				"apiBase": "https://api.openai.com/v1",
+				FieldAPIKey:  testOpenAIAPIKey,
+				FieldAPIBase: testOpenAIAPIBase,
 			},
 			wantErr: false,
 		},
 		{
-			name: "Missing API key",
+			name: testCaseMissingAPIKey,
 			config: map[string]string{
-				"apiBase": "https://api.openai.com/v1",
+				FieldAPIBase: testOpenAIAPIBase,
 			},
 			wantErr: true,
 		},
 		{
-			name: "Empty API key",
+			name: testCaseEmptyAPIKey,
 			config: map[string]string{
-				"apiKey": "",
+				FieldAPIKey: "",
 			},
 			wantErr: true,
 		},
 		{
 			name: "Empty API base URL",
 			config: map[string]string{
-				"apiKey":  "sk-1234567890abcdef",
-				"apiBase": "",
+				FieldAPIKey:  testOpenAIAPIKey,
+				FieldAPIBase: "",
 			},
 			wantErr: true,
 		},
@@ -129,30 +140,30 @@ func TestAnthropicValidator_ValidateConfig(t *testing.T) {
 		{
 			name: "Valid Anthropic config",
 			config: map[string]string{
-				"apiKey":  "sk-ant-1234567890abcdef",
-				"apiBase": "https://api.anthropic.com",
+				FieldAPIKey:  testAnthropicAPIKey,
+				FieldAPIBase: testAnthropicAPIBase,
 			},
 			wantErr: false,
 		},
 		{
 			name: "Valid Anthropic config with optional fields",
 			config: map[string]string{
-				"apiKey":  "sk-ant-1234567890abcdef",
-				"apiBase": "https://api.anthropic.com",
+				FieldAPIKey:  testAnthropicAPIKey,
+				FieldAPIBase: testAnthropicAPIBase,
 			},
 			wantErr: false,
 		},
 		{
-			name: "Missing API key",
+			name: testCaseMissingAPIKey,
 			config: map[string]string{
-				"apiBase": "https://api.anthropic.com",
+				FieldAPIBase: testAnthropicAPIBase,
 			},
 			wantErr: true,
 		},
 		{
-			name: "Empty API key",
+			name: testCaseEmptyAPIKey,
 			config: map[string]string{
-				"apiKey": "",
+				FieldAPIKey: "",
 			},
 			wantErr: true,
 		},
@@ -179,23 +190,23 @@ func TestGoogleValidator_ValidateConfig(t *testing.T) {
 		{
 			name: "Valid Google config with API key",
 			config: map[string]string{
-				"vertexCredentials": "AIzaSyC1234567890abcdef",
+				FieldVertexCredentials: testGoogleCredentials,
 			},
 			wantErr: false,
 		},
 		{
 			name: "Valid Google config with credentials",
 			config: map[string]string{
-				"vertexCredentials": "service-account-key.json",
+				FieldVertexCredentials: "service-account-key.json",
 			},
 			wantErr: false,
 		},
 		{
 			name: "Valid Google config with all fields",
 			config: map[string]string{
-				"vertexCredentials": "AIzaSyC1234567890abcdef",
-				"project":           "my-project",
-				"location":          "us-central1",
+				FieldVertexCredentials: testGoogleCredentials,
+				"project":              "my-project",
+				"location":             "us-central1",
 			},
 			wantErr: false,
 		},
@@ -229,47 +240,47 @@ func TestAzureValidator_ValidateConfig(t *testing.T) {
 		{
 			name: "Valid Azure config",
 			config: map[string]string{
-				"apiKey":  "sk-1234567890abcdef",
-				"apiBase": "https://my-resource.openai.azure.com",
+				FieldAPIKey:  testOpenAIAPIKey,
+				FieldAPIBase: testAzureAPIBase,
 			},
 			wantErr: false,
 		},
 		{
 			name: "Valid Azure config with API version",
 			config: map[string]string{
-				"apiKey":     "sk-1234567890abcdef",
-				"apiBase":    "https://my-resource.openai.azure.com",
+				FieldAPIKey:  testOpenAIAPIKey,
+				FieldAPIBase: testAzureAPIBase,
 				"apiVersion": "2023-05-15",
 			},
 			wantErr: false,
 		},
 		{
-			name: "Missing API key",
+			name: testCaseMissingAPIKey,
 			config: map[string]string{
-				"apiBase": "https://my-resource.openai.azure.com",
+				FieldAPIBase: testAzureAPIBase,
 			},
 			wantErr: true,
 		},
 		{
 			name: "Missing API base",
 			config: map[string]string{
-				"apiKey": "sk-1234567890abcdef",
+				FieldAPIKey: testOpenAIAPIKey,
 			},
 			wantErr: true,
 		},
 		{
-			name: "Empty API key",
+			name: testCaseEmptyAPIKey,
 			config: map[string]string{
-				"apiKey":  "",
-				"apiBase": "https://my-resource.openai.azure.com",
+				FieldAPIKey:  "",
+				FieldAPIBase: testAzureAPIBase,
 			},
 			wantErr: true,
 		},
 		{
 			name: "Empty API base",
 			config: map[string]string{
-				"apiKey":  "sk-1234567890abcdef",
-				"apiBase": "",
+				FieldAPIKey:  testOpenAIAPIKey,
+				FieldAPIBase: "",
 			},
 			wantErr: true,
 		},
@@ -296,8 +307,8 @@ func TestModelProvider_ValidateConfig(t *testing.T) {
 			name:     "Valid OpenAI config",
 			provider: ModelProviderOpenAI,
 			config: map[string]interface{}{
-				"apiKey":  "sk-1234567890abcdef",
-				"apiBase": "https://api.openai.com/v1",
+				FieldAPIKey:  testOpenAIAPIKey,
+				FieldAPIBase: testOpenAIAPIBase,
 			},
 			wantErr: false,
 		},
@@ -305,8 +316,8 @@ func TestModelProvider_ValidateConfig(t *testing.T) {
 			name:     "Valid Anthropic config",
 			provider: ModelProviderAnthropic,
 			config: map[string]interface{}{
-				"apiKey":  "sk-ant-1234567890abcdef",
-				"apiBase": "https://api.anthropic.com",
+				FieldAPIKey:  testAnthropicAPIKey,
+				FieldAPIBase: testAnthropicAPIBase,
 			},
 			wantErr: false,
 		},
@@ -314,7 +325,7 @@ func TestModelProvider_ValidateConfig(t *testing.T) {
 			name:     "Valid Google config",
 			provider: ModelProviderGoogle,
 			config: map[string]interface{}{
-				"vertexCredentials": "AIzaSyC1234567890abcdef",
+				FieldVertexCredentials: testGoogleCredentials,
 			},
 			wantErr: false,
 		},
@@ -322,8 +333,8 @@ func TestModelProvider_ValidateConfig(t *testing.T) {
 			name:     "Valid Azure config",
 			provider: ModelProviderAzure,
 			config: map[string]interface{}{
-				"apiKey":  "sk-1234567890abcdef",
-				"apiBase": "https://my-resource.openai.azure.com",
+				FieldAPIKey:  testOpenAIAPIKey,
+				FieldAPIBase: testAzureAPIBase,
 			},
 			wantErr: false,
 		},

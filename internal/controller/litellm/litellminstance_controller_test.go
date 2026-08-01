@@ -32,6 +32,16 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
+const (
+	testNamespace   = "default"
+	testRedisSecret = "test-redis-secret"
+	testHostKey     = "host"
+	testPasswordKey = "password"
+	testPortKey     = "port"
+	testAPIKeyKey   = "ApiKey"
+	testModelGPT35  = "gpt-3.5"
+)
+
 var _ = Describe("LiteLLMInstance Controller", func() {
 	Context("When reconciling a resource", func() {
 		const resourceName = "test-resource"
@@ -40,7 +50,7 @@ var _ = Describe("LiteLLMInstance Controller", func() {
 
 		typeNamespacedName := types.NamespacedName{
 			Name:      resourceName,
-			Namespace: "default", // TODO(user):Modify as needed
+			Namespace: testNamespace, // TODO(user):Modify as needed
 		}
 		litellminstance := &litellmv1alpha1.LiteLLMInstance{}
 
@@ -49,13 +59,13 @@ var _ = Describe("LiteLLMInstance Controller", func() {
 			databaseSecret := &corev1.Secret{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-database-secret",
-					Namespace: "default",
+					Namespace: testNamespace,
 				},
 				Data: map[string][]byte{
-					"host":     []byte("localhost"),
-					"password": []byte("test-password"),
-					"username": []byte("test-user"),
-					"dbname":   []byte("test-db"),
+					testHostKey:     []byte("localhost"),
+					testPasswordKey: []byte("test-password"),
+					"username":      []byte("test-user"),
+					"dbname":        []byte("test-db"),
 				},
 			}
 			existingSecret := &corev1.Secret{}
@@ -69,12 +79,12 @@ var _ = Describe("LiteLLMInstance Controller", func() {
 			By("creating the test redis secret")
 			redisSecret := &corev1.Secret{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      "test-redis-secret",
-					Namespace: "default",
+					Name:      testRedisSecret,
+					Namespace: testNamespace,
 				},
 				Data: map[string][]byte{
-					"host":     []byte("localhost"),
-					"password": []byte("test-password"),
+					testHostKey:     []byte("localhost"),
+					testPasswordKey: []byte("test-password"),
 				},
 			}
 			existingSecret = &corev1.Secret{}
@@ -89,11 +99,11 @@ var _ = Describe("LiteLLMInstance Controller", func() {
 			openAIModelSecret := &corev1.Secret{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-openai-model-secret",
-					Namespace: "default",
+					Namespace: testNamespace,
 				},
 				Data: map[string][]byte{
-					"ApiKey":  []byte("test-api-key"),
-					"ApiBase": []byte("test-api-base-url"),
+					testAPIKeyKey: []byte("test-api-key"),
+					"ApiBase":     []byte("test-api-base-url"),
 				},
 			}
 			existingSecret = &corev1.Secret{}
@@ -108,7 +118,7 @@ var _ = Describe("LiteLLMInstance Controller", func() {
 			bedrockModelSecret := &corev1.Secret{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-bedrock-model-secret",
-					Namespace: "default",
+					Namespace: testNamespace,
 				},
 				Data: map[string][]byte{
 					"AwsAccessKeyId":     []byte("test-access-key-id"),
@@ -129,7 +139,7 @@ var _ = Describe("LiteLLMInstance Controller", func() {
 				resource := &litellmv1alpha1.LiteLLMInstance{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      resourceName,
-						Namespace: "default",
+						Namespace: testNamespace,
 					},
 					Spec: litellmv1alpha1.LiteLLMInstanceSpec{
 						Image:     "ghcr.io/berriai/litellm-database:main-v1.74.9.rc.1",
@@ -137,18 +147,18 @@ var _ = Describe("LiteLLMInstance Controller", func() {
 						DatabaseSecretRef: litellmv1alpha1.DatabaseSecretRef{
 							NameRef: "test-database-secret",
 							Keys: litellmv1alpha1.DatabaseSecretKeys{
-								HostSecret:     "host",
-								PasswordSecret: "password",
+								HostSecret:     testHostKey,
+								PasswordSecret: testPasswordKey,
 								UsernameSecret: "username",
 								DbnameSecret:   "dbname",
 							},
 						},
 						RedisSecretRef: litellmv1alpha1.RedisSecretRef{
-							NameRef: "test-redis-secret",
+							NameRef: testRedisSecret,
 							Keys: litellmv1alpha1.RedisSecretKeys{
-								HostSecret:     "host",
-								PortSecret:     "port",
-								PasswordSecret: "password",
+								HostSecret:     testHostKey,
+								PortSecret:     testPortKey,
+								PasswordSecret: testPasswordKey,
 							},
 						},
 						Models: []litellmv1alpha1.InitModelInstance{
@@ -173,7 +183,7 @@ var _ = Describe("LiteLLMInstance Controller", func() {
 							}, {
 								ModelName:    "gpt-3.5-turbo",
 								RequiresAuth: true,
-								Identifier:   "gpt-3.5",
+								Identifier:   testModelGPT35,
 								ModelCredentials: litellmv1alpha1.ModelCredentialSecretRef{
 									NameRef: "test-openai-model-secret",
 									Keys: litellmv1alpha1.ModelCredentialSecretKeys{
@@ -208,7 +218,7 @@ var _ = Describe("LiteLLMInstance Controller", func() {
 
 			By("Cleanup the specific resource instance ConfigMap")
 			configMap := &corev1.ConfigMap{}
-			err = k8sClient.Get(ctx, types.NamespacedName{Name: resourceName + "-config", Namespace: "default"}, configMap)
+			err = k8sClient.Get(ctx, types.NamespacedName{Name: resourceName + "-config", Namespace: testNamespace}, configMap)
 			if err == nil {
 				Expect(k8sClient.Delete(ctx, configMap)).To(Succeed())
 			} else if !errors.IsNotFound(err) {
@@ -220,7 +230,7 @@ var _ = Describe("LiteLLMInstance Controller", func() {
 
 			By("Cleanup the test secrets")
 			secrets := &corev1.SecretList{}
-			err = k8sClient.List(ctx, secrets, &client.ListOptions{Namespace: "default"})
+			err = k8sClient.List(ctx, secrets, &client.ListOptions{Namespace: testNamespace})
 			Expect(err).NotTo(HaveOccurred(), "Failed to list secrets in the default namespace")
 			for _, secret := range secrets.Items {
 				Expect(k8sClient.Delete(ctx, &secret)).To(Succeed())
@@ -241,7 +251,7 @@ var _ = Describe("LiteLLMInstance Controller", func() {
 
 			//verify the configmap exists with its values
 			configMap := &corev1.ConfigMap{}
-			err = k8sClient.Get(ctx, types.NamespacedName{Name: resourceName + "-config", Namespace: "default"}, configMap)
+			err = k8sClient.Get(ctx, types.NamespacedName{Name: resourceName + "-config", Namespace: testNamespace}, configMap)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(configMap.Data).To(HaveKey("proxy_server_config.yaml"))
 			yamlData := configMap.Data["proxy_server_config.yaml"]
@@ -270,14 +280,14 @@ var _ = Describe("LiteLLMInstance helpers and rendering", func() {
 	})
 
 	It("buildSecretData preserves existing master key when none provided", func() {
-		existing := &corev1.Secret{Data: map[string][]byte{"masterkey": []byte("existing-key")}}
+		existing := &corev1.Secret{Data: map[string][]byte{masterKeyDataKey: []byte("existing-key")}}
 		data := buildSecretData("", existing)
-		Expect(string(data["masterkey"])).To(Equal("existing-key"))
+		Expect(string(data[masterKeyDataKey])).To(Equal("existing-key"))
 	})
 
 	It("buildSecretData uses provided master key when present", func() {
 		data := buildSecretData("provided-key", nil)
-		Expect(string(data["masterkey"])).To(Equal("provided-key"))
+		Expect(string(data[masterKeyDataKey])).To(Equal("provided-key"))
 	})
 
 	It("validateModelListForDuplicates detects duplicate identifiers", func() {
@@ -293,7 +303,7 @@ var _ = Describe("LiteLLMInstance helpers and rendering", func() {
 
 	It("renderProxyConfig returns error when model missing required model name", func() {
 		llm := &litellmv1alpha1.LiteLLMInstance{
-			ObjectMeta: metav1.ObjectMeta{Name: "x", Namespace: "default"},
+			ObjectMeta: metav1.ObjectMeta{Name: "x", Namespace: testNamespace},
 			Spec: litellmv1alpha1.LiteLLMInstanceSpec{
 				Models: []litellmv1alpha1.InitModelInstance{{LiteLLMParams: litellmv1alpha1.LiteLLMParams{Model: util.StringPtrOrNil("")}}},
 			},
@@ -305,24 +315,24 @@ var _ = Describe("LiteLLMInstance helpers and rendering", func() {
 	It("renderProxyConfig includes router settings from redis secret ref and maps model secret keys to os.environ/<name>", func() {
 		// create a fake model credentials secret and ensure createAdditionalModelSecrets will make secrets
 		modelCred := &corev1.Secret{
-			ObjectMeta: metav1.ObjectMeta{Name: "model-creds", Namespace: "default"},
+			ObjectMeta: metav1.ObjectMeta{Name: "model-creds", Namespace: testNamespace},
 			Data:       map[string][]byte{"ApiKey": []byte("k1")},
 		}
 		Expect(k8sClient.Create(ctx, modelCred)).To(Succeed())
 
 		llm := &litellmv1alpha1.LiteLLMInstance{
-			ObjectMeta: metav1.ObjectMeta{Name: "x", Namespace: "default"},
+			ObjectMeta: metav1.ObjectMeta{Name: "x", Namespace: testNamespace},
 			Spec: litellmv1alpha1.LiteLLMInstanceSpec{
 				RedisSecretRef: litellmv1alpha1.RedisSecretRef{
-					NameRef: "test-redis-secret",
-					Keys:    litellmv1alpha1.RedisSecretKeys{HostSecret: "host", PortSecret: "port", PasswordSecret: "password"},
+					NameRef: testRedisSecret,
+					Keys:    litellmv1alpha1.RedisSecretKeys{HostSecret: testHostKey, PortSecret: testPortKey, PasswordSecret: testPasswordKey},
 				},
 				Models: []litellmv1alpha1.InitModelInstance{
 					{
-						ModelName:        "gpt-3.5",
-						Identifier:       "gpt-3.5",
+						ModelName:        testModelGPT35,
+						Identifier:       testModelGPT35,
 						RequiresAuth:     true,
-						ModelCredentials: litellmv1alpha1.ModelCredentialSecretRef{NameRef: "model-creds", Keys: litellmv1alpha1.ModelCredentialSecretKeys{ApiKey: "ApiKey"}},
+						ModelCredentials: litellmv1alpha1.ModelCredentialSecretRef{NameRef: "model-creds", Keys: litellmv1alpha1.ModelCredentialSecretKeys{ApiKey: testAPIKeyKey}},
 						LiteLLMParams:    litellmv1alpha1.LiteLLMParams{Model: util.StringPtrOrNil("gpt-3.5-turbo")},
 					},
 				},
@@ -340,8 +350,8 @@ var _ = Describe("LiteLLMInstance helpers and rendering", func() {
 
 		// create the redis secret referenced by the llm so router_settings populate (only if absent)
 		redisSecret := &corev1.Secret{
-			ObjectMeta: metav1.ObjectMeta{Name: "test-redis-secret", Namespace: "default"},
-			Data:       map[string][]byte{"host": []byte("host"), "port": []byte("port"), "password": []byte("password")},
+			ObjectMeta: metav1.ObjectMeta{Name: testRedisSecret, Namespace: testNamespace},
+			Data:       map[string][]byte{"host": []byte("host"), "port": []byte("port"), testPasswordKey: []byte("password")},
 		}
 		existingSecret := &corev1.Secret{}
 		err = k8sClient.Get(ctx, types.NamespacedName{Name: redisSecret.Name, Namespace: redisSecret.Namespace}, existingSecret)

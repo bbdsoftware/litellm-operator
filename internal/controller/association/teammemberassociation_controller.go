@@ -94,7 +94,7 @@ func (r *TeamMemberAssociationReconciler) Reconcile(ctx context.Context, req ctr
 
 	//Phase 1.1 : validate Team and User readiness
 	team := &authv1alpha1.Team{}
-	if err := r.Client.Get(ctx, client.ObjectKey{Namespace: teamMemberAssociation.Namespace, Name: teamMemberAssociation.Spec.TeamRef.Name}, team); err != nil {
+	if err := r.Get(ctx, client.ObjectKey{Namespace: teamMemberAssociation.Namespace, Name: teamMemberAssociation.Spec.TeamRef.Name}, team); err != nil {
 		log.Error(err, "Failed to get referenced Team", "teamRef", teamMemberAssociation.Spec.TeamRef.Name)
 		return r.HandleErrorRetryable(ctx, teamMemberAssociation, err, base.ReasonConfigError)
 	}
@@ -105,7 +105,7 @@ func (r *TeamMemberAssociationReconciler) Reconcile(ctx context.Context, req ctr
 	}
 
 	user := &authv1alpha1.User{}
-	if err := r.Client.Get(ctx, client.ObjectKey{Namespace: teamMemberAssociation.Namespace, Name: teamMemberAssociation.Spec.UserRef.Name}, user); err != nil {
+	if err := r.Get(ctx, client.ObjectKey{Namespace: teamMemberAssociation.Namespace, Name: teamMemberAssociation.Spec.UserRef.Name}, user); err != nil {
 		log.Error(err, "Failed to get referenced User", "userRef", teamMemberAssociation.Spec.UserRef.Name)
 		return r.HandleErrorRetryable(ctx, teamMemberAssociation, err, base.ReasonConfigError)
 	}
@@ -231,7 +231,7 @@ func (r *TeamMemberAssociationReconciler) ensureExternal(ctx context.Context, te
 
 	// Validate team existence
 	team := &authv1alpha1.Team{}
-	if err := r.Client.Get(ctx, client.ObjectKey{Namespace: teamMemberAssociation.Namespace, Name: teamMemberAssociation.Spec.TeamRef.Name}, team); err != nil {
+	if err := r.Get(ctx, client.ObjectKey{Namespace: teamMemberAssociation.Namespace, Name: teamMemberAssociation.Spec.TeamRef.Name}, team); err != nil {
 		log.Error(err, "Failed to get referenced Team", "teamRef", teamMemberAssociation.Spec.TeamRef.Name)
 		return r.HandleErrorRetryable(ctx, teamMemberAssociation, err, base.ReasonConfigError)
 	}
@@ -251,7 +251,7 @@ func (r *TeamMemberAssociationReconciler) ensureExternal(ctx context.Context, te
 
 	// Check if user is already correctly in team
 	user := &authv1alpha1.User{}
-	if err := r.Client.Get(ctx, client.ObjectKey{Namespace: teamMemberAssociation.Namespace, Name: teamMemberAssociation.Spec.UserRef.Name}, user); err != nil {
+	if err := r.Get(ctx, client.ObjectKey{Namespace: teamMemberAssociation.Namespace, Name: teamMemberAssociation.Spec.UserRef.Name}, user); err != nil {
 		log.Error(err, "Failed to get referenced User", "userRef", teamMemberAssociation.Spec.UserRef.Name)
 		return r.HandleErrorRetryable(ctx, teamMemberAssociation, err, base.ReasonConfigError)
 	}

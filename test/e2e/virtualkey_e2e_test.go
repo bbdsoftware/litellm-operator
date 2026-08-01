@@ -242,14 +242,14 @@ func createVirtualKeyCR(name, keyAlias string) *authv1alpha1.VirtualKey {
 			ConnectionRef: authv1alpha1.ConnectionRef{
 				InstanceRef: &authv1alpha1.InstanceRef{
 					Namespace: e2eTestNamespace,
-					Name:      "e2e-test-instance",
+					Name:      e2eTestInstance,
 				},
 			},
 			KeyAlias:  keyAlias,
 			MaxBudget: "15",
 			RPMLimit:  150,
 			TPMLimit:  1500,
-			Models:    []string{"gpt-4o"},
+			Models:    []string{e2eTestModelGPT4o},
 			Blocked:   false,
 		},
 	}

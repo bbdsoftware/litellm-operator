@@ -34,6 +34,8 @@ import (
 	"github.com/bbdsoftware/litellm-operator/internal/litellm"
 )
 
+const testTeamAlias = "test-alias"
+
 type mockLitellmTeamClient struct {
 	teams              map[string]*litellm.TeamResponse
 	createError        error
@@ -169,7 +171,7 @@ func createTestTeam() *authv1alpha1.Team {
 					},
 				},
 			},
-			TeamAlias:      "test-alias",
+			TeamAlias:      testTeamAlias,
 			OrganizationID: "test-org",
 		},
 	}
@@ -287,7 +289,7 @@ var _ = Describe("Team Controller", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			Expect(updatedTeam.Status.TeamID).To(Equal("team-test-alias"))
-			Expect(updatedTeam.Status.TeamAlias).To(Equal("test-alias"))
+			Expect(updatedTeam.Status.TeamAlias).To(Equal(testTeamAlias))
 			Expect(updatedTeam.Status.OrganizationID).To(Equal("test-org"))
 			Expect(updatedTeam.Status.ObservedGeneration).To(Equal(int64(1)))
 
@@ -300,7 +302,7 @@ var _ = Describe("Team Controller", func() {
 			By("setting up mock to return existing team with different ID")
 			existingTeam := &litellm.TeamResponse{
 				TeamID:    "different-team-id",
-				TeamAlias: "test-alias",
+				TeamAlias: testTeamAlias,
 			}
 			mockClient.teams["different-team-id"] = existingTeam
 
@@ -334,7 +336,7 @@ var _ = Describe("Team Controller", func() {
 			By("setting up mock with existing team")
 			existingTeam := &litellm.TeamResponse{
 				TeamID:         "existing-team-id",
-				TeamAlias:      "test-alias",
+				TeamAlias:      testTeamAlias,
 				OrganizationID: "old-org",
 			}
 			mockClient.teams["existing-team-id"] = existingTeam

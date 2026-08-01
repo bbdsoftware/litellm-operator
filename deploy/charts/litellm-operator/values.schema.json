@@ -144,6 +144,112 @@
             }
           }
         },
+        "topologySpreadConstraints": {
+          "type": "array",
+          "description": "Pod topology spread constraints",
+          "items": {
+            "type": "object",
+            "properties": {
+              "maxSkew": {
+                "type": "integer",
+                "minimum": 1,
+                "description": "Maximum permitted difference between topology domains"
+              },
+              "topologyKey": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Node label key that defines topology domain"
+              },
+              "whenUnsatisfiable": {
+                "type": "string",
+                "enum": [
+                  "DoNotSchedule",
+                  "ScheduleAnyway"
+                ],
+                "description": "How to handle unsatisfied constraint"
+              },
+              "labelSelector": {
+                "type": "object",
+                "description": "Label selector to identify pods",
+                "properties": {
+                  "matchLabels": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "type": "string"
+                    }
+                  },
+                  "matchExpressions": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "required": [
+                        "key",
+                        "operator"
+                      ],
+                      "properties": {
+                        "key": {
+                          "type": "string"
+                        },
+                        "operator": {
+                          "type": "string",
+                          "enum": [
+                            "In",
+                            "NotIn",
+                            "Exists",
+                            "DoesNotExist"
+                          ]
+                        },
+                        "values": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                "additionalProperties": false
+              },
+              "minDomains": {
+                "type": "integer",
+                "minimum": 1,
+                "description": "Minimum number of topology domains required (optional)"
+              },
+              "nodeAffinityPolicy": {
+                "type": "string",
+                "enum": [
+                  "Honor",
+                  "Ignore"
+                ],
+                "description": "Node affinity policy (beta since K8s 1.26+)"
+              },
+              "nodeTaintsPolicy": {
+                "type": "string",
+                "enum": [
+                  "Honor",
+                  "Ignore"
+                ],
+                "description": "Node taints policy (beta K8s 1.26+)"
+              },
+              "matchLabelKeys": {
+                "type": "array",
+                "description": "List of pod label keys to match for topology spread",
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "maxSkew",
+              "topologyKey",
+              "whenUnsatisfiable",
+              "labelSelector"
+            ]
+          }
+        },
         "podSecurityContext": {
           "type": "object",
           "description": "Pod security context configuration",
