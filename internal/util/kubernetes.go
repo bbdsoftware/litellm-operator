@@ -53,6 +53,13 @@ func CreateOrUpdateWithRetry(ctx context.Context, c client.Client, scheme *runti
 	restart := false
 	log := logf.FromContext(ctx)
 
+	// Snapshot the annotations the caller declared before the loop can mutate
+	// them. A conflict retry re-reads the live object, so every attempt has to
+	// merge against this original set: merging against an already-merged obj
+	// would let a value from a previous attempt win over a newer one, and
+	// would resurrect a key another controller has since removed.
+	declaredAnnotations := copyAnnotations(obj.GetAnnotations())
+
 	for attempt := 0; attempt < maxRetries; attempt++ {
 		// Try to get the existing object
 		existing := obj.DeepCopyObject().(client.Object)
@@ -86,7 +93,7 @@ func CreateOrUpdateWithRetry(ctx context.Context, c client.Client, scheme *runti
 		// Preserve the existing resource version and other metadata
 		obj.SetResourceVersion(existing.GetResourceVersion())
 		obj.SetUID(existing.GetUID())
-		mergeForeignAnnotations(existing, obj)
+		mergeForeignAnnotations(existing, obj, declaredAnnotations)
 
 		// Set controller reference for the update
 		if err := ctrl.SetControllerReference(owner, obj, scheme); err != nil {
@@ -116,32 +123,49 @@ func CreateOrUpdateWithRetry(ctx context.Context, c client.Client, scheme *runti
 	return restart, fmt.Errorf("failed to update after %d attempts", maxRetries)
 }
 
-// mergeForeignAnnotations copies annotations from the existing object onto the
-// desired object for any key the desired object does not declare itself.
+// mergeForeignAnnotations sets the desired object's annotations to the
+// existing object's annotations overlaid with declared, the annotations the
+// operator itself asks for.
 //
 // The operator builds its child objects from scratch on every reconcile, so
 // without this an update overwrites annotations written by other controllers.
 // On GKE, for example, the NEG controller annotates the Service it is asked to
 // back; stripping that annotation makes the NEG controller re-add it, and the
-// two controllers then contend over the same object. Keys the operator does
-// declare still win, so the operator remains authoritative over its own
-// annotations.
-func mergeForeignAnnotations(existing, desired client.Object) {
+// two controllers then contend over the same object. Keys in declared still
+// win, so the operator remains authoritative over its own annotations.
+//
+// declared is passed in rather than read from desired because the caller
+// reuses desired across conflict retries, and reading it back would compound
+// the previous attempt's merge onto the next one.
+func mergeForeignAnnotations(existing, desired client.Object, declared map[string]string) {
 	existingAnnotations := existing.GetAnnotations()
-	if len(existingAnnotations) == 0 {
+	if len(existingAnnotations) == 0 && len(declared) == 0 {
+		desired.SetAnnotations(nil)
 		return
 	}
 
-	desiredAnnotations := desired.GetAnnotations()
-	merged := make(map[string]string, len(existingAnnotations)+len(desiredAnnotations))
+	merged := make(map[string]string, len(existingAnnotations)+len(declared))
 	for key, value := range existingAnnotations {
 		merged[key] = value
 	}
-	for key, value := range desiredAnnotations {
+	for key, value := range declared {
 		merged[key] = value
 	}
 
 	desired.SetAnnotations(merged)
+}
+
+// copyAnnotations returns a copy of an annotation map, so later mutation of
+// the original cannot reach it.
+func copyAnnotations(in map[string]string) map[string]string {
+	if in == nil {
+		return nil
+	}
+	out := make(map[string]string, len(in))
+	for key, value := range in {
+		out[key] = value
+	}
+	return out
 }
 
 // cause a restart of the deployment

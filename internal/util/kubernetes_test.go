@@ -18,15 +18,19 @@ package util
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 )
 
 const (
@@ -36,6 +40,7 @@ const (
 	testAppLabelValue = "litellm"
 	negAnnotation     = "cloud.google.com/neg"
 	foreignAnnotation = "example.com/managed-by"
+	foreignOwner      = "another-controller"
 )
 
 func testScheme(t *testing.T) *runtime.Scheme {
@@ -87,7 +92,7 @@ func TestCreateOrUpdateWithRetryPreservesForeignAnnotations(t *testing.T) {
 	existing := testService()
 	existing.Annotations = map[string]string{
 		negAnnotation:     `{"exposed_ports":{"80":{}}}`,
-		foreignAnnotation: "another-controller",
+		foreignAnnotation: foreignOwner,
 	}
 
 	c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(existing).Build()
@@ -112,8 +117,8 @@ func TestCreateOrUpdateWithRetryPreservesForeignAnnotations(t *testing.T) {
 	if got.Annotations[negAnnotation] == "" {
 		t.Errorf("annotation %q was stripped by the update; annotations owned by other controllers must survive", negAnnotation)
 	}
-	if got.Annotations[foreignAnnotation] != "another-controller" {
-		t.Errorf("annotation %s = %q, want %q", foreignAnnotation, got.Annotations[foreignAnnotation], "another-controller")
+	if got.Annotations[foreignAnnotation] != foreignOwner {
+		t.Errorf("annotation %s = %q, want %q", foreignAnnotation, got.Annotations[foreignAnnotation], foreignOwner)
 	}
 }
 
@@ -152,5 +157,121 @@ func TestCreateOrUpdateWithRetryOperatorAnnotationsWin(t *testing.T) {
 	}
 	if got.Annotations[negAnnotation] == "" {
 		t.Errorf("annotation %q was stripped by the update", negAnnotation)
+	}
+}
+
+// TestCreateOrUpdateWithRetryConflictKeepsNewestForeignAnnotation covers the
+// retry path. CreateOrUpdateWithRetry reuses the same desired object across
+// attempts, so the merge has to run against the annotations the caller
+// originally declared rather than against the result of the previous
+// attempt's merge. Otherwise a value another controller changed between
+// attempts is overwritten by the stale one this call already read.
+func TestCreateOrUpdateWithRetryConflictKeepsNewestForeignAnnotation(t *testing.T) {
+	scheme := testScheme(t)
+	owner := testOwner()
+
+	const staleNEG = `{"exposed_ports":{"80":{}}}`
+	const freshNEG = `{"exposed_ports":{"8080":{}}}`
+
+	existing := testService()
+	existing.Annotations = map[string]string{negAnnotation: staleNEG}
+
+	var builder = fake.NewClientBuilder().WithScheme(scheme).WithObjects(existing)
+
+	updates := 0
+	c := builder.WithInterceptorFuncs(interceptor.Funcs{
+		Update: func(ctx context.Context, cl client.WithWatch, obj client.Object, opts ...client.UpdateOption) error {
+			updates++
+			if updates == 1 {
+				// Another controller rewrites the annotation and wins the race.
+				live := &corev1.Service{}
+				key := client.ObjectKey{Name: testServiceName, Namespace: testNamespace}
+				if err := cl.Get(ctx, key, live); err != nil {
+					return err
+				}
+				live.Annotations[negAnnotation] = freshNEG
+				if err := cl.Update(ctx, live); err != nil {
+					return err
+				}
+				return apierrors.NewConflict(
+					schema.GroupResource{Resource: "services"}, testServiceName,
+					errors.New("the object has been modified"))
+			}
+			return cl.Update(ctx, obj, opts...)
+		},
+	}).Build()
+
+	desired := testService()
+	desired.Spec.Ports[0].Port = 8080
+
+	if _, err := CreateOrUpdateWithRetry(context.Background(), c, scheme, desired, owner); err != nil {
+		t.Fatalf("CreateOrUpdateWithRetry returned error: %v", err)
+	}
+
+	if updates < 2 {
+		t.Fatalf("expected the conflict to force a retry, got %d Update call(s)", updates)
+	}
+
+	got := &corev1.Service{}
+	key := client.ObjectKey{Name: testServiceName, Namespace: testNamespace}
+	if err := c.Get(context.Background(), key, got); err != nil {
+		t.Fatalf("failed to read back Service: %v", err)
+	}
+
+	if got.Annotations[negAnnotation] != freshNEG {
+		t.Errorf("annotation %s = %q, want %q — the retry re-applied a value read before the conflict",
+			negAnnotation, got.Annotations[negAnnotation], freshNEG)
+	}
+}
+
+// TestCreateOrUpdateWithRetryConflictDoesNotResurrectRemovedAnnotation is the
+// deletion case of the same defect: a key another controller removes between
+// attempts must not come back from the previous attempt's merge.
+func TestCreateOrUpdateWithRetryConflictDoesNotResurrectRemovedAnnotation(t *testing.T) {
+	scheme := testScheme(t)
+	owner := testOwner()
+
+	existing := testService()
+	existing.Annotations = map[string]string{foreignAnnotation: foreignOwner}
+
+	updates := 0
+	c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(existing).
+		WithInterceptorFuncs(interceptor.Funcs{
+			Update: func(ctx context.Context, cl client.WithWatch, obj client.Object, opts ...client.UpdateOption) error {
+				updates++
+				if updates == 1 {
+					live := &corev1.Service{}
+					key := client.ObjectKey{Name: testServiceName, Namespace: testNamespace}
+					if err := cl.Get(ctx, key, live); err != nil {
+						return err
+					}
+					delete(live.Annotations, foreignAnnotation)
+					if err := cl.Update(ctx, live); err != nil {
+						return err
+					}
+					return apierrors.NewConflict(
+						schema.GroupResource{Resource: "services"}, testServiceName,
+						errors.New("the object has been modified"))
+				}
+				return cl.Update(ctx, obj, opts...)
+			},
+		}).Build()
+
+	desired := testService()
+	desired.Spec.Ports[0].Port = 8080
+
+	if _, err := CreateOrUpdateWithRetry(context.Background(), c, scheme, desired, owner); err != nil {
+		t.Fatalf("CreateOrUpdateWithRetry returned error: %v", err)
+	}
+
+	got := &corev1.Service{}
+	key := client.ObjectKey{Name: testServiceName, Namespace: testNamespace}
+	if err := c.Get(context.Background(), key, got); err != nil {
+		t.Fatalf("failed to read back Service: %v", err)
+	}
+
+	if _, ok := got.Annotations[foreignAnnotation]; ok {
+		t.Errorf("annotation %s was resurrected by the retry after another controller removed it",
+			foreignAnnotation)
 	}
 }
