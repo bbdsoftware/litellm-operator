@@ -37,7 +37,7 @@ permissions:
   security-events: write
 
 env:
-  GO_VERSION: '1.26.5'
+  GO_VERSION: '1.26.6'
 
 jobs:
   test:
