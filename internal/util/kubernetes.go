@@ -86,6 +86,7 @@ func CreateOrUpdateWithRetry(ctx context.Context, c client.Client, scheme *runti
 		// Preserve the existing resource version and other metadata
 		obj.SetResourceVersion(existing.GetResourceVersion())
 		obj.SetUID(existing.GetUID())
+		mergeForeignAnnotations(existing, obj)
 
 		// Set controller reference for the update
 		if err := ctrl.SetControllerReference(owner, obj, scheme); err != nil {
@@ -113,6 +114,34 @@ func CreateOrUpdateWithRetry(ctx context.Context, c client.Client, scheme *runti
 	}
 
 	return restart, fmt.Errorf("failed to update after %d attempts", maxRetries)
+}
+
+// mergeForeignAnnotations copies annotations from the existing object onto the
+// desired object for any key the desired object does not declare itself.
+//
+// The operator builds its child objects from scratch on every reconcile, so
+// without this an update overwrites annotations written by other controllers.
+// On GKE, for example, the NEG controller annotates the Service it is asked to
+// back; stripping that annotation makes the NEG controller re-add it, and the
+// two controllers then contend over the same object. Keys the operator does
+// declare still win, so the operator remains authoritative over its own
+// annotations.
+func mergeForeignAnnotations(existing, desired client.Object) {
+	existingAnnotations := existing.GetAnnotations()
+	if len(existingAnnotations) == 0 {
+		return
+	}
+
+	desiredAnnotations := desired.GetAnnotations()
+	merged := make(map[string]string, len(existingAnnotations)+len(desiredAnnotations))
+	for key, value := range existingAnnotations {
+		merged[key] = value
+	}
+	for key, value := range desiredAnnotations {
+		merged[key] = value
+	}
+
+	desired.SetAnnotations(merged)
 }
 
 // cause a restart of the deployment
