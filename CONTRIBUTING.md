@@ -1,5 +1,8 @@
 # Contributing to LiteLLM Operator
 
+> [!IMPORTANT]
+> **This project is archived.** Please do not open issues or pull requests here. Ongoing LiteLLM operator work lives in [PalenaAI/litellm-operator](https://github.com/PalenaAI/litellm-operator).
+
 Thank you for considering contributing!  
 See our [Code of Conduct](CODE_OF_CONDUCT.md).
 
