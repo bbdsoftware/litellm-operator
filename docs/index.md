@@ -1,5 +1,11 @@
 # LiteLLM Operator
 
+!!! warning "This project is archived"
+
+    BBD is no longer maintaining this operator. Other LiteLLM operator projects have more time for support and ongoing maintenance, and that is where new work should go. We recommend [PalenaAI/litellm-operator](https://github.com/PalenaAI/litellm-operator) ([documentation](https://litellm-operator.palena.ai/)).
+
+    Charts and images already published from this repository stay available. There will be no further fixes or features here. Palena's custom resources use the `litellm.palena.ai` API group, so moving to it is a migration rather than a drop-in chart upgrade.
+
 A Kubernetes operator for managing [LiteLLM](https://github.com/BerriAI/litellm) resources in your cluster.
 
 ## Overview

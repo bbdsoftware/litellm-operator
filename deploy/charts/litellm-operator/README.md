@@ -1,5 +1,8 @@
 # LiteLLM Operator
 
+> [!IMPORTANT]
+> **This project is archived.** BBD is no longer maintaining this chart. For an operator with ongoing support, use [PalenaAI/litellm-operator](https://github.com/PalenaAI/litellm-operator) ([documentation](https://litellm-operator.palena.ai/)). Published versions of this chart remain available; Palena is not a drop-in upgrade (`litellm.palena.ai` API group).
+
 A Helm chart for deploying the LiteLLM Operator, a Kubernetes operator for managing LiteLLM resources including virtual keys, users, teams, and model configurations.
 
 ## Values
